@@ -1,0 +1,23 @@
+{
+  "note": "Fictional sample cards for development. Do not treat these as verified TCG or NFT metadata.",
+  "cards": [
+    {
+      "id": "sample-flame",
+      "name": "Sample Flame",
+      "hp": 100,
+      "attacks": [
+        { "id": "spark", "name": "Spark", "damage": 20 },
+        { "id": "flare", "name": "Flare", "damage": 35 }
+      ]
+    },
+    {
+      "id": "sample-wave",
+      "name": "Sample Wave",
+      "hp": 100,
+      "attacks": [
+        { "id": "splash", "name": "Splash", "damage": 20 },
+        { "id": "surge", "name": "Surge", "damage": 35 }
+      ]
+    }
+  ]
+}
