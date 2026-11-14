@@ -1,0 +1,32 @@
+[
+  {
+    "id": "emberfox",
+    "name": "Emberfox",
+    "element": "Fire",
+    "maxHp": 100,
+    "attacks": [
+      { "id": "claw", "name": "Quick Claw", "damage": 20, "cost": 0, "gain": 1 },
+      { "id": "flare", "name": "Flare Burst", "damage": 45, "cost": 2, "gain": 0 }
+    ]
+  },
+  {
+    "id": "tidecub",
+    "name": "Tidecub",
+    "element": "Water",
+    "maxHp": 110,
+    "attacks": [
+      { "id": "splash", "name": "Quick Splash", "damage": 18, "cost": 0, "gain": 1 },
+      { "id": "wave", "name": "Wave Crash", "damage": 48, "cost": 2, "gain": 0 }
+    ]
+  },
+  {
+    "id": "mossling",
+    "name": "Mossling",
+    "element": "Grass",
+    "maxHp": 120,
+    "attacks": [
+      { "id": "vine", "name": "Quick Vine", "damage": 16, "cost": 0, "gain": 1 },
+      { "id": "bloom", "name": "Bloom Strike", "damage": 50, "cost": 2, "gain": 0 }
+    ]
+  }
+]

@@ -1,24 +1,32 @@
 # Poke.fun
 
-One-card, turn-based battles using tokenized collectible cards. This repository is an early hackathon scaffold; wallet login, NFT verification, matchmaking, and staking are not implemented yet.
+A working one-card, turn-based 1v1 demo. Two players can create and join a room, select fictional sample cards, attack, and see the same server-decided result. Wallet login, NFT verification, matchmaking, and staking are not implemented yet.
 
 ## Repository layout
 
 ```text
-apps/web/                 Next.js frontend
-services/api/             Go API and authoritative battle logic
-data/cards.example.json   Example combat data for the first battle format
-contracts/                Solana escrow contract design and future code
-docs/                     Architecture and rules decisions
+apps/web/                         Next.js frontend and battle screen
+services/api/cmd/server/          Go API entry point
+services/api/internal/battle/     Card catalog and battle rules
+services/api/internal/server/     HTTP match endpoints
+contracts/                        Solana escrow design and future code
+docs/                             Architecture and rules decisions
 ```
 
-## First milestone
+## Current rules
 
-Two players each choose **one card** and an attack every turn. The Go server owns the match state and decides the winner. Start with example cards; add wallet-owned cards only after the battle loop works.
+Each player uses one card. Both submit an attack; the Go server resolves both simultaneously. Quick attacks generate one energy, while stronger attacks cost two energy. The first card at zero HP loses. If both reach zero on the same turn, the match is a draw.
 
 ## Run locally
 
-Frontend (Node.js 20.9+):
+In terminal 1, start the API (Go 1.22+):
+
+```sh
+cd services/api
+go run ./cmd/server
+```
+
+In terminal 2, start the frontend (Node.js 20.9+):
 
 ```sh
 cd apps/web
@@ -26,21 +34,18 @@ npm install
 npm run dev
 ```
 
-Backend (Go 1.22+):
+Open `http://localhost:3000` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
-```sh
-cd services/api
-go run ./cmd/server
-```
+If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEXT_PUBLIC_API_URL` for the frontend; see `apps/web/.env.example`.
 
-The frontend runs at `http://localhost:3000`; the API health endpoint is `http://localhost:8080/health`.
+Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run build`.
 
 ## Next implementation steps
 
-1. Define the small initial card catalog and attack rules in `data/`.
-2. Implement matches and turn resolution in `services/api/internal/battle/`.
-3. Add a battle screen and connect it to the API.
-4. Add Solana wallet login and verify ownership of supported card NFTs.
-5. Add devnet escrow and settlement only after free matches work end to end.
+1. Replace the fictional catalog with a curated, verified battle catalog for supported collectibles.
+2. Add persistent match storage, reconnect, turn deadlines, and forfeit/refund rules.
+3. Add Solana wallet login and verify ownership of supported card NFTs.
+4. Add matchmaking within compatible formats.
+5. Add devnet escrow and settlement after the battle protocol is stable.
 
-Real-money or card staking requires legal review before a public launch. The Go server will be a trusted referee unless a separate verification mechanism is added.
+Matches are in memory and disappear when the API restarts. Player tokens are for this local demo only; do not use this code to hold stakes. Real-money or card staking requires legal review before a public launch. The Go server is currently a trusted referee.
