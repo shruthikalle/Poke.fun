@@ -85,6 +85,7 @@ export default function LoadoutPage() {
   const { ready, playerName, session, status, playAsGuest } = useWallet();
   const [signInOpen, setSignInOpen] = useState(false);
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [format, setFormat] = useState<MatchFormat>("champion");
@@ -108,7 +109,11 @@ export default function LoadoutPage() {
     if (!playerName) return;
     let live = true;
     void rankService.getRank(playerName).then((r) => live && setRank(r));
-    if (session) void collectionService.getOwnedCollectibles(session.address).then((a) => live && setAssets(a));
+    setCollectionError(null);
+    setAssets(null);
+    if (session) void collectionService.getOwnedCollectibles(session.address)
+      .then((a) => { if (live) setAssets(a); })
+      .catch(() => { if (live) { setCollectionError("Could not verify your cards on Solana Devnet. Try again later."); setAssets([]); } });
     else setAssets([]);
     return () => { live = false; };
   }, [playerName, session]);
@@ -212,6 +217,7 @@ export default function LoadoutPage() {
         <section className={styles.collection}>
           <h1>Choose your champion</h1>
           {guest && <p className={styles.lede}>Rental creatures. Sign in to battle with your own cards.</p>}
+          {collectionError && <p className={styles.warn} role="alert">{collectionError}</p>}
 
           {!assets ? (
             <div className={styles.grid}>{[0, 1, 2, 3].map((i) => <div key={i} className={styles.cardSkeleton} />)}</div>
@@ -219,7 +225,7 @@ export default function LoadoutPage() {
             <>
             {!guest && eligible.length === 0 && (
               <div className={styles.empty} role="status">
-                <strong>{rows.length === 0 ? "No cards yet" : "None of these can battle"}</strong>
+                <strong>{rows.length === 0 ? "No supported cards in this wallet" : "None of these can battle"}</strong>
                 <button className="pf-btn" data-size="sm" onClick={() => playAsGuest()}>Battle as a guest</button>
               </div>
             )}

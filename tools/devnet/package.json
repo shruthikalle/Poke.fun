@@ -1,0 +1,14 @@
+{
+  "name": "pokefun-devnet-tools",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "mint:test-cards": "node mint-test-cards.mjs"
+  },
+  "dependencies": {
+    "@metaplex-foundation/mpl-core": "^1.9.0",
+    "@metaplex-foundation/umi": "^1.5.0",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.5.0",
+    "@metaplex-foundation/umi-uploader-irys": "^1.5.0"
+  }
+}
