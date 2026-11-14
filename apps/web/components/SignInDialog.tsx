@@ -1,74 +1,114 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useWallet } from "../lib/wallet/WalletProvider";
-import { Emblem } from "./Emblem";
 import { useFocusTrap } from "../lib/useFocusTrap";
+import { Emblem } from "./Emblem";
 import styles from "./SignInDialog.module.css";
-import { PixelIcon } from "./PixelIcon";
 
-const COPY = {
-  idle: { title: "Sign in to Poke.fun", body: "Your cards, your rank, your battles." },
-  connecting: { title: "Check the Phantom window", body: "Approve the sign-in request to continue. It only takes a second." },
-  confirming: { title: "Confirm it's you", body: "Phantom will ask you to confirm. It's free and doesn't post anything." },
-  "not-installed": { title: "Phantom isn't set up here", body: "Poke.fun uses the Phantom browser extension to keep your account safe. Add it, then come back and sign in." },
-  rejected: { title: "Sign-in cancelled", body: "No problem, nothing was shared. You can try again whenever you're ready." },
-  error: { title: "Couldn't sign you in", body: "Give it another go." },
-} as const;
+type Step = "email" | "code";
+type Mode = "sign-in" | "create";
 
-export function SignInDialog({ open, onClose, onSignedIn }: { open: boolean; onClose: () => void; onSignedIn?: () => void }) {
-  const { status, signIn, playAsGuest, reset } = useWallet();
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+function friendly(error: unknown): string {
+  const text = error instanceof Error ? error.message : String(error);
+  if (/invalid|incorrect|code/i.test(text)) return "That code didn't work. Check it and try again.";
+  if (/rate|too many/i.test(text)) return "Too many tries. Wait a minute and try again.";
+  return "Something went wrong. Give it another go.";
+}
+
+/** Email + one-time code sign-in. Rendered once by WalletProvider; open it with `useWallet().signIn()`. */
+export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open: boolean; initialMode: Mode; onClose: () => void; onSignedIn: () => void }) {
+  const { auth, connected, playAsGuest, provider } = useWallet();
   const dialogRef = useRef<HTMLDivElement>(null);
-  const wasOpen = useRef(false);
+  const codeRef = useRef<HTMLInputElement>(null);
+  const [mode, setMode] = useState<Mode>(initialMode);
+  const [step, setStep] = useState<Step>("email");
+  const [email, setEmail] = useState("");
+  const [code, setCode] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   useFocusTrap(dialogRef, open);
 
   useEffect(() => {
-    if (open && !wasOpen.current) reset();
-    wasOpen.current = open;
-  }, [open, reset]);
+    if (!open) return;
+    setMode(initialMode); setStep("email"); setCode(""); setError(null); setBusy(false);
+  }, [open, initialMode]);
 
-  useEffect(() => {
-    if (open && (status === "signed-in" || status === "guest") && wasOpen.current) {
-      onSignedIn?.();
-    }
-  }, [open, status, onSignedIn]);
+  useEffect(() => { if (open && connected) onSignedIn(); }, [open, connected, onSignedIn]);
+  useEffect(() => { if (step === "code") codeRef.current?.focus(); }, [step]);
 
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose();
     window.addEventListener("keydown", onKey);
-    dialogRef.current?.focus();
     return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, busy, onClose]);
 
   if (!open) return null;
-  const key = status === "signed-in" || status === "guest" ? "idle" : status;
-  const copy = COPY[key];
-  const busy = status === "connecting" || status === "confirming";
 
+  const run = async (task: () => Promise<void>) => {
+    setBusy(true); setError(null);
+    try { await task(); } catch (e) { setError(friendly(e)); } finally { setBusy(false); }
+  };
+
+  const submitEmail = (e: FormEvent) => {
+    e.preventDefault();
+    if (!EMAIL_RE.test(email.trim())) { setError("Enter a valid email address."); return; }
+    void run(async () => { await auth.sendCode(email.trim()); setStep("code"); });
+  };
+
+  const submitCode = (e: FormEvent) => {
+    e.preventDefault();
+    if (!/^\d{6}$/.test(code)) { setError("Enter the 6-digit code from your email."); return; }
+    void run(() => auth.verifyCode(code));
+  };
+
+  const creating = mode === "create";
   return (
     <div className={styles.backdrop} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
-      <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="signin-title" tabIndex={-1} data-status={status}>
-        <button className={styles.close} onClick={onClose} aria-label="Close" disabled={busy}><PixelIcon name="close" size={14} /></button>
-        <div className={styles.icon} data-tone={key}>
-          {key === "rejected" ? <PixelIcon name="alert" size={24} /> : key === "not-installed" ? <PixelIcon name="question" size={24} /> : key === "error" ? <PixelIcon name="close" size={22} /> : <Emblem size={56} />}
-          {busy && <span className={styles.spinner} />}
-        </div>
-        <h2 id="signin-title" className={styles.title}>{copy.title}</h2>
-        <p className={styles.body}>{copy.body}</p>
+      <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="signin-title" tabIndex={-1}>
+        <button className={styles.close} onClick={onClose} disabled={busy} aria-label="Close">×</button>
+        <div className={styles.icon}><Emblem size={48} /></div>
 
-        {key === "not-installed" ? (
-          <>
-            <a className={`pf-btn ${styles.primary}`} data-variant="primary" href="https://phantom.com/download" target="_blank" rel="noreferrer">Get Phantom <PixelIcon name="external" size={10} /></a>
-            <button className={`pf-btn ${styles.secondary}`} data-variant="ghost" onClick={signIn}>I've added it, try again</button>
-          </>
+        {step === "email" ? (
+          <form onSubmit={submitEmail} noValidate>
+            <h2 id="signin-title" className={styles.title}>{creating ? "Create your account" : "Sign in to Poke.fun"}</h2>
+            <p className={styles.body}>{creating ? "Just your email. We'll send a code to confirm it's you." : "Your cards, your rank, your battles."}</p>
+            <label className={styles.field}>
+              <span>Email</span>
+              <input className="pf-input" type="email" autoComplete="email" placeholder="you@example.com" value={email}
+                onChange={(e) => setEmail(e.target.value)} autoFocus disabled={busy} />
+            </label>
+            {error && <p className={styles.error} role="alert">{error}</p>}
+            <button className={`pf-btn ${styles.primary}`} data-variant="primary" disabled={busy}>
+              {busy ? "Sending code…" : creating ? "Create account" : "Continue"}
+            </button>
+            <button type="button" className={styles.link} onClick={() => { setMode(creating ? "sign-in" : "create"); setError(null); }} disabled={busy}>
+              {creating ? "Already have an account? Sign in" : "New here? Create an account"}
+            </button>
+            <button type="button" className={styles.link} onClick={() => { playAsGuest(); onSignedIn(); }} disabled={busy}>
+              Play as a guest instead
+            </button>
+          </form>
         ) : (
-          <button className={`pf-btn ${styles.primary}`} data-variant="primary" onClick={signIn} disabled={busy}>
-            {busy ? "Waiting…" : key === "idle" ? "Continue with Phantom" : "Try again"}
-          </button>
+          <form onSubmit={submitCode} noValidate>
+            <h2 id="signin-title" className={styles.title}>Check your email</h2>
+            <p className={styles.body}>We sent a 6-digit code to <b>{email.trim()}</b>.</p>
+            <label className={styles.field}>
+              <span>Code</span>
+              <input ref={codeRef} className={`pf-input ${styles.code}`} inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+                placeholder="000000" value={code} onChange={(e) => setCode(e.target.value.replace(/\D/g, "").slice(0, 6))} disabled={busy} />
+            </label>
+            {error && <p className={styles.error} role="alert">{error}</p>}
+            <button className={`pf-btn ${styles.primary}`} data-variant="primary" disabled={busy}>{busy ? "Signing in…" : creating ? "Create account" : "Sign in"}</button>
+            <button type="button" className={styles.link} onClick={() => { setStep("email"); setCode(""); setError(null); }} disabled={busy}>Use a different email</button>
+            <button type="button" className={styles.link} onClick={() => void run(() => auth.sendCode(email.trim()))} disabled={busy}>Send a new code</button>
+          </form>
         )}
-        <button className={styles.link} onClick={() => { playAsGuest(); }} disabled={busy}>Play as a guest instead</button>
-        <p className={styles.fine}>We never ask for your recovery phrase.</p>
+
+        <p className={styles.fine}>{provider === "mock" ? "Demo mode: any 6-digit code works." : "No passwords to remember. We'll email you a code each time."}</p>
       </div>
     </div>
   );

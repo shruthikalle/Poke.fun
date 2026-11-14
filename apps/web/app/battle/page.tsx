@@ -8,7 +8,6 @@ import { RoomPanel } from "../../components/battle/RoomPanel";
 import { Sidebar } from "../../components/battle/Sidebar";
 import { TopBar, type TabId } from "../../components/battle/TopBar";
 import { Viewport } from "../../components/battle/Viewport";
-import { SignInDialog } from "../../components/SignInDialog";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { MockBattleStream } from "../../lib/battle/MockBattleStream";
@@ -57,7 +56,7 @@ function ResultSummary({ result, entry }: { result: MatchResult; entry: number }
 
 export default function BattlePage() {
   const router = useRouter();
-  const { ready, playerName: signedInName } = useWallet();
+  const { ready, playerName: signedInName, signIn } = useWallet();
   const playerName = signedInName ?? "Guest";
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -102,7 +101,6 @@ export default function BattlePage() {
   const [sidebar, setSidebar] = useState(true);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [tab, setTab] = useState<TabId>("battle");
-  const [signIn, setSignIn] = useState(false);
 
   useEffect(() => {
     if (window.innerWidth < 1180) setSidebar(false);
@@ -134,7 +132,6 @@ export default function BattlePage() {
     setRooms((rs) => rs.filter((r) => r.id !== id));
     setTab((t) => (t === id ? "battle" : t));
   }, []);
-  const closeSignIn = useCallback(() => setSignIn(false), []);
 
   const setOptions = (o: BattleOptions) => {
     if (o.sound === audio.muted) audio.toggleMute();
@@ -151,7 +148,7 @@ export default function BattlePage() {
   return (
     <div className={styles.app} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
       <TopBar title={title} subtitle={subtitle} rooms={rooms} activeTab={tab} onSelect={setTab} onCloseRoom={closeRoom}
-        onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => setSignIn(true)} />
+        onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => signIn()} />
 
       <div className={styles.body}>
         <div className={styles.left}>
@@ -191,7 +188,6 @@ export default function BattlePage() {
         )}
       </div>
 
-      <SignInDialog open={signIn} onClose={closeSignIn} onSignedIn={closeSignIn} />
     </div>
   );
 }

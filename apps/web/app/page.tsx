@@ -7,7 +7,6 @@ import { preload } from "react-dom";
 import { AccountChip } from "../components/AccountChip";
 import { Emblem } from "../components/Emblem";
 import { PixelAvatar } from "../components/PixelAvatar";
-import { SignInDialog } from "../components/SignInDialog";
 import { FORMAT_LABEL } from "../lib/cards/mapping";
 import { useMotionPreference } from "../lib/motion";
 import { speciesService } from "../lib/pokemon/SpeciesService";
@@ -169,17 +168,11 @@ function SocialIcon({ name }: { name: string }) {
 
 export default function Landing() {
   const router = useRouter();
-  const { playerName } = useWallet();
-  const [signInOpen, setSignInOpen] = useState(false);
+  const { playerName, signIn } = useWallet();
   const motion = useMotionPreference();
   const paused = motion.reduced;
 
-  const enter = () => (playerName ? router.push("/loadout") : setSignInOpen(true));
-  const close = useCallback(() => setSignInOpen(false), []);
-  const onSignedIn = useCallback(() => {
-    setSignInOpen(false);
-    router.push("/loadout");
-  }, [router]);
+  const enter = () => (playerName ? router.push("/loadout") : signIn({ onSignedIn: () => router.push("/loadout") }));
 
   return (
     <div className={styles.page} data-paused={paused || undefined}>
@@ -203,7 +196,7 @@ export default function Landing() {
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
                 extra={<Link className={styles.menuItem} href="/loadout">Play a match</Link>} />
             ) : (
-              <button className={styles.signIn} onClick={() => setSignInOpen(true)}>Sign in</button>
+              <button className={styles.signIn} onClick={() => signIn()}>Sign in</button>
             )}
           </nav>
         </header>
@@ -295,7 +288,6 @@ export default function Landing() {
         </footer>
       </main>
 
-      <SignInDialog open={signInOpen} onClose={close} onSignedIn={onSignedIn} />
     </div>
   );
 }

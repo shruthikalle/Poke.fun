@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
-import { SignInDialog } from "../../components/SignInDialog";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useMotionPreference } from "../../lib/motion";
@@ -82,8 +81,7 @@ function RankBadge({ rank }: { rank: { tier: string; rating: number } }) {
 
 export default function LoadoutPage() {
   const router = useRouter();
-  const { ready, playerName, session, status, playAsGuest } = useWallet();
-  const [signInOpen, setSignInOpen] = useState(false);
+  const { ready, playerName, session, status, playAsGuest, signIn } = useWallet();
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -101,8 +99,8 @@ export default function LoadoutPage() {
   const guest = status === "guest" || !session;
 
   useEffect(() => {
-    if (ready && !playerName) setSignInOpen(true);
-  }, [ready, playerName]);
+    if (ready && !playerName) signIn({ onCancel: () => router.push("/") });
+  }, [ready, playerName, signIn, router]);
 
   useEffect(() => {
     if (!playerName) return;
@@ -177,11 +175,6 @@ export default function LoadoutPage() {
 
   useEffect(() => () => search.current?.cancel(), []);
 
-  const closeSignIn = useCallback(() => {
-    setSignInOpen(false);
-    if (!playerName) router.push("/");
-  }, [playerName, router]);
-  const onSignedIn = useCallback(() => setSignInOpen(false), []);
 
   const [entryError, setEntryError] = useState<string | null>(null);
   const setCustomEntry = (raw: string) => {
@@ -364,7 +357,6 @@ export default function LoadoutPage() {
           onReplay={() => summonCard(lead.key)} onDone={() => setSummon(null)} />
       )}
 
-      <SignInDialog open={signInOpen} onClose={closeSignIn} onSignedIn={onSignedIn} />
     </div>
   );
 }
