@@ -30,6 +30,8 @@
 
 .top { position: absolute; top: 0; left: 0; right: 0; display: flex; align-items: center; justify-content: space-between; padding: var(--space-5) var(--space-7); }
 .brand { display: flex; align-items: center; gap: var(--space-3); text-decoration: none; font-family: var(--font-label); font-size: 13px; letter-spacing: .2em; text-transform: uppercase; }
+.brandText { display: flex; flex-direction: column; gap: 2px; }
+.brandText small { font-family: var(--font-body); font-size: 11px; letter-spacing: .04em; text-transform: none; color: var(--text-dim); }
 .nav { display: flex; align-items: center; gap: var(--space-6); font-family: var(--font-label); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; }
 .nav a, .signIn { padding: 6px 0; color: var(--text-dim); text-decoration: none; background: none; border: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; border-bottom: 2px solid transparent; transition: color var(--dur-fast), border-color var(--dur-fast); }
 .nav a:hover, .signIn:hover { color: var(--text); border-bottom-color: var(--accent); }
@@ -50,14 +52,12 @@
 .fine { margin: var(--space-4) 0 0; font-size: 12px; color: var(--text-dim); text-shadow: 0 1px 0 rgba(0, 0, 0, .6); }
 .fine strong { color: var(--text-dim); font-weight: 600; }
 
-.rail { position: absolute; right: var(--space-6); top: 50%; transform: translateY(-50%); margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; align-items: center; gap: var(--space-4); }
-.rail::before, .rail::after { content: ""; width: 1px; height: 56px; background: linear-gradient(transparent, var(--line-strong)); }
-.rail::after { background: linear-gradient(var(--line-strong), transparent); }
-.rail a { display: grid; place-items: center; width: 32px; height: 32px; color: var(--text-dim); transition: color var(--dur-fast), transform var(--dur-fast); }
-.rail a:hover { color: var(--accent); transform: translateX(-2px); }
-
-.pause { position: absolute; left: var(--space-7); bottom: var(--space-6); display: flex; align-items: center; gap: var(--space-2); padding: 4px 0; color: var(--text-dim); background: none; border: 0; font-family: var(--font-label); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; }
-.pause:hover { color: var(--text); }
+.corner { position: absolute; right: var(--space-7); bottom: var(--space-6); display: flex; align-items: center; gap: var(--space-5); }
+.rail { margin: 0; padding: 0; list-style: none; display: flex; align-items: center; gap: var(--space-4); }
+.rail a { display: flex; align-items: center; gap: 6px; padding: 4px 0; color: var(--text-dim); text-decoration: none; font-family: var(--font-label); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; transition: color var(--dur-fast); }
+.rail a:hover { color: var(--accent); }
+.pause { display: flex; align-items: center; gap: var(--space-2); padding: 4px 0; color: var(--text); background: none; border: 0; border-bottom: 1px solid currentColor; font-family: var(--font-label); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; }
+.pause:hover { color: var(--accent); }
 .pauseIcon { width: 8px; height: 10px; border-left: 3px solid currentColor; border-right: 3px solid currentColor; }
 .pauseIcon[data-paused] { border: 0; width: 0; height: 0; border-left: 8px solid currentColor; border-top: 5px solid transparent; border-bottom: 5px solid transparent; }
 
@@ -120,5 +120,5 @@
 @keyframes hover { 50% { transform: translateY(-6px); } }
 @keyframes drip { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
 @keyframes blink { 50% { opacity: .25; } }
-@media (max-width: 900px) { .top { padding: var(--space-4); } .nav { gap: var(--space-4); } .steps { grid-template-columns: 1fr 1fr; } .rail { right: var(--space-3); } .pause { left: var(--space-4); } }
+@media (max-width: 900px) { .top { padding: var(--space-4); } .nav { gap: var(--space-4); } .steps { grid-template-columns: 1fr 1fr; } .corner { right: var(--space-4); } .rail span { display: none; } }
 @media (prefers-reduced-motion: reduce) { .cone, .screenInner, .screenSprite, .motes span, .crest, .scroll i { animation: none; } }

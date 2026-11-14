@@ -73,7 +73,7 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
         <div className={styles.icon}><Emblem size={48} /></div>
 
         {step === "email" ? (
-          <form onSubmit={submitEmail} noValidate>
+          <form className={styles.form} onSubmit={submitEmail} noValidate>
             <h2 id="signin-title" className={styles.title}>{creating ? "Create your account" : "Sign in to Poke.fun"}</h2>
             <p className={styles.body}>{creating ? "Just your email. We'll send a code to confirm it's you." : "Your cards, your rank, your battles."}</p>
             <label className={styles.field}>
@@ -93,7 +93,7 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
             </button>
           </form>
         ) : (
-          <form onSubmit={submitCode} noValidate>
+          <form className={styles.form} onSubmit={submitCode} noValidate>
             <h2 id="signin-title" className={styles.title}>Check your email</h2>
             <p className={styles.body}>We sent a 6-digit code to <b>{email.trim()}</b>.</p>
             <label className={styles.field}>

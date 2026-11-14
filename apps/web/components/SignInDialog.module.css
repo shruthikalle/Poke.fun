@@ -25,4 +25,4 @@
 .field input { width: 100%; text-transform: none; letter-spacing: normal; font-family: var(--font-body); font-size: 15px; }
 .code { text-align: center; font-family: var(--font-display) !important; font-size: 26px !important; letter-spacing: .4em !important; }
 .error { margin: -6px 0 var(--space-3); font-size: 13px; color: var(--bad); text-align: left; }
-form { display: grid; }
+.form { display: grid; }

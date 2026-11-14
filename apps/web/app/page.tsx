@@ -187,10 +187,12 @@ export default function Landing() {
         <header className={styles.top}>
           <Link href="/" className={styles.brand} aria-label="Poke.fun home">
             <Emblem size={26} />
-            <span>Poke.fun</span>
+            <span className={styles.brandText}><b>Poke.fun</b><small>Real cards. Real battles.</small></span>
           </Link>
           <nav className={styles.nav} aria-label="Main">
             {NAV.map((n) => <a key={n.href} href={n.href}>{n.label}</a>)}
+            <Link href="/market">Marketplace</Link>
+            <Link href="/collection">My Cards</Link>
             <Link href="/loadout">Play</Link>
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
@@ -211,18 +213,19 @@ export default function Landing() {
           <p className={styles.fine}>{playerName ? <>Playing as <strong>{playerName}</strong></> : null}</p>
         </div>
 
-        <ul className={styles.rail} aria-label="Social links">
-          {SOCIALS.map((s) => (
-            <li key={s.label}><a href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label}><SocialIcon name={s.label} /></a></li>
-          ))}
-        </ul>
+        <div className={styles.corner}>
+          <ul className={styles.rail} aria-label="Social links">
+            {SOCIALS.map((s) => (
+              <li key={s.label}><a href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label}><SocialIcon name={s.label} />{s.label.length > 1 && <span>{s.label}</span>}</a></li>
+            ))}
+          </ul>
+          <button className={styles.pause} onClick={() => motion.setPaused(!paused)} aria-pressed={paused}>
+            <span className={styles.pauseIcon} data-paused={paused || undefined} aria-hidden="true" />
+            {paused ? "Play motion" : "Pause motion"}
+          </button>
+        </div>
 
-        <button className={styles.pause} onClick={() => motion.setPaused(!paused)} aria-pressed={paused}>
-          <span className={styles.pauseIcon} data-paused={paused || undefined} aria-hidden="true" />
-          {paused ? "Play motion" : "Pause motion"}
-        </button>
-
-        <a href="#about" className={styles.scroll}><span>Scroll</span><i aria-hidden="true" /></a>
+        <a href="#about" className={styles.scroll}><span>How it works</span><i aria-hidden="true" /></a>
       </section>
 
       <main className={styles.below}>
@@ -231,7 +234,7 @@ export default function Landing() {
           <ol className={styles.steps}>
             <li>
               <div className={styles.art}><PixelAvatar seed="trainer" size={36} /><span className={styles.or}>or</span><img src={SPRITE(133)} alt="" width={56} height={56} /></div>
-              <span>01</span><h3>Sign in</h3><p>Connect Phantom, or play free as a guest with rental Pokémon.</p>
+              <span>01</span><h3>Sign in</h3><p>Create a free account with your email, or play as a guest with rental Pokémon.</p>
             </li>
             <li>
               <div className={styles.art}><img className={styles.thumb} src="https://images.pokemontcg.io/base3/5.png" alt="" width={40} height={56} loading="lazy" /><i className={styles.arrow} /><img src={SPRITE(94)} alt="" width={56} height={56} /></div>
