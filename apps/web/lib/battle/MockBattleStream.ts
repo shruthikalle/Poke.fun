@@ -1,0 +1,316 @@
+import { MOCK_FORMAT, randomTeam, speciesById, typeMultiplier } from "./roster";
+import {
+  otherSide,
+  type BattleChoice, type BattleEvent, type BattleStreamSource, type Creature, type Effectiveness,
+  type Side, type SideState, type Trainer, type Unsubscribe,
+} from "./types";
+
+const OPPONENT_LINES = ["gl hf", "nice switch", "oof", "that crit tho", "gg", "close one!"];
+
+export interface MockBattleOptions {
+  you: Trainer;
+  opponent?: Trainer;
+  /** Multiplier for every delay; tests can pass a small value. */
+  speed?: number;
+}
+
+/**
+ * In-memory stand-in for the live battle feed. It plays a random
+ * opponent and emits the same events a real transport would.
+ */
+export class MockBattleStream implements BattleStreamSource {
+  private listener: ((event: BattleEvent) => void) | null = null;
+  private timers = new Set<ReturnType<typeof setTimeout>>();
+  private tick: ReturnType<typeof setInterval> | null = null;
+  private sides!: Record<Side, SideState>;
+  private turn = 1;
+  private pending: BattleChoice | null = null;
+  private needsSwitch = false;
+  private awaiting = false;
+  private over = false;
+  private timerEnabled = false;
+  private secondsLeft = 150;
+  private readonly speed: number;
+  private readonly you: Trainer;
+  private readonly opponent: Trainer;
+
+  constructor(options: MockBattleOptions) {
+    this.you = options.you;
+    this.opponent = options.opponent ?? { id: "thar07", name: "thar07", avatar: "kai" };
+    this.speed = options.speed ?? 1;
+  }
+
+  connect(listener: (event: BattleEvent) => void): Unsubscribe {
+    this.listener = listener;
+    this.start();
+    return () => {
+      this.listener = null;
+      this.clearAll();
+    };
+  }
+
+  choose(choice: BattleChoice): void {
+    if (this.over || this.pending || !this.awaiting) return;
+    const mine = this.sides.p1;
+    if (choice.kind === "switch") {
+      const target = mine.team[choice.teamIndex];
+      if (!target || target.fainted || choice.teamIndex === mine.activeIndex) return;
+    }
+    if (this.needsSwitch) {
+      if (choice.kind !== "switch") return;
+      this.needsSwitch = false;
+      this.awaiting = false;
+      this.emit({ type: "resolving" });
+      mine.activeIndex = choice.teamIndex;
+      this.emit({ type: "switch", side: "p1", teamIndex: choice.teamIndex });
+      this.later(700, () => this.beginTurn(false));
+      return;
+    }
+    if (choice.kind === "move") {
+      const m = mine.team[mine.activeIndex].moves[choice.moveIndex];
+      if (!m || m.pp <= 0) return;
+    }
+    this.pending = choice;
+    this.awaiting = false;
+    this.emit({ type: "choice-accepted", choice });
+    this.later(1200 + Math.random() * 1800, () => this.resolveTurn());
+  }
+
+  cancel(): void {
+    if (!this.pending || this.over) return;
+    this.pending = null;
+    this.awaiting = true;
+    this.clearTimeouts();
+    this.emit({ type: "choice-cancelled" });
+  }
+
+  setTimer(enabled: boolean): void {
+    this.timerEnabled = enabled;
+    this.secondsLeft = 150;
+    this.emit({ type: "timer", enabled, secondsLeft: enabled ? this.secondsLeft : null });
+    if (enabled) this.emit({ type: "chat", user: "", text: `Battle timer is ON: inactive players will automatically lose when time's up. (requested by ${this.you.name})` });
+    else this.emit({ type: "chat", user: "", text: "Battle timer is now OFF." });
+  }
+
+  sendChat(text: string): void {
+    const trimmed = text.trim().slice(0, 300);
+    if (!trimmed) return;
+    this.emit({ type: "chat", user: this.you.name, text: trimmed });
+    if (Math.random() < 0.4) {
+      this.later(1500, () => this.emit({ type: "chat", user: this.opponent.name, text: OPPONENT_LINES[Math.floor(Math.random() * OPPONENT_LINES.length)] }));
+    }
+  }
+
+  rematch(): void {
+    this.clearAll();
+    this.start();
+  }
+
+  private start() {
+    this.turn = 1;
+    this.pending = null;
+    this.needsSwitch = false;
+    this.awaiting = false;
+    this.over = false;
+    const p1Team = randomTeam(6);
+    this.sides = {
+      p1: { side: "p1", trainer: this.you, team: p1Team, activeIndex: 0 },
+      p2: { side: "p2", trainer: this.opponent, team: randomTeam(6), activeIndex: 0 },
+    };
+    this.emit({
+      type: "init",
+      state: {
+        id: `battle-gen9randombattle-${Math.floor(Math.random() * 9e9) + 1e9}`,
+        format: MOCK_FORMAT,
+        turn: 1,
+        you: "p1",
+        sides: structuredClone(this.sides),
+        users: [this.you.name],
+        pendingChoice: null,
+        winner: null,
+        timer: { enabled: this.timerEnabled, secondsLeft: this.timerEnabled ? 150 : null, secondsPerTurn: 150 },
+      },
+    });
+    this.later(150, () => this.emit({ type: "join", name: this.opponent.name }));
+    this.later(300, () => this.emit({ type: "join", name: this.you.name }));
+    this.later(600, () => {
+      this.emit({ type: "start" });
+      this.emit({ type: "switch", side: "p2", teamIndex: 0 });
+    });
+    this.later(1100, () => this.emit({ type: "switch", side: "p1", teamIndex: 0 }));
+    this.later(1500, () => this.beginTurn(true));
+    this.startTicker();
+  }
+
+  private beginTurn(first: boolean) {
+    if (!first) this.turn += 1;
+    this.secondsLeft = 150;
+    this.emit({ type: "turn", turn: this.turn });
+    if (this.timerEnabled) this.emit({ type: "timer", enabled: true, secondsLeft: this.secondsLeft });
+    this.awaiting = true;
+    this.emit({ type: "request", phase: "choosing" });
+  }
+
+  private resolveTurn() {
+    const choice = this.pending;
+    if (!choice) return;
+    this.pending = null;
+    this.emit({ type: "resolving" });
+    const steps: Array<() => void> = [];
+    const p1 = this.sides.p1;
+    const p2 = this.sides.p2;
+
+    if (choice.kind === "switch") {
+      steps.push(() => {
+        p1.activeIndex = choice.teamIndex;
+        this.emit({ type: "switch", side: "p1", teamIndex: choice.teamIndex });
+      });
+    }
+
+    const opponentMove = this.pickOpponentMove();
+    const order: Array<{ side: Side; moveIndex: number }> = [];
+    if (choice.kind === "move") order.push({ side: "p1", moveIndex: choice.moveIndex });
+    order.push({ side: "p2", moveIndex: opponentMove });
+    order.sort((a, b) => this.speedOf(b.side) - this.speedOf(a.side));
+
+    for (const action of order) {
+      steps.push(() => this.performMove(action.side, action.moveIndex));
+    }
+
+    this.runSteps(steps, () => {
+      if (this.over) return;
+      if (p2.team[p2.activeIndex].fainted) {
+        const next = p2.team.findIndex((c) => !c.fainted);
+        p2.activeIndex = next;
+        this.emit({ type: "switch", side: "p2", teamIndex: next });
+      }
+      if (p1.team[p1.activeIndex].fainted) {
+        this.needsSwitch = true;
+        this.awaiting = true;
+        this.emit({ type: "request", phase: "switching" });
+        return;
+      }
+      this.later(500, () => this.beginTurn(false));
+    });
+  }
+
+  private runSteps(steps: Array<() => void>, done: () => void) {
+    const [head, ...rest] = steps;
+    if (!head || this.over) {
+      this.later(400, done);
+      return;
+    }
+    head();
+    this.later(1100, () => this.runSteps(rest, done));
+  }
+
+  private performMove(side: Side, moveIndex: number) {
+    const attacker = this.active(side);
+    const defenderSide = otherSide(side);
+    const defender = this.active(defenderSide);
+    if (attacker.fainted || defender.fainted) return;
+    const m = attacker.moves[moveIndex];
+    m.pp = Math.max(0, m.pp - 1);
+    this.emit({ type: "move", side, moveIndex, ppLeft: m.pp });
+
+    this.later(450, () => {
+      if (Math.random() * 100 >= m.accuracy) {
+        this.emit({ type: "miss", side: defenderSide });
+        return;
+      }
+      const mult = typeMultiplier(m.type, defender.types);
+      const stab = attacker.types.includes(m.type) ? 1.5 : 1;
+      const crit = Math.random() < 0.06;
+      const base = (((2 * attacker.level) / 5 + 2) * m.power * 1.1) / 50 + 2;
+      const damage = Math.round(base * stab * mult * (crit ? 1.5 : 1) * (0.85 + Math.random() * 0.15) * 1.6);
+      defender.hp = Math.max(0, defender.hp - damage);
+      const effectiveness: Effectiveness = mult === 0 ? "immune" : mult > 1 ? "super" : mult < 1 ? "resisted" : "normal";
+      this.emit({ type: "damage", side: defenderSide, hp: defender.hp, effectiveness, crit });
+      if (defender.hp === 0) {
+        defender.fainted = true;
+        this.later(500, () => {
+          this.emit({ type: "faint", side: defenderSide });
+          this.checkWinner();
+        });
+      }
+    });
+  }
+
+  private checkWinner() {
+    const p1Out = this.sides.p1.team.every((c) => c.fainted);
+    const p2Out = this.sides.p2.team.every((c) => c.fainted);
+    if (!p1Out && !p2Out) return;
+    this.over = true;
+    this.stopTicker();
+    const winner = p1Out && p2Out ? "draw" : p1Out ? "p2" : "p1";
+    this.later(600, () => {
+      this.emit({ type: "win", winner });
+      this.emit({ type: "chat", user: this.opponent.name, text: "gg" });
+    });
+  }
+
+  private pickOpponentMove(): number {
+    const attacker = this.active("p2");
+    const defender = this.active("p1");
+    const scored = attacker.moves
+      .map((m, i) => ({ i, score: m.pp > 0 ? m.power * typeMultiplier(m.type, defender.types) * (0.7 + Math.random() * 0.6) : -1 }))
+      .sort((a, b) => b.score - a.score);
+    return scored[0].i;
+  }
+
+  private speedOf(side: Side) {
+    const c = this.active(side);
+    return (speciesById(c.spriteId)?.base.spe ?? 70) + c.level / 10 + Math.random();
+  }
+
+  private active(side: Side): Creature {
+    const s = this.sides[side];
+    return s.team[s.activeIndex];
+  }
+
+  private startTicker() {
+    this.stopTicker();
+    this.tick = setInterval(() => {
+      if (!this.timerEnabled || this.over) return;
+      this.secondsLeft = Math.max(0, this.secondsLeft - 1);
+      this.emit({ type: "timer", enabled: true, secondsLeft: this.secondsLeft });
+      if (this.secondsLeft === 0 && this.awaiting) {
+        const mine = this.active("p1");
+        if (this.needsSwitch) {
+          this.choose({ kind: "switch", teamIndex: this.sides.p1.team.findIndex((c) => !c.fainted) });
+        } else {
+          const usable = mine.moves.findIndex((m) => m.pp > 0);
+          this.emit({ type: "chat", user: "", text: `${this.you.name} ran out of time; a move was picked automatically.` });
+          this.choose({ kind: "move", moveIndex: Math.max(0, usable) });
+        }
+      }
+    }, 1000);
+  }
+
+  private stopTicker() {
+    if (this.tick) clearInterval(this.tick);
+    this.tick = null;
+  }
+
+  private later(ms: number, fn: () => void) {
+    const id = setTimeout(() => {
+      this.timers.delete(id);
+      fn();
+    }, ms * this.speed);
+    this.timers.add(id);
+  }
+
+  private clearTimeouts() {
+    this.timers.forEach(clearTimeout);
+    this.timers.clear();
+  }
+
+  private clearAll() {
+    this.clearTimeouts();
+    this.stopTicker();
+  }
+
+  private emit(event: BattleEvent) {
+    this.listener?.(event);
+  }
+}

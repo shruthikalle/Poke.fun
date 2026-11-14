@@ -1,141 +1,140 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
-import { api, type Card, type Match, type Session } from "../lib/api";
+import { AccountChip } from "../components/AccountChip";
+import { SignInDialog } from "../components/SignInDialog";
+import { useWallet } from "../lib/wallet/WalletProvider";
+import styles from "./landing.module.css";
 
-const SESSION_KEY = "pokefun-session";
+const NAV = [
+  { href: "#about", label: "About" },
+  { href: "#battles", label: "Battles" },
+  { href: "#leaderboard", label: "Leaderboard" },
+];
 
-function BattleCard({ player, label }: { player: NonNullable<Match["players"][number]>; label: string }) {
-  const hp = Math.max(0, Math.round((player.hp / player.card.maxHp) * 100));
-  return (
-    <article className={`battle-card ${player.card.element.toLowerCase()}`}>
-      <span className="card-label">{label}</span>
-      <div className="card-symbol" aria-hidden="true">
-        {player.card.element === "Fire" ? "✦" : player.card.element === "Water" ? "≈" : "✿"}
-      </div>
-      <h3>{player.card.name}</h3>
-      <p className="player-name">{player.name} · {player.card.element}</p>
-      <div className="stat-line"><span>HP</span><strong>{player.hp}/{player.card.maxHp}</strong></div>
-      <div className="hp-track"><div style={{ width: `${hp}%` }} /></div>
-      <div className="stat-line"><span>Energy</span><strong>{player.energy}</strong></div>
-    </article>
-  );
-}
+const SOCIALS = [
+  { href: "https://github.com/shruthikalle/Poke.fun", label: "GitHub" },
+  { href: "https://discord.com", label: "Discord" },
+  { href: "https://x.com", label: "X" },
+];
 
-export default function Home() {
-  const [cards, setCards] = useState<Card[]>([]);
-  const [name, setName] = useState("");
-  const [cardId, setCardId] = useState("");
-  const [roomCode, setRoomCode] = useState("");
-  const [session, setSession] = useState<Session | null>(null);
-  const [match, setMatch] = useState<Match | null>(null);
-  const [error, setError] = useState("");
-  const [busy, setBusy] = useState(false);
+const LIVE_BATTLES = [
+  { a: "thar07", b: "mossy_mo", turn: 7, format: "Random Battle" },
+  { a: "kiwi.k", b: "drillbit", turn: 3, format: "One-Card Arena" },
+  { a: "pyrefly", b: "ottergirl", turn: 12, format: "Random Battle" },
+];
 
-  useEffect(() => {
-    const saved = sessionStorage.getItem(SESSION_KEY);
-    if (saved) {
-      try { setSession(JSON.parse(saved) as Session); } catch { sessionStorage.removeItem(SESSION_KEY); }
-    }
-    api.cards().then((data) => {
-      setCards(data);
-      setCardId((current) => current || data[0]?.id || "");
-    }).catch((cause: Error) => setError(cause.message));
-  }, []);
+const LEADERS = [
+  { name: "pyrefly", rating: 1842, record: "128–41" },
+  { name: "ottergirl", rating: 1797, record: "102–39" },
+  { name: "thar07", rating: 1765, record: "88–35" },
+  { name: "kiwi.k", rating: 1720, record: "140–77" },
+  { name: "drillbit", rating: 1688, record: "64–30" },
+];
 
-  const refresh = useCallback(async (current: Session) => {
-    try {
-      setMatch(await api.match(current));
-      setError("");
-    } catch (cause) {
-      setError((cause as Error).message);
-    }
-  }, []);
+const MOTES = Array.from({ length: 14 }, (_, i) => i);
+
+export default function Landing() {
+  const router = useRouter();
+  const { playerName } = useWallet();
+  const [signInOpen, setSignInOpen] = useState(false);
+  const [paused, setPaused] = useState(false);
 
   useEffect(() => {
-    if (!session) return;
-    void refresh(session);
-    const timer = window.setInterval(() => void refresh(session), 1000);
-    return () => window.clearInterval(timer);
-  }, [session, refresh]);
+    setPaused(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, []);
 
-  async function enter(mode: "create" | "join") {
-    if (!name.trim() || !cardId || (mode === "join" && !roomCode.trim())) {
-      setError("Enter a name, choose a card, and add a room code if joining.");
-      return;
-    }
-    setBusy(true);
-    setError("");
-    try {
-      const next = mode === "create"
-        ? await api.create(name.trim(), cardId)
-        : await api.join(roomCode.trim().toUpperCase(), name.trim(), cardId);
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
-      setSession(next);
-      await refresh(next);
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function attack(attackId: string) {
-    if (!session) return;
-    setBusy(true);
-    try {
-      setMatch(await api.attack(session, attackId));
-      setError("");
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  function leave() {
-    sessionStorage.removeItem(SESSION_KEY);
-    setSession(null);
-    setMatch(null);
-    setError("");
-  }
-
-  const you = match?.players[match.you];
-  const opponent = match?.players[1 - match.you];
-  const winnerText = match?.winner === "draw" ? "Draw — both cards were knocked out."
-    : match?.winner ? (match.winner === `player${match.you + 1}` ? "You won!" : "You lost.") : "";
+  const enter = () => (playerName ? router.push("/battle") : setSignInOpen(true));
+  const close = useCallback(() => setSignInOpen(false), []);
+  const onSignedIn = useCallback(() => {
+    setSignInOpen(false);
+    router.push("/battle");
+  }, [router]);
 
   return (
-    <main>
-      <header className="site-header"><div className="brand">POKE<span>.FUN</span></div><span className="badge">ONE-CARD DEMO</span></header>
-      <div className="intro"><p className="eyebrow">TURN-BASED 1V1</p><h1>One card. One opponent. Your move.</h1><p>Pick a card, share a room code, and battle a friend in another browser. Both attacks resolve together each turn.</p></div>
-      {error && <div className="error" role="alert">{error}</div>}
+    <div className={styles.page} data-paused={paused || undefined}>
+      <section className={styles.hero}>
+        <div className={styles.bg} aria-hidden="true" />
+        <div className={styles.motes} aria-hidden="true">
+          {MOTES.map((i) => <span key={i} style={{ "--i": i } as React.CSSProperties} />)}
+        </div>
+        <div className={styles.vignette} aria-hidden="true" />
 
-      {session && !match && <button className="secondary reset-session" onClick={leave}>Start a new match</button>}
+        <header className={styles.top}>
+          <Link href="/" className={styles.brand} aria-label="Poke.fun home">
+            <span className={styles.mark}>pf.</span>
+            <span className={styles.brandText}>
+              <strong>Poke.fun</strong>
+              <small>Creature card battles.</small>
+            </span>
+          </Link>
+          <nav className={styles.nav} aria-label="Main">
+            {NAV.map((n) => <a key={n.href} href={n.href}>{n.label}</a>)}
+            <Link href="/battle">Play</Link>
+            {playerName ? (
+              <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
+                extra={<Link className={styles.menuItem} href="/battle">Go to battle</Link>} />
+            ) : (
+              <button className={styles.signIn} onClick={() => setSignInOpen(true)}>Sign in ↗</button>
+            )}
+          </nav>
+        </header>
 
-      {!session && <div className="setup-grid">
-        <section className="panel">
-          <h2>Choose your fighter</h2>
-          <label htmlFor="player-name">Your name</label>
-          <input id="player-name" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} placeholder="Player name" />
-          <div className="card-grid">{cards.map((card) => <button className={`choose-card ${card.id === cardId ? "selected" : ""}`} key={card.id} type="button" onClick={() => setCardId(card.id)}>
-            <span className="element">{card.element}</span><strong>{card.name}</strong><small>{card.maxHp} HP · 2 attacks</small>
-          </button>)}</div>
+        <button className={styles.enter} onClick={enter}>
+          {playerName ? "Enter the arena" : "Sign in to battle"} <span className={styles.arrow}>↓</span>
+        </button>
+
+        <footer className={styles.bottomRight}>
+          {SOCIALS.map((s) => <a key={s.label} href={s.href} target="_blank" rel="noreferrer">{s.label} ↗</a>)}
+          <button className={styles.pause} onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
+            {paused ? "Play motion" : "Pause motion"}
+          </button>
+        </footer>
+      </section>
+
+      <main className={styles.below}>
+        <section id="about" className={styles.section}>
+          <h2>About</h2>
+          <div className={styles.steps}>
+            <article><span>01</span><h3>Pick your team</h3><p>Bring the creatures you collect, or start with a random squad of six.</p></article>
+            <article><span>02</span><h3>Battle turn by turn</h3><p>Choose a move or a switch each turn. The server referees every hit, so nobody can cheat.</p></article>
+            <article><span>03</span><h3>Climb the ladder</h3><p>Win to raise your rating. Friends can watch live and call the winner.</p></article>
+          </div>
         </section>
-        <section className="panel join-panel"><h2>Start playing</h2><button className="primary" disabled={busy || !cards.length} onClick={() => void enter("create")}>Create match</button><div className="divider">or join a friend</div><label htmlFor="room-code">Room code</label><input id="room-code" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="8-character code" maxLength={8} /><button className="secondary" disabled={busy || !cards.length} onClick={() => void enter("join")}>Join match</button><p className="hint">Free demo match. No wallet or stakes yet.</p></section>
-      </div>}
 
-      {session && match && <section className="arena">
-        <div className="room-bar"><div><span className="muted">ROOM CODE</span><strong className="room-code">{match.id}</strong></div><button className="text-button" onClick={() => void navigator.clipboard.writeText(match.id)}>Copy code</button><button className="text-button" onClick={leave}>Leave view</button></div>
-        {match.status === "waiting" ? <div className="waiting"><h2>Waiting for opponent</h2><p>Share room code <strong>{match.id}</strong>. Have your friend open this app in another browser or a private window and join with the code.</p></div> : <>
-          <div className="battle-top"><span>TURN {match.turn}</span><strong>{winnerText || (match.submitted[match.you] ? "Attack locked in · waiting for opponent" : "Choose an attack")}</strong></div>
-          <div className="fighters">{opponent && <BattleCard player={opponent} label="OPPONENT" />}<div className="versus">VS</div>{you && <BattleCard player={you} label="YOU" />}</div>
-          {match.status === "playing" && you && <div className="attacks"><h2>Your attacks</h2><div className="attack-grid">{you.card.attacks.map((move) => <button key={move.id} disabled={busy || match.submitted[match.you] || you.energy < move.cost} onClick={() => void attack(move.id)}><strong>{move.name}</strong><span>{move.damage} damage · {move.cost ? `costs ${move.cost} energy` : `gains ${move.gain} energy`}</span></button>)}</div></div>}
-          {match.status === "finished" && <div className="result"><h2>{winnerText}</h2><button className="primary" onClick={leave}>Play another match</button></div>}
-          <div className="history"><h2>Battle log</h2>{match.history.length ? [...match.history].reverse().map((turn) => <p key={turn.number}>Turn {turn.number}: {match.players[0]?.name} used {turn.attacks[0]} for {turn.damage[0]} damage. {match.players[1]?.name} used {turn.attacks[1]} for {turn.damage[1]} damage.</p>) : <p>First turn is waiting for attacks.</p>}</div>
-        </>}
-      </section>}
-      <footer>Fictional sample cards. Wallet verification and onchain stakes are future milestones.</footer>
-    </main>
+        <section id="battles" className={styles.section}>
+          <h2>Live battles</h2>
+          <ul className={styles.live}>
+            {LIVE_BATTLES.map((b) => (
+              <li key={b.a}>
+                <span className={styles.dot} />
+                <strong>{b.a}</strong> vs. <strong>{b.b}</strong>
+                <em>{b.format} · Turn {b.turn}</em>
+                <Link href="/battle">Watch →</Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section id="leaderboard" className={styles.section}>
+          <h2>Leaderboard</h2>
+          <table className={styles.table}>
+            <thead><tr><th>#</th><th>Trainer</th><th>Rating</th><th>W–L</th></tr></thead>
+            <tbody>
+              {LEADERS.map((l, i) => <tr key={l.name}><td>{i + 1}</td><td>{l.name}</td><td>{l.rating}</td><td>{l.record}</td></tr>)}
+            </tbody>
+          </table>
+        </section>
+
+        <footer className={styles.footer}>
+          <span>© Poke.fun · Original creatures and art. Not affiliated with any game publisher.</span>
+          <Link href="/play">Classic one-card demo →</Link>
+        </footer>
+      </main>
+
+      <SignInDialog open={signInOpen} onClose={close} onSignedIn={onSignedIn} />
+    </div>
   );
 }

@@ -1,0 +1,24 @@
+.backdrop { position: fixed; inset: 0; z-index: 50; display: grid; place-items: center; background: rgba(12, 22, 40, .45); animation: fade .15s ease-out; }
+.dialog { position: relative; width: min(380px, calc(100vw - 32px)); padding: 28px 28px 20px; text-align: center; color: #1d2a1a; background: #fdf8e8; font-family: var(--font-pixel), Verdana, sans-serif; outline: none;
+  box-shadow: 0 0 0 3px #2b3a26, 6px 6px 0 3px rgba(20, 30, 18, .35); border-radius: 2px; animation: pop .18s ease-out; }
+.close { position: absolute; top: 6px; right: 10px; border: 0; background: none; font-size: 22px; line-height: 1; color: #55634f; }
+.close:hover:not(:disabled) { color: #1d2a1a; }
+.icon { position: relative; width: 52px; height: 52px; margin: 0 auto 14px; display: grid; place-items: center; font-size: 26px; color: #fff; background: #7c6cf2; box-shadow: 0 0 0 3px #2b3a26; }
+.icon[data-tone="rejected"] { background: #e2a23b; }
+.icon[data-tone="not-installed"] { background: #4c90d6; }
+.icon[data-tone="error"] { background: #d0554a; }
+.spinner { width: 22px; height: 22px; border: 4px solid rgba(255,255,255,.35); border-top-color: #fff; animation: spin .8s steps(8) infinite; }
+.title { margin: 0 0 8px; font-size: 22px; font-weight: 600; letter-spacing: .01em; }
+.body { margin: 0 0 20px; font-size: 15px; line-height: 1.45; color: #4a5644; }
+.primary, .secondary { display: block; width: 100%; padding: 11px 14px; border: 0; font-family: inherit; font-size: 16px; font-weight: 600; text-decoration: none; box-shadow: 0 0 0 3px #2b3a26, 0 4px 0 3px #2b3a26; transition: transform .08s; }
+.primary { color: #fff; background: #7c6cf2; }
+.primary:hover:not(:disabled) { background: #8f81f7; }
+.primary:active:not(:disabled), .secondary:active { transform: translateY(2px); }
+.primary:disabled { opacity: .7; cursor: progress; }
+.secondary { margin-top: 14px; color: #1d2a1a; background: #fff; }
+.link { margin-top: 18px; border: 0; background: none; color: #3d6b2f; font-family: inherit; font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
+.link:disabled { opacity: .5; }
+.fine { margin: 12px 0 0; font-size: 12px; color: #7d8676; }
+@keyframes fade { from { opacity: 0; } }
+@keyframes pop { from { transform: scale(.94); opacity: 0; } }
+@keyframes spin { to { transform: rotate(360deg); } }

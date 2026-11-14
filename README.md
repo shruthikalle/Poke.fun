@@ -34,9 +34,27 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
+The frontend has three routes:
+
+- `/`: pixel-art landing page with Phantom sign-in (or guest play).
+- `/battle`: multi-creature battle screen. It runs on its own with mock data, so the Go API is not needed.
+- `/play`: the original one-card demo that talks to the Go API.
+
+For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
 If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEXT_PUBLIC_API_URL` for the frontend; see `apps/web/.env.example`.
+
+### Frontend integration seams
+
+`/battle` reads all live data through typed interfaces in `apps/web/lib`, each backed by a mock for now. To swap in a real service, implement the interface; the UI code doesn't change.
+
+| Seam | Interface | Mock | TODO |
+| --- | --- | --- | --- |
+| Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `MockBattleStream` | QuickNode Streams / Go API match feed |
+| Win odds | `OddsProvider`, `useOdds` (`lib/markets`) | `MockOddsProvider` | Gemini prediction markets |
+| Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
+| Sign-in | `AuthService` (`lib/wallet`) | `mockAuthService` | Go API nonce + signature check |
+| Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | `MockLobbyService`, `MockRoomChatService` | Presence and chat API |
 
 Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run build`.
 

@@ -1,71 +1,8 @@
-:root { color-scheme: dark; font-family: Arial, Helvetica, sans-serif; background: #0b1018; color: #f4f6fa; }
-* { box-sizing: border-box; }
-body { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% -20%, #19304a 0, #0b1018 55%); }
-button, input { font: inherit; }
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body { font-family: Verdana, "DejaVu Sans", Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .45; }
-main { max-width: 1120px; margin: 0 auto; padding: 24px 24px 60px; }
-.site-header, .room-bar, .stat-line, .battle-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.site-header { padding-bottom: 26px; border-bottom: 1px solid #293241; }
-.brand { font-size: 1.35rem; font-weight: 900; letter-spacing: -.04em; }
-.brand span { color: #77e6b3; }
-.badge { border: 1px solid #3b6c5c; border-radius: 99px; padding: 8px 12px; color: #a9f2ca; font-size: .68rem; font-weight: 800; letter-spacing: .1em; }
-.intro { max-width: 780px; margin: 66px 0 38px; }
-.eyebrow, .card-label, .muted { color: #78ddb1; font-size: .7rem; font-weight: 800; letter-spacing: .16em; }
-h1 { font-size: clamp(2.6rem, 7vw, 5.5rem); line-height: 1.02; letter-spacing: -.065em; margin: 14px 0 20px; }
-h2 { font-size: 1.2rem; margin: 0 0 22px; }
-h3 { margin: 8px 0 4px; font-size: 1.6rem; }
-p { color: #aeb9c8; line-height: 1.6; }
-.intro p:last-child { font-size: 1.08rem; max-width: 630px; }
-.setup-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; }
-.panel, .arena { background: #131c29; border: 1px solid #2c3c4e; border-radius: 18px; padding: 28px; }
-label { display: block; color: #cdd5df; font-size: .85rem; font-weight: 700; margin-bottom: 10px; }
-input { width: 100%; background: #0b131e; color: #fff; border: 1px solid #394b5f; border-radius: 10px; padding: 13px 14px; outline: none; }
-input:focus { border-color: #78ddb1; }
-.card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
-.choose-card { background: #1c2939; border: 1px solid #35475a; color: #f4f6fa; border-radius: 12px; padding: 18px 14px; text-align: left; min-height: 142px; }
-.choose-card.selected { border-color: #78ddb1; box-shadow: 0 0 0 1px #78ddb1; }
-.choose-card strong, .choose-card small, .choose-card .element { display: block; }
-.choose-card strong { margin: 20px 0 7px; font-size: 1.05rem; }
-.choose-card small, .element, .hint { color: #9aabba; font-size: .78rem; }
-.element { text-transform: uppercase; letter-spacing: .1em; }
-.primary, .secondary { width: 100%; border-radius: 10px; padding: 14px 18px; font-weight: 800; }
-.primary { border: 0; color: #082419; background: #78ddb1; }
-.primary:hover:not(:disabled) { background: #9bf3c8; }
-.secondary { border: 1px solid #667b8f; color: #eaf1f6; background: transparent; margin-top: 12px; }
-.secondary:hover:not(:disabled) { border-color: #9bf3c8; }
-.join-panel .primary { margin-top: 4px; }
-.divider { text-align: center; color: #8192a4; font-size: .78rem; margin: 24px 0; }
-.hint { margin: 22px 0 0; }
-.error { background: #4e2229; border: 1px solid #b44d59; padding: 13px 16px; border-radius: 10px; margin-bottom: 18px; }
-.reset-session { max-width: 230px; margin: 0; }
-.room-bar { border-bottom: 1px solid #2c3c4e; padding-bottom: 20px; flex-wrap: wrap; }
-.room-code { display: block; font-size: 1.6rem; letter-spacing: .18em; margin-top: 5px; }
-.text-button { background: none; border: 0; color: #93dfb7; text-decoration: underline; }
-.waiting { text-align: center; padding: 80px 20px; }
-.waiting p { max-width: 540px; margin: auto; }
-.battle-top { margin: 24px 0; color: #91a6b9; }
-.battle-top strong { color: #eaf1f6; }
-.fighters { display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center; }
-.versus { color: #78ddb1; font-size: 1.3rem; font-weight: 900; }
-.battle-card { min-height: 310px; border: 1px solid #546172; border-radius: 16px; padding: 22px; background: linear-gradient(145deg, #203044, #131e2d); }
-.battle-card.fire { background: linear-gradient(145deg, #58372f, #1a2330); }
-.battle-card.water { background: linear-gradient(145deg, #22516a, #152633); }
-.battle-card.grass { background: linear-gradient(145deg, #2d523f, #162b2e); }
-.card-symbol { height: 100px; display: grid; place-items: center; font-size: 5rem; opacity: .8; }
-.player-name { margin: 0 0 26px; font-size: .85rem; }
-.stat-line { color: #dfe6eb; font-size: .85rem; margin: 10px 0; }
-.hp-track { height: 9px; background: #263444; border-radius: 99px; overflow: hidden; }
-.hp-track div { height: 100%; background: #78ddb1; transition: width .3s; }
-.attacks, .history, .result { margin-top: 30px; }
-.attack-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
-.attack-grid button { background: #23354a; border: 1px solid #52708b; color: #fff; border-radius: 10px; padding: 18px; text-align: left; }
-.attack-grid button:hover:not(:disabled) { border-color: #78ddb1; }
-.attack-grid strong, .attack-grid span { display: block; }
-.attack-grid span { color: #adbfcc; font-size: .8rem; margin-top: 7px; }
-.history { border-top: 1px solid #2c3c4e; padding-top: 24px; }
-.history p { border-bottom: 1px solid #263545; padding: 10px 0; margin: 0; font-size: .85rem; }
-.result { background: #1d3b35; border-radius: 12px; padding: 22px; text-align: center; }
-.result .primary { max-width: 240px; }
-footer { color: #73849a; font-size: .75rem; margin-top: 38px; }
-@media (max-width: 760px) { .setup-grid, .fighters { grid-template-columns: 1fr; } .versus { text-align: center; } .card-grid { grid-template-columns: 1fr; } .choose-card { min-height: auto; } .choose-card strong { margin: 8px 0; } .attack-grid { grid-template-columns: 1fr; } .intro { margin-top: 45px; } .panel, .arena { padding: 20px; } }
+a { color: inherit; }
+img { max-width: none; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
