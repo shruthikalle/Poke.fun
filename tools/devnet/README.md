@@ -12,4 +12,6 @@ The script creates a dedicated devnet payer for mint fees. This **is not either 
 
 The payer keypair is written with owner-only permissions to `/private/tmp/pokefun-devnet-payer.json`. Both paths can be overridden with `POKEFUN_DEVNET_STATE_PATH` and `POKEFUN_DEVNET_PAYER_PATH`. Never commit the payer file.
 
-The app must be configured with a devnet DAS RPC and the new collection address before it will read these NFTs from wallets. Devnet assets can disappear if the network resets.
+The app must be configured with the new collection and asset addresses before it will read these NFTs from wallets. Devnet assets can disappear if the network resets.
+
+Run `npm run verify:test-cards` to check the collection, each owner's onchain address, and the off-chain metadata. The app's test mode reads the two known Core asset addresses directly from Solana RPC, so a DAS provider is not required for this specific demo. A DAS provider will be useful when supporting arbitrary collections later.

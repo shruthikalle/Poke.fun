@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "mint:test-cards": "node mint-test-cards.mjs"
+    "mint:test-cards": "node mint-test-cards.mjs",
+    "verify:test-cards": "node verify-test-cards.mjs"
   },
   "dependencies": {
     "@metaplex-foundation/mpl-core": "^1.9.0",
