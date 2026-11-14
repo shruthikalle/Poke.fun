@@ -210,13 +210,8 @@ export default function LoadoutPage() {
 
       <main className={styles.main}>
         <section className={styles.collection}>
-          <p className="pf-eyebrow">{guest ? "Rental creatures" : "Your collection"}</p>
           <h1>Choose your champion</h1>
-          <p className={styles.lede}>
-            {guest
-              ? "Guests battle with rental creatures. Sign in to play with the cards you own."
-              : "The card you pick is the creature you battle with, and the one your entry rides on."}
-          </p>
+          {guest && <p className={styles.lede}>Rental creatures. Sign in to battle with your own cards.</p>}
 
           {!assets ? (
             <div className={styles.grid}>{[0, 1, 2, 3].map((i) => <div key={i} className={styles.cardSkeleton} />)}</div>
@@ -224,8 +219,7 @@ export default function LoadoutPage() {
             <>
             {!guest && eligible.length === 0 && (
               <div className={styles.empty} role="status">
-                <strong>{rows.length === 0 ? "No cards in this wallet yet" : "None of these cards can battle yet"}</strong>
-                <span>{rows.length === 0 ? "Cards you own show up here automatically." : "Only supported creature cards can be played."} You can still battle as a guest with rental creatures.</span>
+                <strong>{rows.length === 0 ? "No cards yet" : "None of these can battle"}</strong>
                 <button className="pf-btn" data-size="sm" onClick={() => playAsGuest()}>Battle as a guest</button>
               </div>
             )}
@@ -234,7 +228,7 @@ export default function LoadoutPage() {
                 const key = r.pick?.key ?? r.asset?.id ?? r.label;
                 const isSel = !!r.pick && r.pick.key === selected;
                 return (
-                  <button key={key} role="radio" aria-checked={isSel} className={styles.card} data-selected={isSel || undefined} disabled={!r.pick}
+                  <button key={key} role="radio" aria-checked={isSel} className={`pf-frame ${styles.card}`} data-selected={isSel || undefined} disabled={!r.pick}
                     onClick={() => { if (r.pick) { setSelected(r.pick.key); summonCard(r.pick.key); } }} title={r.reason ?? undefined}>
                     <span className={styles.art}>
                       {r.image ? <CardArt src={r.image} species={r.pick?.species ?? null} /> : r.pick ? <Sprite species={r.pick.species} size={88} /> : null}
@@ -261,7 +255,7 @@ export default function LoadoutPage() {
             {lead ? <Sprite species={lead.species} size={104} /> : <span className={styles.spriteSkeleton} style={{ width: 104, height: 104 }} />}
             <div>
               <p className={styles.label}>Champion</p>
-              <h2>{leadSpecies?.species?.name ?? lead?.label ?? "—"}</h2>
+              <h2>{leadSpecies?.species?.name ?? lead?.label ?? "Pick a card"}</h2>
               {lead && leadSpecies?.species && <button className={`pf-btn ${styles.resummon}`} data-size="sm" data-variant="ghost" onClick={() => summonCard(lead.key)}>Summon again</button>}
               <div className={styles.types}>
                 {leadSpecies?.species?.types.map((t) => <span key={t} style={{ "--type": TYPE_COLORS[t] } as React.CSSProperties}>{t}</span>)}
@@ -281,10 +275,10 @@ export default function LoadoutPage() {
           <p className={styles.label}>Format</p>
           <div className={styles.segment} role="radiogroup" aria-label="Format">
             {(["champion", "squad"] as const).map((f) => (
-              <button key={f} role="radio" aria-checked={format === f} data-on={format === f || undefined} onClick={() => setFormat(f)}>{FORMAT_LABEL[f]}</button>
+              <button key={f} role="radio" aria-checked={format === f} className="pf-chip" data-on={format === f || undefined} onClick={() => setFormat(f)}>{FORMAT_LABEL[f]}</button>
             ))}
           </div>
-          <p className={styles.hint}>{format === "champion" ? "Only your champion fights. One card, four moves, no switching." : "Your champion leads. Two more come from your cards, then from the rental pool both players share."}</p>
+          <p className={styles.hint}>{format === "champion" ? "One card, no switching." : "Your lead plus two bench creatures. Empty slots use shared rentals."}</p>
           {format === "squad" && (
             <div className={styles.squad}>
               {team.map((p, i) => (
@@ -296,11 +290,11 @@ export default function LoadoutPage() {
           <p className={styles.label}>Entry</p>
           <div className={styles.chips}>
             {ENTRY_PRESETS.map((n) => (
-              <button key={n} data-on={entry === n && !custom || undefined} disabled={guest && n > 0} onClick={() => { setCustom(""); setEntryError(null); setEntry(n); }}>{formatDollars(n)}</button>
+              <button key={n} className="pf-chip" data-on={entry === n && !custom || undefined} disabled={guest && n > 0} onClick={() => { setCustom(""); setEntryError(null); setEntry(n); }}>{formatDollars(n)}</button>
             ))}
-            <label className={styles.custom} data-on={!!custom || undefined}>
+            <label className={`pf-input ${styles.custom}`} data-on={!!custom || undefined}>
               <span>$</span>
-              <input inputMode="decimal" placeholder="Custom" value={custom} disabled={guest} aria-label="Custom entry in dollars" onChange={(e) => setCustomEntry(e.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
+              <input inputMode="decimal" placeholder="0.00" value={custom} disabled={guest} aria-label="Custom entry in dollars" onChange={(e) => setCustomEntry(e.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
             </label>
           </div>
           {entryError && <p id="entry-error" className={styles.warn} role="alert">{entryError}</p>}
@@ -308,7 +302,7 @@ export default function LoadoutPage() {
             <span>{entry ? <>Winner takes <strong>{formatDollars(quote.winnerTakes)}</strong></> : <>Free match, ranked only</>}</span>
             <em>Demo: no real money</em>
           </div>
-          {guest && <p className={styles.hint}>Sign in to play with an entry.</p>}
+          {guest && <p className={styles.hint}>Sign in to add an entry.</p>}
 
           <p className={styles.label}>Your rank</p>
           {rank ? (

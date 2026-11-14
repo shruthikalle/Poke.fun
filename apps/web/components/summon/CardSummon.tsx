@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { FAUX_ART_WINDOW, type ArtWindow, type CardPick } from "../../lib/cards/mapping";
 import type { SpeciesData } from "../../lib/pokemon/SpeciesService";
+import { local } from "../../lib/storage";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { Burst } from "./Burst";
 import { PixelArt } from "./PixelArt";
@@ -215,6 +216,21 @@ function Creature({ species, level, onInteract, playCry }: { species: SummonSpec
   );
 }
 
+const TIP_KEY = "pf:summon-tip-seen";
+
+/** Shows the interaction hint once per browser, for a few seconds. */
+function useFirstTimeTip(active: boolean) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!active || local.get(TIP_KEY)) return;
+    local.set(TIP_KEY, "1");
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 4500);
+    return () => clearTimeout(t);
+  }, [active]);
+  return show;
+}
+
 function FullSummon(props: Props) {
   const { card, species, level = 50, reduced, muted, playCry, onToggleMute, companions = [], onPhase, onInteract, onDone, onReplay } = props;
   const ready = usePreload(card, species, species?.sprites.front);
@@ -294,6 +310,7 @@ function FullSummon(props: Props) {
   };
 
   const live = phase === "live";
+  const showTip = useFirstTimeTip(live);
   return (
     <div ref={stage} tabIndex={-1} className={styles.stage} data-phase={phase} data-reduced={reduced || undefined} role="dialog" aria-modal="true" aria-label={species ? `Summoning ${species.name}` : "Summoning"}
       style={{ "--type": color, "--wx": win.x, "--wy": win.y, "--ww": win.w, "--wh": win.h } as React.CSSProperties} onPointerMove={onTilt}>
@@ -356,7 +373,7 @@ function FullSummon(props: Props) {
               <button className="pf-btn" data-variant="primary" data-size="lg" onClick={onDone}>Ready</button>
             </div>
           )}
-          {live && <p className={styles.tip}>Tap to pet · drag to turn · hover a move</p>}
+          {live && showTip && <p className={styles.tip}>Tap to pet · drag to turn</p>}
         </>
       )}
     </div>

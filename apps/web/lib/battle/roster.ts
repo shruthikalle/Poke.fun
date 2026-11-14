@@ -28,8 +28,6 @@ export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFo
     rated: true,
     rules: [
       ...rules,
-      { name: "Card Clause", description: "Only cards you own, plus the shared rental pool" },
-      { name: "HP Percentage Mod", description: "HP is shown in percentages" },
     ],
   };
 }

@@ -90,13 +90,12 @@ export default function Landing() {
 
         <div className={styles.center}>
           <Emblem size={112} className={styles.crest} title="Poke.fun crest" />
-          <p className="pf-eyebrow">Turn-based creature battles</p>
           <h1 className={styles.title}>Poke.fun</h1>
-          <p className={styles.tagline}>Collect creatures, pick your six and outthink your rival one turn at a time.</p>
+          <p className={styles.tagline}>Your cards come alive. Outthink your rival, one turn at a time.</p>
           <button className="pf-btn" data-variant="primary" data-size="lg" onClick={enter}>
             {playerName ? "Enter the arena" : "Sign in to play"}
           </button>
-          <p className={styles.fine}>{playerName ? <>Playing as <strong>{playerName}</strong></> : "Free to play · Nothing to download"}</p>
+          <p className={styles.fine}>{playerName ? <>Playing as <strong>{playerName}</strong></> : null}</p>
         </div>
 
         <ul className={styles.rail} aria-label="Social links">

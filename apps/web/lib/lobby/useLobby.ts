@@ -23,12 +23,12 @@ export interface LobbyService {
 }
 
 const ROOMS: ChatRoom[] = [
-  { id: "lobby", name: "Lobby", users: 513, description: "Still haven't decided on a room for you? Relax here amidst the chaos.", section: "official" },
-  { id: "tournaments", name: "Tournaments", users: 221, description: "24/7 room tournaments! Join and ascend the leaderboard :P", section: "official", subrooms: ["Tours Plaza", "Tours Minigames"] },
-  { id: "help", name: "Help", users: 203, description: "Have a question about Poke.fun? We'd be glad to help you out!", section: "official" },
-  { id: "one-card", name: "One-Card Arena", users: 61, description: "The tier where a single card decides everything.", section: "community", subrooms: ["Arena Clinic"] },
-  { id: "collectors", name: "Collectors", users: 48, description: "Show off your pulls and talk card condition.", section: "community" },
-  { id: "random", name: "Random Battles", users: 132, description: "Six random creatures, one winner.", section: "community" },
+  { id: "lobby", name: "Lobby", users: 513, description: "Hang out between battles.", section: "official" },
+  { id: "tournaments", name: "Tournaments", users: 221, description: "Brackets every hour.", section: "official", subrooms: ["Tours Plaza", "Tours Minigames"] },
+  { id: "help", name: "Help", users: 203, description: "Ask other trainers.", section: "official" },
+  { id: "one-card", name: "One-Card Arena", users: 61, description: "One card decides it.", section: "community", subrooms: ["Arena Clinic"] },
+  { id: "collectors", name: "Collectors", users: 48, description: "Show off your pulls.", section: "community" },
+  { id: "random", name: "Random Battles", users: 132, description: "Random creatures, one winner.", section: "community" },
 ];
 
 export class MockLobbyService implements LobbyService {

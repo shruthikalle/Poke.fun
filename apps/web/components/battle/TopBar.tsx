@@ -7,6 +7,7 @@ import { Emblem } from "../Emblem";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import type { ChatRoom } from "../../lib/lobby/useLobby";
 import styles from "./battle.module.css";
+import { PixelIcon } from "../PixelIcon";
 
 export type TabId = "battle" | string;
 
@@ -50,7 +51,7 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
             <strong>{title}</strong>
             <span>{subtitle}</span>
           </button>
-          <Link href="/" className={styles.tabClose} aria-label="Leave battle">×</Link>
+          <Link href="/" className={styles.tabClose} aria-label="Leave battle"><PixelIcon name="close" size={9} /></Link>
         </div>
         {rooms.map((r) => (
           <div key={r.id} className={styles.tab} data-active={activeTab === r.id || undefined} role="tab" aria-selected={activeTab === r.id}>
@@ -58,7 +59,7 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
               <strong>{r.name}</strong>
               <span>{r.users} users</span>
             </button>
-            <button className={styles.tabClose} onClick={() => onCloseRoom(r.id)} aria-label={`Close ${r.name}`}>×</button>
+            <button className={styles.tabClose} onClick={() => onCloseRoom(r.id)} aria-label={`Close ${r.name}`}><PixelIcon name="close" size={9} /></button>
           </div>
         ))}
       </nav>

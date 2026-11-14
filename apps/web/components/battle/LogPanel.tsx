@@ -49,7 +49,7 @@ export function ChatInput({ name, onSend, placeholder }: { name: string; onSend:
   return (
     <form className={styles.chatForm} onSubmit={submit}>
       <label htmlFor="chat-input" className={styles.chatName} style={{ color: nameColor(name) }}>{name}:</label>
-      <input id="chat-input" className={styles.chatInput} value={text} onChange={(e) => setText(e.target.value)} maxLength={300} autoComplete="off" placeholder={placeholder} />
+      <input id="chat-input" className={`pf-input ${styles.chatInput}`} value={text} onChange={(e) => setText(e.target.value)} maxLength={300} autoComplete="off" placeholder={placeholder} />
     </form>
   );
 }

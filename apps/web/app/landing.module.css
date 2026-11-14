@@ -32,7 +32,7 @@
 .crest { margin-bottom: var(--space-5); filter: drop-shadow(0 0 18px var(--accent-glow)) drop-shadow(0 6px 0 rgba(0, 0, 0, .5)); animation: hover 5s ease-in-out infinite; }
 .title { margin: var(--space-3) 0 var(--space-4); font-family: var(--font-display); font-size: clamp(56px, 8.5vw, 104px); font-weight: 700; line-height: .95; letter-spacing: .06em; text-transform: uppercase;
   text-shadow: 0 5px 0 rgba(0, 0, 0, .55), 0 0 42px rgba(244, 195, 90, .18); }
-.tagline { margin: 0 0 var(--space-6); max-width: 620px; font-size: 16px; line-height: 1.55; color: var(--text-dim); }
+.tagline { margin: 0 0 var(--space-6); max-width: 620px; font-size: 18px; line-height: 1.5; color: var(--text); text-shadow: 0 2px 0 rgba(0, 0, 0, .6); }
 .fine { margin: var(--space-4) 0 0; font-size: 12px; color: var(--text-dim); text-shadow: 0 1px 0 rgba(0, 0, 0, .6); }
 .fine strong { color: var(--text-dim); font-weight: 600; }
 

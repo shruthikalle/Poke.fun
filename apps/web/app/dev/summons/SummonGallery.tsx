@@ -77,13 +77,13 @@ export function SummonGallery() {
       <section className={styles.tools}>
         <div className={styles.chips} role="radiogroup" aria-label="Set">
           {[{ id: "all", name: "All sets" }, ...CARD_CATALOG.sets].map((s) => (
-            <button key={s.id} role="radio" aria-checked={set === s.id} data-on={set === s.id || undefined} onClick={() => setSet(s.id)}>{s.name}</button>
+            <button key={s.id} role="radio" className="pf-chip" aria-checked={set === s.id} data-on={set === s.id || undefined} onClick={() => setSet(s.id)}>{s.name}</button>
           ))}
         </div>
-        <input className={styles.search} placeholder="Search name or species" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search cards" />
+        <input className={`pf-input ${styles.search}`} placeholder="Search name or species" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search cards" />
         <button className="pf-btn" data-size="sm" onClick={checkAll} disabled={!!check && check.done < check.total}>Check all species</button>
         <label className={styles.scenario}>Mock collection
-          <select value={scenario} onChange={(e) => chooseScenario(e.target.value as MockScenario)}>
+          <select className="pf-input" value={scenario} onChange={(e) => chooseScenario(e.target.value as MockScenario)}>
             {SCENARIOS.map((s) => <option key={s} value={s}>{s}</option>)}
           </select>
         </label>
