@@ -2,11 +2,16 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { preload } from "react-dom";
 import { AccountChip } from "../components/AccountChip";
 import { Emblem } from "../components/Emblem";
+import { PixelAvatar } from "../components/PixelAvatar";
 import { SignInDialog } from "../components/SignInDialog";
+import { FORMAT_LABEL } from "../lib/cards/mapping";
 import { useMotionPreference } from "../lib/motion";
+import { speciesService } from "../lib/pokemon/SpeciesService";
+import { tierFor } from "../lib/rank/RankService";
 import { useWallet } from "../lib/wallet/WalletProvider";
 import styles from "./landing.module.css";
 
@@ -22,10 +27,21 @@ const SOCIALS = [
   { href: "https://x.com", label: "X" },
 ];
 
+const SPRITE = (dex: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
+
 const LIVE_BATTLES = [
-  { a: "thar07", b: "mossy_mo", turn: 7, format: "Random Battle" },
-  { a: "kiwi.k", b: "drillbit", turn: 3, format: "One-Card Arena" },
-  { a: "pyrefly", b: "ottergirl", turn: 12, format: "Random Battle" },
+  { a: { trainer: "thar07", mon: "Gengar", dex: 94 }, b: { trainer: "mossy_mo", mon: "Kangaskhan", dex: 115 }, turn: 7, format: FORMAT_LABEL.champion },
+  { a: { trainer: "kiwi.k", mon: "Pikachu", dex: 25 }, b: { trainer: "drillbit", mon: "Charizard", dex: 6 }, turn: 3, format: FORMAT_LABEL.squad },
+  { a: { trainer: "pyrefly", mon: "Mewtwo", dex: 150 }, b: { trainer: "ottergirl", mon: "Blastoise", dex: 9 }, turn: 12, format: FORMAT_LABEL.champion },
+];
+
+const SCREEN_ROSTER = ["pikachu", "charizard", "gengar", "mewtwo", "eevee", "blastoise"];
+
+const FLOODLIGHTS = [
+  { x: 8.8, y: 8.6, tilt: 18 },
+  { x: 22.8, y: 11.8, tilt: 9 },
+  { x: 77.2, y: 11.8, tilt: -9 },
+  { x: 91.2, y: 8.6, tilt: -18 },
 ];
 
 const LEADERS = [
@@ -36,7 +52,111 @@ const LEADERS = [
   { name: "drillbit", rating: 1688, record: "64–30" },
 ];
 
-const MOTES = Array.from({ length: 18 }, (_, i) => i);
+const MOTES = Array.from({ length: 14 }, (_, i) => i);
+
+/** Tiny camera-flash flicker over the stands, drawn at the art's pixel scale. */
+function CrowdFlicker({ paused }: { paused: boolean }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    const ctx = canvas?.getContext("2d");
+    if (!canvas || !ctx || paused) return;
+    const colours = ["#ffffff", "#ffd987", "#9fbcff", "#f4c35a"];
+    const flashes: { x: number; y: number; c: string; life: number }[] = [];
+    let raf = 0, last = 0, visible = true;
+    const io = new IntersectionObserver(([e]) => { visible = e.isIntersecting; });
+    io.observe(canvas);
+    const tick = (t: number) => {
+      raf = requestAnimationFrame(tick);
+      if (!visible || t - last < 110) return;
+      last = t;
+      for (let i = 0; i < 5; i++) flashes.push({ x: Math.random() * canvas.width | 0, y: Math.random() * canvas.height | 0, c: colours[Math.random() * 4 | 0], life: 2 + (Math.random() * 3 | 0) });
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      for (let i = flashes.length - 1; i >= 0; i--) {
+        const f = flashes[i];
+        ctx.globalAlpha = Math.min(1, f.life / 3);
+        ctx.fillStyle = f.c;
+        ctx.fillRect(f.x, f.y, 1, 1);
+        if (--f.life <= 0) flashes.splice(i, 1);
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => { cancelAnimationFrame(raf); io.disconnect(); ctx.clearRect(0, 0, canvas.width, canvas.height); };
+  }, [paused]);
+  return <canvas ref={ref} className={styles.crowd} width={384} height={80} />;
+}
+
+/** Big screen above the field, cycling a few real battle sprites. */
+function Jumbotron({ paused }: { paused: boolean }) {
+  const [sprites, setSprites] = useState<{ name: string; src: string }[]>([]);
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    for (const key of SCREEN_ROSTER) {
+      speciesService.getSpecies(key).then((sp) => {
+        if (alive) setSprites((list) => [...list, { name: sp.name, src: sp.sprites.front }]);
+      }).catch(() => {});
+    }
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (paused || sprites.length < 2) return;
+    const t = setInterval(() => setI((n) => (n + 1) % sprites.length), 3200);
+    return () => clearInterval(t);
+  }, [paused, sprites.length]);
+  const now = sprites[i];
+  return (
+    <div className={styles.screen} aria-hidden="true">
+      <div className={styles.screenInner}>
+        {now ? <img key={now.src} src={now.src} alt="" className={styles.screenSprite} /> : <Emblem size={40} />}
+        {now && <span className={styles.screenName}>{now.name}</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Layered pixel stadium; layers shift slightly with the pointer and scroll for depth. */
+function Stadium({ paused }: { paused: boolean }) {
+  const ref = useRef<HTMLDivElement>(null);
+  preload("/landing/stadium-back.webp", { as: "image", fetchPriority: "high" });
+  preload("/landing/stadium-front.webp", { as: "image" });
+  useEffect(() => {
+    const el = ref.current?.parentElement;
+    if (!el) return;
+    if (paused) { el.style.setProperty("--px", "0"); el.style.setProperty("--py", "0"); el.style.setProperty("--sy", "0"); return; }
+    let raf = 0, px = 0, py = 0;
+    const apply = () => {
+      raf = 0;
+      el.style.setProperty("--px", px.toFixed(3));
+      el.style.setProperty("--py", py.toFixed(3));
+      el.style.setProperty("--sy", String(Math.min(window.scrollY, window.innerHeight)));
+    };
+    const queue = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    const onMove = (e: PointerEvent) => { px = e.clientX / window.innerWidth * 2 - 1; py = e.clientY / window.innerHeight * 2 - 1; queue(); };
+    window.addEventListener("pointermove", onMove, { passive: true });
+    window.addEventListener("scroll", queue, { passive: true });
+    return () => { window.removeEventListener("pointermove", onMove); window.removeEventListener("scroll", queue); cancelAnimationFrame(raf); };
+  }, [paused]);
+  return (
+    <div ref={ref} className={styles.stage} aria-hidden="true">
+      <img className={styles.back} src="/landing/stadium-back.webp" alt="" width={1536} height={1024} fetchPriority="high" />
+      <CrowdFlicker paused={paused} />
+      {FLOODLIGHTS.map((f) => (
+        <span key={f.x} className={styles.cone} style={{ left: `${f.x}%`, top: `${f.y}%`, "--tilt": `${f.tilt}deg` } as React.CSSProperties} />
+      ))}
+      <img className={styles.front} src="/landing/stadium-front.webp" alt="" width={1536} height={484} />
+    </div>
+  );
+}
+
+function Trophy() {
+  return (
+    <svg viewBox="0 0 9 9" width="36" height="36" shapeRendering="crispEdges" aria-hidden="true">
+      <path fill="var(--accent)" d="M1 0h7v1h1v2H8v1H7v1H6v1H5v1h1v1h1v1H2V8h1V7h1V6H3V5H2V4H1V3H0V1h1zm0 1v2h1V1zm6 0v2h1V1z" />
+      <path fill="var(--accent-hi)" d="M3 1h1v3H3z" />
+    </svg>
+  );
+}
 
 function SocialIcon({ name }: { name: string }) {
   const paths: Record<string, string> = {
@@ -64,12 +184,12 @@ export default function Landing() {
   return (
     <div className={styles.page} data-paused={paused || undefined}>
       <section className={styles.hero}>
-        <div className={styles.bg} aria-hidden="true" />
-        <div className={styles.mist} aria-hidden="true" />
+        <Stadium paused={paused} />
         <div className={styles.motes} aria-hidden="true">
           {MOTES.map((i) => <span key={i} style={{ "--i": i } as React.CSSProperties} />)}
         </div>
         <div className={styles.shade} aria-hidden="true" />
+        <Jumbotron paused={paused} />
 
         <header className={styles.top}>
           <Link href="/" className={styles.brand} aria-label="Poke.fun home">
@@ -91,9 +211,9 @@ export default function Landing() {
         <div className={styles.center}>
           <Emblem size={112} className={styles.crest} title="Poke.fun crest" />
           <h1 className={styles.title}>Poke.fun</h1>
-          <p className={styles.tagline}>Your cards come alive. Outthink your rival, one turn at a time.</p>
+          <p className={styles.tagline}>Bring a card. Summon it. Win the pot.</p>
           <button className="pf-btn" data-variant="primary" data-size="lg" onClick={enter}>
-            {playerName ? "Enter the arena" : "Sign in to play"}
+            {playerName ? "Play" : "Sign in to play"}
           </button>
           <p className={styles.fine}>{playerName ? <>Playing as <strong>{playerName}</strong></> : null}</p>
         </div>
@@ -114,13 +234,29 @@ export default function Landing() {
 
       <main className={styles.below}>
         <section id="about" className={styles.section}>
-          <p className="pf-eyebrow">How it works</p>
-          <h2>About</h2>
-          <div className={styles.steps}>
-            <article><span>01</span><h3>Pick your team</h3><p>Bring the creatures you collect, or start with a random squad of six.</p></article>
-            <article><span>02</span><h3>Battle turn by turn</h3><p>Choose a move or a switch each turn. The server referees every hit, so nobody can cheat.</p></article>
-            <article><span>03</span><h3>Climb the ladder</h3><p>Win to raise your rating. Friends can watch live and call the winner.</p></article>
-          </div>
+          <h2>How a match works</h2>
+          <ol className={styles.steps}>
+            <li>
+              <div className={styles.art}><PixelAvatar seed="trainer" size={36} /><span className={styles.or}>or</span><img src={SPRITE(133)} alt="" width={56} height={56} /></div>
+              <span>01</span><h3>Sign in</h3><p>Connect Phantom, or play free as a guest with rental Pokémon.</p>
+            </li>
+            <li>
+              <div className={styles.art}><img className={styles.thumb} src="https://images.pokemontcg.io/base3/5.png" alt="" width={40} height={56} loading="lazy" /><i className={styles.arrow} /><img src={SPRITE(94)} alt="" width={56} height={56} /></div>
+              <span>02</span><h3>Pick a card</h3><p>Choose a card from your collection and it summons into its Pokémon.</p>
+            </li>
+            <li>
+              <div className={styles.art}><span className={styles.mini} /><span className={styles.or}>or</span><span className={styles.stack}><span className={styles.mini} /><span className={styles.mini} /><span className={styles.mini} /></span><b className={styles.coin}>$5</b></div>
+              <span>03</span><h3>Set the match</h3><p>Champion 1v1 or Squad of 3. Entry from Free to $25, or custom. Demo money.</p>
+            </li>
+            <li>
+              <div className={styles.art}><img src={SPRITE(94)} alt="" width={56} height={56} className={styles.flip} /><b className={styles.vs}>VS</b><img src={SPRITE(115)} alt="" width={56} height={56} /></div>
+              <span>04</span><h3>Find a rival</h3><p>See their card and rank, then battle turn by turn.</p>
+            </li>
+            <li>
+              <div className={styles.art}><Trophy /><b className={styles.coin}>+$10</b></div>
+              <span>05</span><h3>Win the pot</h3><p>Take the entry and climb from Bronze to Master.</p>
+            </li>
+          </ol>
         </section>
 
         <section id="battles" className={styles.section}>
@@ -128,11 +264,15 @@ export default function Landing() {
           <h2>Live battles</h2>
           <ul className={styles.live}>
             {LIVE_BATTLES.map((b) => (
-              <li key={b.a}>
+              <li key={b.a.trainer}>
                 <span className={styles.dot} />
-                <strong>{b.a}</strong> vs. <strong>{b.b}</strong>
+                <img src={SPRITE(b.a.dex)} alt="" width={48} height={48} className={styles.flip} />
+                <span className={styles.side}><strong>{b.a.mon}</strong><small>{b.a.trainer}</small></span>
+                <b className={styles.vsSmall}>vs</b>
+                <img src={SPRITE(b.b.dex)} alt="" width={48} height={48} />
+                <span className={styles.side}><strong>{b.b.mon}</strong><small>{b.b.trainer}</small></span>
                 <em>{b.format} · Turn {b.turn}</em>
-                <Link href="/battle">Watch →</Link>
+                <Link href="/loadout">Play</Link>
               </li>
             ))}
           </ul>
@@ -142,9 +282,9 @@ export default function Landing() {
           <p className="pf-eyebrow">This season</p>
           <h2>Leaderboard</h2>
           <table className={styles.table}>
-            <thead><tr><th>#</th><th>Trainer</th><th>Rating</th><th>W–L</th></tr></thead>
+            <thead><tr><th>#</th><th>Trainer</th><th>Rank</th><th>Rating</th><th>W–L</th></tr></thead>
             <tbody>
-              {LEADERS.map((l, i) => <tr key={l.name}><td>{i + 1}</td><td>{l.name}</td><td>{l.rating}</td><td>{l.record}</td></tr>)}
+              {LEADERS.map((l, i) => <tr key={l.name}><td>{i + 1}</td><td>{l.name}</td><td><span className={styles.tier} data-tier={tierFor(l.rating)}>{tierFor(l.rating)}</span></td><td>{l.rating}</td><td>{l.record}</td></tr>)}
             </tbody>
           </table>
         </section>

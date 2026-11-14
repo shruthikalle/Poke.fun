@@ -47,3 +47,20 @@ I re-ran the same scripted walk-through at both widths after all of the fixes ab
 | Guest | ![](design-audit/before-1280-12-loadout-guest.jpg) | ![](design-audit/after-1280-12-loadout-guest.jpg) |
 
 The 1600px shots are in the same folder (`*-1600-*`).
+
+## Landing pass: real flow and stadium background
+
+| # | Finding | Fix | Status |
+|---|---|---|---|
+| L01 | Tagline "Your cards come alive. Outthink your rival, one turn at a time." was generic. | "Bring a card. Summon it. Win the pot." Other options considered: "Your card. Your Pokémon. Your match.", "Your card is your fighter. Put an entry on it." | Fixed |
+| L02 | About described a game that no longer exists (random squad of six, server refereeing, friends calling the winner). | Five steps in play order: Sign in, Pick a card, Set the match, Find a rival, Win the pot. Each has a sprite, card or pixel icon. | Fixed |
+| L03 | Live battles showed "Random Battle" / "One-Card Arena" with no Pokémon, and "Watch" went to /battle (redirects to Loadout). | Real formats from `FORMAT_LABEL`, catalog Pokémon with sprites (e.g. Gengar vs Kangaskhan), "Play" links to /loadout. | Fixed |
+| L04 | Leaderboard had no rank. | Rank column from `RankService.tierFor`. | Fixed |
+| L05 | Dusk hill background did not read as Pokémon. | Original pixel stadium (back + front WebP layers, 142 KB): stands with a canvas crowd flicker, floodlight cones that sweep slowly, a raised field with a red/white centre circle, and a screen that cycles sprites from `SpeciesService`. Pointer and scroll parallax. Everything stops with Pause motion and `prefers-reduced-motion`. The same stadium sits faintly behind the sections below the fold. | Fixed |
+
+| Screen | Before | After |
+|---|---|---|
+| Hero 1280 | ![](design-audit/landing-before-1280-hero.jpg) | ![](design-audit/landing-after-1280-hero.jpg) |
+| About 1280 | ![](design-audit/landing-before-1280-about.jpg) | ![](design-audit/landing-after-1280-about.jpg) |
+| Battles 1280 | ![](design-audit/landing-before-1280-battles.jpg) | ![](design-audit/landing-after-1280-battles.jpg) |
+| Hero 1600 | ![](design-audit/landing-before-1600-hero.jpg) | ![](design-audit/landing-after-1600-hero.jpg) |
