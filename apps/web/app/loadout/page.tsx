@@ -6,6 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
 import { SignInDialog } from "../../components/SignInDialog";
+import { CardSummon } from "../../components/summon/CardSummon";
+import { useBattleAudio } from "../../lib/audio/useBattleAudio";
+import { useMotionPreference } from "../../lib/motion";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { collectionService, type DasAsset } from "../../lib/cards/collection";
 import { buildTeam, FORMAT_LABEL, RENTAL_POOL, resolveCard, type CardPick, type MatchFormat } from "../../lib/cards/mapping";
@@ -40,6 +43,28 @@ function Sprite({ species, size = 96 }: { species: string; size?: number }) {
     onError={(e) => { if (data.species && e.currentTarget.src !== data.species.sprites.frontStatic) e.currentTarget.src = data.species.sprites.frontStatic; }} />;
 }
 
+function useSpeciesList(keys: string[]) {
+  const [map, setMap] = useState<Record<string, SpeciesData>>({});
+  const joined = keys.join(",");
+  useEffect(() => {
+    let live = true;
+    for (const key of joined ? joined.split(",") : []) {
+      speciesService.getSpecies(key).then((s) => live && setMap((m) => (m[key] ? m : { ...m, [key]: s }))).catch(() => {});
+    }
+    return () => { live = false; };
+  }, [joined]);
+  return map;
+}
+
+function SummonedSprite({ pick, from, reduced }: { pick: CardPick; from: "left" | "right"; reduced: boolean }) {
+  const data = useSpecies(pick.species);
+  return (
+    <div className={styles.summoned}>
+      <CardSummon mode="mini" keepSprite card={pick} species={data?.species ?? null} from={from} reduced={reduced} spriteScale={1.2} />
+    </div>
+  );
+}
+
 function TierPips({ tier }: { tier: number }) {
   return <span className={styles.pips} title={`Power tier ${tier}`}>{[1, 2, 3].map((i) => <i key={i} data-on={i <= tier || undefined} />)}</span>;
 }
@@ -61,6 +86,9 @@ export default function LoadoutPage() {
   const [queue, setQueue] = useState<Queue>({ status: "idle" });
   const [now, setNow] = useState(0);
   const search = useRef<MatchSearch | null>(null);
+  const [summon, setSummon] = useState<{ key: string; n: number } | null>(null);
+  const motion = useMotionPreference();
+  const audio = useBattleAudio();
   const guest = status === "guest" || !session;
 
   useEffect(() => {
@@ -97,6 +125,13 @@ export default function LoadoutPage() {
   const lead = eligible.find((p) => p.key === selected) ?? null;
   const team = useMemo(() => (lead ? buildTeam(lead, eligible, format) : []), [lead, eligible, format]);
   const leadSpecies = useSpecies(lead?.species ?? null);
+  const bench = useMemo(() => (format === "squad" ? team.slice(1) : []), [format, team]);
+  const benchSpecies = useSpeciesList(bench.map((p) => p.species));
+  const summonCard = (key: string) => setSummon({ key, n: Date.now() });
+
+  useEffect(() => {
+    if (leadSpecies?.failed) setSummon(null);
+  }, [leadSpecies?.failed]);
   const quote = stakeService.quote(entry);
   const preview = rank ? rankService.preview(rank.rating, rank.rating) : null;
 
@@ -172,7 +207,7 @@ export default function LoadoutPage() {
                 const isSel = !!r.pick && r.pick.key === selected;
                 return (
                   <button key={key} role="radio" aria-checked={isSel} className={styles.card} data-selected={isSel || undefined} disabled={!r.pick}
-                    onClick={() => r.pick && setSelected(r.pick.key)} title={r.reason ?? undefined}>
+                    onClick={() => { if (r.pick) { setSelected(r.pick.key); summonCard(r.pick.key); } }} title={r.reason ?? undefined}>
                     <span className={styles.art}>
                       {r.image ? <img src={r.image} alt="" loading="lazy" /> : r.pick ? <Sprite species={r.pick.species} size={88} /> : null}
                       {r.reason && <span className={styles.reason}>{r.reason}</span>}
@@ -198,6 +233,7 @@ export default function LoadoutPage() {
             <div>
               <p className={styles.label}>Champion</p>
               <h2>{leadSpecies?.species?.name ?? lead?.label ?? "—"}</h2>
+              {lead && leadSpecies?.species && <button className={`pf-btn ${styles.resummon}`} data-size="sm" data-variant="ghost" onClick={() => summonCard(lead.key)}>Summon again</button>}
               <div className={styles.types}>
                 {leadSpecies?.species?.types.map((t) => <span key={t} style={{ "--type": TYPE_COLORS[t] } as React.CSSProperties}>{t}</span>)}
               </div>
@@ -272,14 +308,14 @@ export default function LoadoutPage() {
                 <p className="pf-eyebrow">Match found</p>
                 <div className={styles.versus}>
                   <div>
-                    <Sprite species={queue.ticket.you.team[0].species} size={88} />
+                    <SummonedSprite pick={queue.ticket.you.team[0]} from="left" reduced={motion.reduced} />
                     <strong>{playerName}</strong>
                     <RankBadge rank={{ tier: rank?.tier ?? "", rating: queue.ticket.you.rating }} />
                     <small>{queue.ticket.you.team.map((p) => p.label).join(" · ")}</small>
                   </div>
                   <span className={styles.vs}>VS</span>
                   <div>
-                    <Sprite species={queue.ticket.opponent.team[0].species} size={88} />
+                    <SummonedSprite pick={queue.ticket.opponent.team[0]} from="right" reduced={motion.reduced} />
                     <strong>{queue.ticket.opponent.trainer.name}</strong>
                     <RankBadge rank={queue.ticket.opponent} />
                     <small>{queue.ticket.opponent.team.map((p) => p.label).join(" · ")}</small>
@@ -294,6 +330,13 @@ export default function LoadoutPage() {
             )}
           </div>
         </div>
+      )}
+
+      {summon && lead && lead.key === summon.key && (
+        <CardSummon key={summon.n} mode="full" card={lead} species={leadSpecies?.species ?? null} level={lead.level}
+          reduced={motion.reduced} muted={audio.muted} onToggleMute={audio.toggleMute} playCry={audio.playClip}
+          companions={bench.map((p) => ({ card: p, species: benchSpecies[p.species] ?? null, level: p.level }))}
+          onReplay={() => summonCard(lead.key)} onDone={() => setSummon(null)} />
       )}
 
       <SignInDialog open={signInOpen} onClose={closeSignIn} onSignedIn={onSignedIn} />

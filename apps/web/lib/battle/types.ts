@@ -33,6 +33,8 @@ export interface Creature {
   sprites: CreatureSprites;
   speed: number;
   stats: { atk: number; def: number; spa: number; spd: number };
+  /** Art of the collectible card this creature was summoned from, if any. */
+  cardArt?: string | null;
   level: number;
   gender: "M" | "F" | null;
   types: ElementType[];

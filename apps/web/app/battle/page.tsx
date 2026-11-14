@@ -21,6 +21,7 @@ import { loadTicket, type MatchTicket } from "../../lib/match/MatchmakingService
 import { speciesService } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
 import { formatDollars, stakeService } from "../../lib/stake/StakeService";
+import { useMotionPreference } from "../../lib/motion";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "../../components/battle/battle.module.css";
 
@@ -33,7 +34,7 @@ interface MatchResult { outcome: "win" | "loss" | "draw"; payout: number; before
 
 async function toCreatures(picks: CardPick[], side: Side): Promise<Creature[]> {
   const species = await Promise.all(picks.map((p) => speciesService.getSpecies(p.species)));
-  return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${picks[i].key}`));
+  return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${picks[i].key}`, picks[i].image));
 }
 
 function ResultSummary({ result, entry }: { result: MatchResult; entry: number }) {
@@ -95,6 +96,7 @@ export default function BattlePage() {
   const odds = useOdds(state);
   const audio = useBattleAudio();
   const lobby = useLobby();
+  const motion = useMotionPreference();
 
   const [options, setOptionsState] = useState<Omit<BattleOptions, "sound">>({ animations: true, showOdds: true });
   const [sidebar, setSidebar] = useState(true);
@@ -155,7 +157,7 @@ export default function BattlePage() {
         <div className={styles.left}>
           {state && ticket ? (
             <>
-              <Viewport state={state} odds={options.showOdds ? odds : null} badge={badge} />
+              <Viewport state={state} odds={options.showOdds ? odds : null} badge={badge} summon={options.animations && !motion.reduced} />
               <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={battle.rematch}
                 summary={result ? <ResultSummary result={result} entry={ticket.entry} /> : null} />
             </>

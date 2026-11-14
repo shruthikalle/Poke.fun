@@ -14,6 +14,10 @@ export interface SpeciesData {
   /** Four battle moves picked from the level-up movepool. */
   moves: Omit<Move, "pp">[];
   sprites: CreatureSprites;
+  /** Large official artwork, used while the creature leaves its card. */
+  artwork: string | null;
+  /** Cry audio clip (ogg). */
+  cry: string | null;
 }
 
 export interface SpeciesService {
@@ -21,7 +25,7 @@ export interface SpeciesService {
 }
 
 const API = "https://pokeapi.co/api/v2";
-const CACHE_VERSION = "v1";
+const CACHE_VERSION = "v2";
 
 interface RawPokemon {
   id: number;
@@ -29,7 +33,12 @@ interface RawPokemon {
   types: { slot: number; type: { name: string } }[];
   stats: { base_stat: number; stat: { name: string } }[];
   moves: { move: { name: string }; version_group_details: { level_learned_at: number; move_learn_method: { name: string } }[] }[];
-  sprites: { front_default: string | null; back_default: string | null; other?: { showdown?: { front_default: string | null; back_default: string | null } } };
+  sprites: {
+    front_default: string | null;
+    back_default: string | null;
+    other?: { showdown?: { front_default: string | null; back_default: string | null }; "official-artwork"?: { front_default: string | null } };
+  };
+  cries?: { latest: string | null; legacy: string | null };
 }
 
 interface RawMove {
@@ -118,6 +127,8 @@ export class PokeApiSpeciesService implements SpeciesService {
           frontStatic: front,
           backStatic: back,
         },
+        artwork: p.sprites.other?.["official-artwork"]?.front_default ?? null,
+        cry: p.cries?.latest ?? p.cries?.legacy ?? null,
       };
     });
   }

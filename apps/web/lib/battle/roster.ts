@@ -1,7 +1,7 @@
 import type { BattleFormat, Creature, ElementType } from "./types";
 import type { SpeciesData } from "../pokemon/SpeciesService";
 
-export function createCreature(species: SpeciesData, level: number, uid: string): Creature {
+export function createCreature(species: SpeciesData, level: number, uid: string, cardArt: string | null = null): Creature {
   const maxHp = Math.floor(((2 * species.base.hp + 31) * level) / 100) + level + 10;
   const stat = (b: number) => Math.floor(((2 * b + 31) * level) / 100) + 5;
   return {
@@ -9,6 +9,7 @@ export function createCreature(species: SpeciesData, level: number, uid: string)
     species: species.name,
     spriteId: species.key,
     sprites: species.sprites,
+    cardArt,
     speed: species.base.spe,
     stats: { atk: stat(species.base.atk), def: stat(species.base.def), spa: stat(species.base.spa), spd: stat(species.base.spd) },
     level,

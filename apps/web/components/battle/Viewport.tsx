@@ -1,6 +1,7 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { CardSummon } from "../summon/CardSummon";
 import type { BattleState, Creature, Side, SideState } from "../../lib/battle/types";
 import type { MarketOdds } from "../../lib/markets/useOdds";
 import { hpPercent } from "./format";
@@ -52,16 +53,27 @@ function TrainerStrip({ side, you, odds, position }: { side: SideState; you: boo
   );
 }
 
-function Sprite({ state, side }: { state: BattleState; side: Side }) {
+function Sprite({ state, side, summon, summoning, onLanded }: { state: BattleState; side: Side; summon: boolean; summoning: boolean; onLanded: () => void }) {
   const s = state.sides[side];
   const creature = s.team[s.activeIndex];
   const anim = state.animation?.side === side ? state.animation : null;
   const facing = side === state.you ? "back" : "front";
   const hidden = state.phase === "connecting" && state.turn === 1 && !state.log.some((l) => l.kind === "switch");
   if (!creature || hidden) return null;
+  if (summoning) {
+    return (
+      <div className={styles.spriteSlot} data-role={facing}>
+        <CardSummon mode="mini" card={{ image: creature.cardArt ?? null, label: creature.species, grade: null }}
+          species={{ name: creature.species, types: creature.types, sprites: creature.sprites }}
+          from={facing === "back" ? "left" : "right"} facing={facing} spriteScale={facing === "back" ? 1.6 : 1.35} onDone={onLanded} />
+        <div className={styles.shadow} />
+      </div>
+    );
+  }
+  const kind = summon && anim?.kind === "switch-in" ? undefined : anim?.kind;
   return (
     <div className={styles.spriteSlot} data-role={facing}>
-      <div key={anim ? `${anim.kind}-${anim.seq}` : "idle"} className={styles.spriteAction} data-anim={anim?.kind} data-fainted={creature.fainted || undefined}>
+      <div key={anim ? `${anim.kind}-${anim.seq}` : "idle"} className={styles.spriteAction} data-anim={kind} data-fainted={creature.fainted || undefined}>
         <img key={creature.id} className={styles.sprite} src={facing === "back" ? creature.sprites.back : creature.sprites.front} alt={creature.species} draggable={false}
           onError={(e) => { const fallback = facing === "back" ? creature.sprites.backStatic : creature.sprites.frontStatic; if (e.currentTarget.src !== fallback) e.currentTarget.src = fallback; }} />
       </div>
@@ -70,7 +82,20 @@ function Sprite({ state, side }: { state: BattleState; side: Side }) {
   );
 }
 
-export function Viewport({ state, odds, badge }: { state: BattleState; odds: MarketOdds | null; badge?: ReactNode }) {
+export function Viewport({ state, odds, badge, summon = false }: { state: BattleState; odds: MarketOdds | null; badge?: ReactNode; summon?: boolean }) {
+  const [summoning, setSummoning] = useState<Record<Side, number | null>>({ p1: null, p2: null });
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const anim = state.animation;
+  useEffect(() => {
+    if (!summon || !anim || anim.kind !== "switch-in") return;
+    const { side, seq } = anim;
+    setSummoning((s) => ({ ...s, [side]: seq }));
+    // Safety net: never leave a sprite hidden if the summon can't finish.
+    timers.current.push(setTimeout(() => setSummoning((s) => (s[side] === seq ? { ...s, [side]: null } : s)), 2500));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [summon, anim?.seq]);
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
+  const landed = (side: Side) => () => setSummoning((s) => ({ ...s, [side]: null }));
   const me = state.you;
   const foe = me === "p1" ? "p2" : "p1";
   const myActive = state.sides[me].team[state.sides[me].activeIndex];
@@ -81,10 +106,10 @@ export function Viewport({ state, odds, badge }: { state: BattleState; odds: Mar
       <div className={styles.field} />
       {started && <div className={styles.turnBadge}>Turn {state.turn}</div>}
       {badge && <div className={styles.stakeBadge}>{badge}</div>}
-      {started && foeActive && !foeActive.fainted && <HpBar creature={foeActive} role="foe" />}
-      {started && myActive && !myActive.fainted && <HpBar creature={myActive} role="me" />}
-      <Sprite state={state} side={foe} />
-      <Sprite state={state} side={me} />
+      {started && foeActive && !foeActive.fainted && summoning[foe] === null && <HpBar creature={foeActive} role="foe" />}
+      {started && myActive && !myActive.fainted && summoning[me] === null && <HpBar creature={myActive} role="me" />}
+      <Sprite state={state} side={foe} summon={summon} summoning={summoning[foe] !== null} onLanded={landed(foe)} />
+      <Sprite state={state} side={me} summon={summon} summoning={summoning[me] !== null} onLanded={landed(me)} />
       <TrainerStrip side={state.sides[foe]} you={false} odds={odds} position="right" />
       <TrainerStrip side={state.sides[me]} you odds={odds} position="left" />
       {state.phase === "ended" && (

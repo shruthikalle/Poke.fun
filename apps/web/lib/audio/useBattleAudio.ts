@@ -7,6 +7,8 @@ export type AudioCue = "hit" | "super-hit" | "faint" | "switch" | "turn" | "vict
 
 export interface AudioCueProvider {
   play(cue: AudioCue): void;
+  /** One-off clip by URL, e.g. a creature's cry. */
+  playClip?(url: string): void;
   dispose?(): void;
 }
 
@@ -46,6 +48,16 @@ export class SynthAudioProvider implements AudioCueProvider {
       }
     } catch {
       // Audio is decorative; ignore unsupported or blocked contexts.
+    }
+  }
+
+  playClip(url: string) {
+    try {
+      const audio = new Audio(url);
+      audio.volume = 0.5;
+      void audio.play().catch(() => {});
+    } catch {
+      // Unsupported format or blocked autoplay; the clip is optional.
     }
   }
 
@@ -98,5 +110,9 @@ export function useBattleAudio(createProvider: () => AudioCueProvider = () => ne
     if (!mutedRef.current) provider.current?.play(cue);
   }, []);
 
-  return { muted, toggleMute, play };
+  const playClip = useCallback((url: string) => {
+    if (!mutedRef.current) provider.current?.playClip?.(url);
+  }, []);
+
+  return { muted, toggleMute, play, playClip };
 }

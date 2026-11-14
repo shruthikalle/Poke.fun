@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { AccountChip } from "../components/AccountChip";
 import { Emblem } from "../components/Emblem";
 import { SignInDialog } from "../components/SignInDialog";
+import { useMotionPreference } from "../lib/motion";
 import { useWallet } from "../lib/wallet/WalletProvider";
 import styles from "./landing.module.css";
 
@@ -50,11 +51,8 @@ export default function Landing() {
   const router = useRouter();
   const { playerName } = useWallet();
   const [signInOpen, setSignInOpen] = useState(false);
-  const [paused, setPaused] = useState(false);
-
-  useEffect(() => {
-    setPaused(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
-  }, []);
+  const motion = useMotionPreference();
+  const paused = motion.reduced;
 
   const enter = () => (playerName ? router.push("/loadout") : setSignInOpen(true));
   const close = useCallback(() => setSignInOpen(false), []);
@@ -107,7 +105,7 @@ export default function Landing() {
           ))}
         </ul>
 
-        <button className={styles.pause} onClick={() => setPaused((p) => !p)} aria-pressed={paused}>
+        <button className={styles.pause} onClick={() => motion.setPaused(!paused)} aria-pressed={paused}>
           <span className={styles.pauseIcon} data-paused={paused || undefined} aria-hidden="true" />
           {paused ? "Play motion" : "Pause motion"}
         </button>
