@@ -5,7 +5,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "catalog": "node scripts/build-card-catalog.mjs",
+    "catalog:check": "node scripts/check-species.mjs"
   },
   "dependencies": {
     "@solana/kit": "^8.5.0",

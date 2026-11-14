@@ -34,7 +34,7 @@ interface MatchResult { outcome: "win" | "loss" | "draw"; payout: number; before
 
 async function toCreatures(picks: CardPick[], side: Side): Promise<Creature[]> {
   const species = await Promise.all(picks.map((p) => speciesService.getSpecies(p.species)));
-  return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${picks[i].key}`, picks[i].image));
+  return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${i}-${picks[i].key}`, picks[i].image));
 }
 
 function ResultSummary({ result, entry }: { result: MatchResult; entry: number }) {

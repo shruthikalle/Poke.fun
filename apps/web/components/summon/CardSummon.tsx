@@ -2,13 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { TYPE_COLORS } from "../../lib/battle/roster";
-import type { CardPick } from "../../lib/cards/mapping";
+import { FAUX_ART_WINDOW, type ArtWindow, type CardPick } from "../../lib/cards/mapping";
 import type { SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { Burst } from "./Burst";
 import { PixelArt } from "./PixelArt";
 import styles from "./summon.module.css";
 
-export type SummonCard = Pick<CardPick, "image" | "label" | "grade">;
+export type SummonCard = Pick<CardPick, "image" | "label" | "grade"> & { artWindow?: ArtWindow };
+
+const VINTAGE_WINDOW: ArtWindow = { x: 0.09, y: 0.11, w: 0.82, h: 0.37 };
 export type SummonSpecies = Pick<SpeciesData, "name" | "types" | "sprites"> & Partial<Pick<SpeciesData, "artwork" | "cry" | "base" | "moves">>;
 export type SummonPhase = "loading" | "reveal" | "awaken" | "emerge" | "land" | "live";
 
@@ -223,6 +225,9 @@ function FullSummon(props: Props) {
   const windowEl = useRef<HTMLDivElement>(null);
   const cryPlayed = useRef(false);
   const color = species ? TYPE_COLORS[species.types[0]] : "#f4c35a";
+  const win = card.image ? card.artWindow ?? VINTAGE_WINDOW : FAUX_ART_WINDOW;
+  const riseSrc = species?.artwork ?? card.image ?? species?.sprites.frontStatic ?? null;
+  const riseCrop = !species?.artwork && card.image ? win : undefined;
 
   const clear = () => { timers.current.forEach(clearTimeout); timers.current = []; };
 
@@ -289,7 +294,7 @@ function FullSummon(props: Props) {
   const live = phase === "live";
   return (
     <div ref={stage} className={styles.stage} data-phase={phase} data-reduced={reduced || undefined} role="dialog" aria-modal="true" aria-label={species ? `Summoning ${species.name}` : "Summoning"}
-      style={{ "--type": color } as React.CSSProperties} onPointerMove={onTilt}>
+      style={{ "--type": color, "--wx": win.x, "--wy": win.y, "--ww": win.w, "--wh": win.h } as React.CSSProperties} onPointerMove={onTilt}>
       <div className={styles.stageBg} aria-hidden="true" />
       <div className={styles.controls}>
         {onToggleMute && <button className="pf-btn" data-size="sm" data-variant="ghost" onClick={onToggleMute} aria-pressed={muted}>{muted ? "Sound off" : "Sound on"}</button>}
@@ -316,9 +321,9 @@ function FullSummon(props: Props) {
             <div className={styles.caption}><strong>{card.label}</strong>{card.grade && <em>{card.grade}</em>}</div>
           </div>
 
-          {(phase === "emerge" || phase === "land") && species.artwork && (
+          {(phase === "emerge" || phase === "land") && riseSrc && (
             <div className={styles.rise}>
-              <PixelArt className={styles.pixel} src={species.artwork} size={220} steps={[64, 32, 16]} startDelay={430} stepMs={140} />
+              <PixelArt className={styles.pixel} src={riseSrc} crop={riseCrop} size={220} steps={[64, 32, 16]} startDelay={430} stepMs={140} />
             </div>
           )}
           <Burst className={styles.burst} fireKey={burst.key} color={color} origin={burst} />
