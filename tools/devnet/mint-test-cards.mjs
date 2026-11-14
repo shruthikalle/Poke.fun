@@ -1,9 +1,10 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { create, createCollection, fetchCollection, mplCore } from "@metaplex-foundation/mpl-core";
-import { createGenericFile, generateSigner, keypairIdentity, publicKey, sol } from "@metaplex-foundation/umi";
+import { generateSigner, keypairIdentity, publicKey, sol } from "@metaplex-foundation/umi";
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
 import { irysUploader } from "@metaplex-foundation/umi-uploader-irys";
+import { cards, cardMetadata, collectionMetadata, imageFile } from "./card-metadata.mjs";
 
 const [firstOwner, secondOwner] = process.argv.slice(2);
 const rpcUrl = process.env.DEVNET_RPC_URL ?? "https://api.devnet.solana.com";
@@ -19,16 +20,13 @@ if (!rpcUrl.includes("devnet")) {
   process.exit(1);
 }
 
-const cards = [
-  { owner: firstOwner, name: "Pikachu", number: "58/102", id: "base1-58", hue: "#f8ca58", icon: "P" },
-  { owner: secondOwner, name: "Charmander", number: "46/102", id: "base1-46", hue: "#fa9a62", icon: "C" },
-];
+const recipients = [firstOwner, secondOwner];
 
 const umi = createUmi(rpcUrl, "confirmed")
   .use(mplCore())
   .use(irysUploader({ address: "https://devnet.irys.xyz" }));
 
-for (const card of cards) publicKey(card.owner);
+for (const owner of recipients) publicKey(owner);
 
 async function loadOrCreatePayer() {
   try {
@@ -41,17 +39,6 @@ async function loadOrCreatePayer() {
     await writeFile(payerPath, JSON.stringify(Array.from(keypair.secretKey)), { mode: 0o600, flag: "wx" });
     return keypair;
   }
-}
-
-function svg(label, icon, color) {
-  return `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="880" viewBox="0 0 640 880"><rect width="640" height="880" rx="36" fill="#142232"/><rect x="25" y="25" width="590" height="830" rx="25" fill="${color}"/><rect x="52" y="52" width="536" height="776" rx="18" fill="#152332"/><text x="320" y="126" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="38" font-weight="bold">POKE.FUN TEST CARD</text><circle cx="320" cy="388" r="180" fill="${color}"/><text x="320" y="460" text-anchor="middle" fill="#152332" font-family="sans-serif" font-size="210" font-weight="bold">${icon}</text><text x="320" y="665" text-anchor="middle" fill="#ffffff" font-family="sans-serif" font-size="48" font-weight="bold">${label}</text><text x="320" y="745" text-anchor="middle" fill="#ffdb8f" font-family="sans-serif" font-size="33">DEVNET ONLY · NOT VAULTED</text></svg>`;
-}
-
-function imageFile(label, icon, color, filename) {
-  return createGenericFile(new TextEncoder().encode(svg(label, icon, color)), filename, {
-    contentType: "image/svg+xml",
-    tags: [{ name: "Content-Type", value: "image/svg+xml" }],
-  });
 }
 
 async function saveState(state) {
@@ -86,17 +73,13 @@ async function main() {
   }
 
   const [collectionImage, firstImage, secondImage] = await umi.uploader.upload([
-    imageFile("Test Collection", "★", "#83dbc6", "pokefun-test-collection.svg"),
-    imageFile("Pikachu", "P", cards[0].hue, "pokefun-test-pikachu.svg"),
-    imageFile("Charmander", "C", cards[1].hue, "pokefun-test-charmander.svg"),
+    await imageFile("Test Collection", "★", "#83dbc6", "pokefun-test-collection.png"),
+    await imageFile("Pikachu", "P", cards[0].hue, "pokefun-test-pikachu.png"),
+    await imageFile("Charmander", "C", cards[1].hue, "pokefun-test-charmander.png"),
   ]);
 
   if (!state.collection) {
-    const uri = await umi.uploader.uploadJson({
-      name: "Poke.fun Devnet Test Cards",
-      description: "Fictional test assets for Poke.fun. No physical card or redemption rights.",
-      image: collectionImage,
-    });
+    const uri = await umi.uploader.uploadJson(collectionMetadata(collectionImage));
     const collectionSigner = generateSigner(umi);
     console.log("Creating devnet test collection...");
     await createCollection(umi, { collection: collectionSigner, name: "Poke.fun Devnet Test Cards", uri }).sendAndConfirm(umi);
@@ -107,29 +90,19 @@ async function main() {
   const collection = await fetchCollection(umi, publicKey(state.collection));
   for (let i = 0; i < cards.length; i++) {
     const card = cards[i];
-    if (state.assets.some((asset) => asset.id === card.id && asset.owner === card.owner)) continue;
-    const uri = await umi.uploader.uploadJson({
-      name: `Poke.fun Devnet Test ${card.name}`,
-      description: "Demo NFT only. This is not a vaulted collectible and has no physical redemption rights.",
-      image: i === 0 ? firstImage : secondImage,
-      attributes: [
-        { trait_type: "Category", value: "Pokemon" },
-        { trait_type: "Card Name", value: card.name },
-        { trait_type: "Set", value: "Base Set" },
-        { trait_type: "Card Number", value: card.number },
-        { trait_type: "Test Asset", value: "Devnet only; not vaulted" },
-      ],
-    });
+    const owner = recipients[i];
+    if (state.assets.some((asset) => asset.id === card.id && asset.owner === owner)) continue;
+    const uri = await umi.uploader.uploadJson(cardMetadata(card, i === 0 ? firstImage : secondImage));
     const asset = generateSigner(umi);
-    console.log(`Minting ${card.name} to ${card.owner}...`);
+    console.log(`Minting ${card.name} to ${owner}...`);
     await create(umi, {
       asset,
       collection,
-      owner: publicKey(card.owner),
+      owner: publicKey(owner),
       name: `Poke.fun Devnet Test ${card.name}`,
       uri,
     }).sendAndConfirm(umi);
-    state.assets.push({ id: card.id, owner: card.owner, address: asset.publicKey, metadataUri: uri });
+    state.assets.push({ id: card.id, owner, address: asset.publicKey, metadataUri: uri });
     await saveState(state);
   }
 
