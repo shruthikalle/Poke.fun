@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useWallet } from "../lib/wallet/WalletProvider";
+import { Emblem } from "./Emblem";
 import styles from "./SignInDialog.module.css";
 
 const COPY = {
@@ -46,17 +47,21 @@ export function SignInDialog({ open, onClose, onSignedIn }: { open: boolean; onC
     <div className={styles.backdrop} onMouseDown={(e) => e.target === e.currentTarget && !busy && onClose()}>
       <div ref={dialogRef} className={styles.dialog} role="dialog" aria-modal="true" aria-labelledby="signin-title" tabIndex={-1} data-status={status}>
         <button className={styles.close} onClick={onClose} aria-label="Close" disabled={busy}>×</button>
-        <div className={styles.icon} data-tone={key}>{key === "rejected" ? "!" : key === "not-installed" ? "?" : key === "error" ? "×" : busy ? "" : "♦"}{busy && <span className={styles.spinner} />}</div>
+        <div className={styles.icon} data-tone={key}>
+          {key === "rejected" ? "!" : key === "not-installed" ? "?" : key === "error" ? "×" : <Emblem size={56} />}
+          {busy && <span className={styles.spinner} />}
+        </div>
+        <p className="pf-eyebrow">{key === "idle" ? "Welcome, trainer" : busy ? "One moment" : "Sign in"}</p>
         <h2 id="signin-title" className={styles.title}>{copy.title}</h2>
         <p className={styles.body}>{copy.body}</p>
 
         {key === "not-installed" ? (
           <>
-            <a className={styles.primary} href="https://phantom.com/download" target="_blank" rel="noreferrer">Get Phantom ↗</a>
-            <button className={styles.secondary} onClick={signIn}>I've added it, try again</button>
+            <a className={`pf-btn ${styles.primary}`} data-variant="primary" href="https://phantom.com/download" target="_blank" rel="noreferrer">Get Phantom ↗</a>
+            <button className={`pf-btn ${styles.secondary}`} data-variant="ghost" onClick={signIn}>I've added it, try again</button>
           </>
         ) : (
-          <button className={styles.primary} onClick={signIn} disabled={busy}>
+          <button className={`pf-btn ${styles.primary}`} data-variant="primary" onClick={signIn} disabled={busy}>
             {busy ? "Waiting…" : key === "idle" ? "Continue with Phantom" : "Try again"}
           </button>
         )}

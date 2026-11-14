@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { AccountChip } from "../AccountChip";
+import { Emblem } from "../Emblem";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import type { ChatRoom } from "../../lib/lobby/useLobby";
 import styles from "./battle.module.css";
@@ -37,7 +38,7 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
     <header className={styles.topbar}>
       <div className={styles.topLeft}>
       <Link href="/" className={styles.logo} aria-label="Poke.fun home">
-        <span>Poke<em>.fun</em></span><small>beta</small>
+        <Emblem size={22} /><span>Poke<em>.fun</em></span><small>beta</small>
       </Link>
       <nav className={styles.tabs} aria-label="Open tabs">
         <Link href="/" className={styles.tab}>

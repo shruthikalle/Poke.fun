@@ -10,7 +10,7 @@ export function richText(text: string): ReactNode {
 export function nameColor(name: string) {
   let h = 0;
   for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
-  return `hsl(${h % 360} 70% 32%)`;
+  return `hsl(${h % 360} 75% 70%)`;
 }
 
 export const hpPercent = (hp: number, max: number) => (hp <= 0 ? 0 : Math.max(1, Math.round((hp / max) * 100)));
