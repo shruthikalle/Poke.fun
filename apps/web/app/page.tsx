@@ -88,13 +88,13 @@ function CrowdFlicker({ paused }: { paused: boolean }) {
 
 /** Big screen above the field, cycling a few real battle sprites. */
 function Jumbotron({ paused }: { paused: boolean }) {
-  const [sprites, setSprites] = useState<{ name: string; src: string }[]>([]);
+  const [sprites, setSprites] = useState<{ name: string; src: string; still: string }[]>([]);
   const [i, setI] = useState(0);
   useEffect(() => {
     let alive = true;
     for (const key of SCREEN_ROSTER) {
       speciesService.getSpecies(key).then((sp) => {
-        if (alive) setSprites((list) => [...list, { name: sp.name, src: sp.sprites.front }]);
+        if (alive) setSprites((list) => [...list, { name: sp.name, src: sp.sprites.front, still: sp.sprites.frontStatic }]);
       }).catch(() => {});
     }
     return () => { alive = false; };
@@ -108,7 +108,7 @@ function Jumbotron({ paused }: { paused: boolean }) {
   return (
     <div className={styles.screen} aria-hidden="true">
       <div className={styles.screenInner}>
-        {now ? <img key={now.src} src={now.src} alt="" className={styles.screenSprite} /> : <Emblem size={40} />}
+        {now ? <img key={now.src} src={paused ? now.still : now.src} alt="" className={styles.screenSprite} /> : <Emblem size={40} />}
         {now && <span className={styles.screenName}>{now.name}</span>}
       </div>
     </div>
