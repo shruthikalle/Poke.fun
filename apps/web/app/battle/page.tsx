@@ -83,7 +83,8 @@ export default function BattlePage() {
     if (!ready || load.status !== "ready") return null;
     const t = load.ticket;
     const { winnerTakes } = stakeService.quote(t.entry);
-    const format = makeFormat(FORMAT_LABEL[t.format], [
+    const format = makeFormat("[Gen 9] Random Battle", [
+      { name: "Match", description: FORMAT_LABEL[t.format] },
       { name: "Entry", description: t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
       { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
     ]);
@@ -146,7 +147,7 @@ export default function BattlePage() {
     : <>Free match · Ranked</>);
 
   return (
-    <div className={styles.app} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
+    <div className={`pf-chrome ${styles.app}`} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
       <TopBar title={title} subtitle={subtitle} rooms={rooms} activeTab={tab} onSelect={setTab} onCloseRoom={closeRoom}
         onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => signIn()} />
 
