@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { FAUX_ART_WINDOW, type ArtWindow, type CardPick } from "../../lib/cards/mapping";
 import type { SpeciesData } from "../../lib/pokemon/SpeciesService";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import { Burst } from "./Burst";
 import { PixelArt } from "./PixelArt";
 import styles from "./summon.module.css";
@@ -224,6 +225,7 @@ function FullSummon(props: Props) {
   const cardEl = useRef<HTMLDivElement>(null);
   const windowEl = useRef<HTMLDivElement>(null);
   const cryPlayed = useRef(false);
+  useFocusTrap(stage, true);
   const color = species ? TYPE_COLORS[species.types[0]] : "#f4c35a";
   const win = card.image ? card.artWindow ?? VINTAGE_WINDOW : FAUX_ART_WINDOW;
   const riseSrc = species?.artwork ?? card.image ?? species?.sprites.frontStatic ?? null;
@@ -293,7 +295,7 @@ function FullSummon(props: Props) {
 
   const live = phase === "live";
   return (
-    <div ref={stage} className={styles.stage} data-phase={phase} data-reduced={reduced || undefined} role="dialog" aria-modal="true" aria-label={species ? `Summoning ${species.name}` : "Summoning"}
+    <div ref={stage} tabIndex={-1} className={styles.stage} data-phase={phase} data-reduced={reduced || undefined} role="dialog" aria-modal="true" aria-label={species ? `Summoning ${species.name}` : "Summoning"}
       style={{ "--type": color, "--wx": win.x, "--wy": win.y, "--ww": win.w, "--wh": win.h } as React.CSSProperties} onPointerMove={onTilt}>
       <div className={styles.stageBg} aria-hidden="true" />
       <div className={styles.controls}>

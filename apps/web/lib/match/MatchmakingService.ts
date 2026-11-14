@@ -1,3 +1,4 @@
+import { session } from "../storage";
 import type { Trainer } from "../battle/types";
 import { opponentAssets } from "../cards/collection";
 import { buildTeam, resolveCard, type CardPick, type MatchFormat, type PowerTier } from "../cards/mapping";
@@ -84,13 +85,26 @@ export const matchmakingService: MatchmakingService = new MockMatchmakingService
 const TICKET_KEY = "pf:match:v1";
 
 export function saveTicket(ticket: MatchTicket) {
-  window.sessionStorage.setItem(TICKET_KEY, JSON.stringify(ticket));
+  session.set(TICKET_KEY, JSON.stringify(ticket));
+}
+
+const isPick = (p: unknown): p is CardPick => !!p && typeof p === "object" && typeof (p as CardPick).species === "string" && typeof (p as CardPick).key === "string" && typeof (p as CardPick).level === "number";
+const isTeam = (t: unknown) => Array.isArray(t) && t.length >= 1 && t.length <= 3 && t.every(isPick);
+
+/** Rejects stale or hand-edited tickets so /battle never renders half a match. */
+export function isTicket(t: unknown): t is MatchTicket {
+  const x = t as MatchTicket;
+  return !!x && typeof x.matchId === "string" && (x.format === "champion" || x.format === "squad") && typeof x.entry === "number" && x.entry >= 0
+    && !!x.you && isTeam(x.you.team) && typeof x.you.rating === "number" && !!x.opponent && isTeam(x.opponent.team) && !!x.opponent.trainer?.name && typeof x.opponent.rating === "number";
 }
 
 export function loadTicket(): MatchTicket | null {
   try {
-    const raw = window.sessionStorage.getItem(TICKET_KEY);
-    return raw ? (JSON.parse(raw) as MatchTicket) : null;
+    const raw = session.get(TICKET_KEY);
+    const ticket: unknown = raw ? JSON.parse(raw) : null;
+    if (isTicket(ticket)) return ticket;
+    if (raw) session.remove(TICKET_KEY);
+    return null;
   } catch {
     return null;
   }

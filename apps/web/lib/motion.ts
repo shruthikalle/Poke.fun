@@ -1,5 +1,6 @@
 "use client";
 
+import { local } from "./storage";
 import { useCallback, useEffect, useState } from "react";
 
 const KEY = "pf-motion-paused";
@@ -12,7 +13,7 @@ export function useMotionPreference() {
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
     setSystemReduced(mq.matches);
-    setPausedState(localStorage.getItem(KEY) === "1");
+    setPausedState(local.get(KEY) === "1");
     const onChange = () => setSystemReduced(mq.matches);
     mq.addEventListener("change", onChange);
     return () => mq.removeEventListener("change", onChange);
@@ -20,7 +21,7 @@ export function useMotionPreference() {
 
   const setPaused = useCallback((next: boolean) => {
     setPausedState(next);
-    try { localStorage.setItem(KEY, next ? "1" : "0"); } catch { /* memory only */ }
+    local.set(KEY, next ? "1" : "0");
   }, []);
 
   return { paused, setPaused, reduced: paused || systemReduced };

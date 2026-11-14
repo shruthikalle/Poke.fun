@@ -1,3 +1,4 @@
+import { local } from "../storage";
 /**
  * Collectible card seam. Shapes follow the Metaplex DAS `getAssetsByOwner`
  * response so a real RPC result can be passed straight through.
@@ -71,7 +72,7 @@ const INELIGIBLE: MockCard[] = [
 ];
 
 function scenario(): MockScenario {
-  try { return (window.localStorage.getItem(MOCK_SCENARIO_KEY) as MockScenario | null) ?? "default"; } catch { return "default"; }
+  return (local.get(MOCK_SCENARIO_KEY) as MockScenario | null) ?? "default";
 }
 
 export function mockCollection(owner: string, which: MockScenario = "default"): DasAsset[] {

@@ -99,9 +99,17 @@ export class MockBattleStream implements BattleStreamSource {
     else this.emit({ type: "chat", user: "", text: "Battle timer is now OFF." });
   }
 
+  private lastChat = 0;
+
   sendChat(text: string): void {
     const trimmed = text.trim().slice(0, 300);
     if (!trimmed) return;
+    const now = Date.now();
+    if (now - this.lastChat < 600) {
+      this.emit({ type: "chat", user: "", text: "You're sending messages too fast. Wait a moment." });
+      return;
+    }
+    this.lastChat = now;
     this.emit({ type: "chat", user: this.you.name, text: trimmed });
     if (Math.random() < 0.4) {
       this.later(1500, () => this.emit({ type: "chat", user: this.opponent.name, text: OPPONENT_LINES[Math.floor(Math.random() * OPPONENT_LINES.length)] }));

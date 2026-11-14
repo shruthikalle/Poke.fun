@@ -1,5 +1,6 @@
 "use client";
 
+import { local } from "../storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { mockAuthService, type AuthService, type PlayerSession } from "./auth";
 import { connectPhantom, getPhantomProvider, isUserRejection, signText } from "./phantom";
@@ -29,7 +30,7 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const saved = localStorage.getItem(SESSION_KEY);
+    const saved = local.get(SESSION_KEY);
     if (!saved) {
       setReady(true);
       return;
@@ -44,7 +45,7 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
       }
       const provider = getPhantomProvider();
       if (!parsed.session || !provider) {
-        localStorage.removeItem(SESSION_KEY);
+        local.remove(SESSION_KEY);
         setReady(true);
         return;
       }
@@ -54,10 +55,10 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
           setSession(parsed.session!);
           setStatus("signed-in");
         })
-        .catch(() => localStorage.removeItem(SESSION_KEY))
+        .catch(() => local.remove(SESSION_KEY))
         .finally(() => setReady(true));
     } catch {
-      localStorage.removeItem(SESSION_KEY);
+      local.remove(SESSION_KEY);
       setReady(true);
     }
   }, []);
@@ -68,11 +69,21 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
     const onChange = () => {
       setSession(null);
       setStatus("idle");
-      localStorage.removeItem(SESSION_KEY);
+      local.remove(SESSION_KEY);
     };
+    // Some wallets switch accounts without an event; re-check when the tab regains focus.
+    const recheck = () => {
+      const current = provider.publicKey?.toString();
+      if (current && current !== session.address) onChange();
+    };
+    window.addEventListener("focus", recheck);
+    document.addEventListener("visibilitychange", recheck);
+    recheck();
     provider.on("accountChanged", onChange);
     provider.on("disconnect", onChange);
     return () => {
+      window.removeEventListener("focus", recheck);
+      document.removeEventListener("visibilitychange", recheck);
       provider.removeListener?.("accountChanged", onChange);
       provider.removeListener?.("disconnect", onChange);
     };
@@ -94,7 +105,7 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
       setSession(next);
       setGuestName(null);
       setStatus("signed-in");
-      localStorage.setItem(SESSION_KEY, JSON.stringify({ session: next }));
+      local.set(SESSION_KEY, JSON.stringify({ session: next }));
     } catch (error) {
       setStatus(isUserRejection(error) ? "rejected" : "error");
     }
@@ -105,11 +116,11 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
     setGuestName(name);
     setSession(null);
     setStatus("guest");
-    localStorage.setItem(SESSION_KEY, JSON.stringify({ guest: name }));
+    local.set(SESSION_KEY, JSON.stringify({ guest: name }));
   }, []);
 
   const signOut = useCallback(async () => {
-    localStorage.removeItem(SESSION_KEY);
+    local.remove(SESSION_KEY);
     setSession(null);
     setGuestName(null);
     setStatus("idle");

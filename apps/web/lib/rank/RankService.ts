@@ -1,3 +1,4 @@
+import { local } from "../storage";
 export type RankTier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Master";
 
 export interface RankInfo {
@@ -32,7 +33,7 @@ const keyFor = (player: string) => `pf:rank:v1:${player}`;
 export class MockRankService implements RankService {
   async getRank(player: string): Promise<RankInfo> {
     try {
-      const raw = window.localStorage.getItem(keyFor(player));
+      const raw = local.get(keyFor(player));
       if (raw) return JSON.parse(raw) as RankInfo;
     } catch { /* fall through to a fresh rank */ }
     return { rating: 1480, tier: tierFor(1480), wins: 12, losses: 9, history: [] };
@@ -53,7 +54,7 @@ export class MockRankService implements RankService {
       losses: before.losses + (result === "loss" ? 1 : 0),
       history: [{ at: Date.now(), opponent, result, delta: d }, ...before.history].slice(0, 20),
     };
-    try { window.localStorage.setItem(keyFor(player), JSON.stringify(after)); } catch { /* memory only */ }
+    local.set(keyFor(player), JSON.stringify(after));
     return { before, after, delta: d };
   }
 }

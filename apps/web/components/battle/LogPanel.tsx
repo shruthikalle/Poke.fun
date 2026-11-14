@@ -27,7 +27,7 @@ function Line({ entry }: { entry: LogEntry }) {
     case "join": case "leave": return <div className={styles.logSmall}>☆{entry.text}</div>;
     case "damage": return <div className={styles.logDamage}>{entry.text}</div>;
     case "info": case "timer": return <div className={styles.logInfo}>{entry.text}</div>;
-    case "chat": return (
+    case "chat": return !entry.user ? <div className={styles.logInfo} role="status">{entry.text}</div> : (
       <div className={styles.logChat}>
         <strong style={{ color: nameColor(entry.user ?? "") }}>{entry.user}:</strong> {entry.text}
       </div>

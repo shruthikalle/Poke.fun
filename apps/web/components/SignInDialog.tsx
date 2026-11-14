@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { useWallet } from "../lib/wallet/WalletProvider";
 import { Emblem } from "./Emblem";
+import { useFocusTrap } from "../lib/useFocusTrap";
 import styles from "./SignInDialog.module.css";
 
 const COPY = {
@@ -18,6 +19,7 @@ export function SignInDialog({ open, onClose, onSignedIn }: { open: boolean; onC
   const { status, signIn, playAsGuest, reset } = useWallet();
   const dialogRef = useRef<HTMLDivElement>(null);
   const wasOpen = useRef(false);
+  useFocusTrap(dialogRef, open);
 
   useEffect(() => {
     if (open && !wasOpen.current) reset();

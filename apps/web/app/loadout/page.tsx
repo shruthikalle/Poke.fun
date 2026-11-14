@@ -9,6 +9,7 @@ import { SignInDialog } from "../../components/SignInDialog";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useMotionPreference } from "../../lib/motion";
+import { useFocusTrap } from "../../lib/useFocusTrap";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { collectionService, type DasAsset } from "../../lib/cards/collection";
 import { buildTeam, FORMAT_LABEL, RENTAL_POOL, resolveCard, type CardPick, type MatchFormat } from "../../lib/cards/mapping";
@@ -65,6 +66,12 @@ function SummonedSprite({ pick, from, reduced }: { pick: CardPick; from: "left" 
   );
 }
 
+function CardArt({ src, species }: { src: string; species: string | null }) {
+  const [failed, setFailed] = useState(false);
+  if (failed || !src) return species ? <Sprite species={species} size={88} /> : <span className={styles.artMissing}>Card art unavailable</span>;
+  return <img src={src} alt="" loading="lazy" decoding="async" onError={() => setFailed(true)} />;
+}
+
 function TierPips({ tier }: { tier: number }) {
   return <span className={styles.pips} title={`Power tier ${tier}`}>{[1, 2, 3].map((i) => <i key={i} data-on={i <= tier || undefined} />)}</span>;
 }
@@ -75,7 +82,7 @@ function RankBadge({ rank }: { rank: { tier: string; rating: number } }) {
 
 export default function LoadoutPage() {
   const router = useRouter();
-  const { ready, playerName, session, status } = useWallet();
+  const { ready, playerName, session, status, playAsGuest } = useWallet();
   const [signInOpen, setSignInOpen] = useState(false);
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
@@ -86,9 +93,11 @@ export default function LoadoutPage() {
   const [queue, setQueue] = useState<Queue>({ status: "idle" });
   const [now, setNow] = useState(0);
   const search = useRef<MatchSearch | null>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
   const [summon, setSummon] = useState<{ key: string; n: number } | null>(null);
   const motion = useMotionPreference();
   const audio = useBattleAudio();
+  useFocusTrap(overlayRef, queue.status !== "idle");
   const guest = status === "guest" || !session;
 
   useEffect(() => {
@@ -127,10 +136,13 @@ export default function LoadoutPage() {
   const leadSpecies = useSpecies(lead?.species ?? null);
   const bench = useMemo(() => (format === "squad" ? team.slice(1) : []), [format, team]);
   const benchSpecies = useSpeciesList(bench.map((p) => p.species));
-  const summonCard = (key: string) => setSummon({ key, n: Date.now() });
+  const summonCard = (key: string) => { setNotice(null); setSummon({ key, n: Date.now() }); };
 
+  const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
-    if (leadSpecies?.failed) setSummon(null);
+    if (!leadSpecies?.failed) return;
+    setSummon(null);
+    setNotice("Couldn't wake this card: creature data didn't load. Check your connection and pick it again.");
   }, [leadSpecies?.failed]);
   const quote = stakeService.quote(entry);
   const preview = rank ? rankService.preview(rank.rating, rank.rating) : null;
@@ -171,10 +183,18 @@ export default function LoadoutPage() {
   }, [playerName, router]);
   const onSignedIn = useCallback(() => setSignInOpen(false), []);
 
-  const setCustomEntry = (v: string) => {
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const setCustomEntry = (raw: string) => {
+    const cleaned = raw.replace(/[^0-9.]/g, "");
+    const [whole, ...rest] = cleaned.split(".");
+    const v = rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
     setCustom(v);
-    const n = Math.round(Number(v) * 100) / 100;
-    if (Number.isFinite(n) && n > 0) setEntry(Math.min(n, MAX_ENTRY));
+    if (!v) { setEntryError(null); setEntry(5); return; }
+    const n = Number(v);
+    if (!Number.isFinite(n) || n < 1) { setEntryError("Minimum entry is $1"); return; }
+    if (n > MAX_ENTRY) { setEntryError(`Maximum entry is $${MAX_ENTRY}`); return; }
+    setEntryError(null);
+    setEntry(Math.round(n * 100) / 100);
   };
 
   return (
@@ -201,6 +221,14 @@ export default function LoadoutPage() {
           {!assets ? (
             <div className={styles.grid}>{[0, 1, 2, 3].map((i) => <div key={i} className={styles.cardSkeleton} />)}</div>
           ) : (
+            <>
+            {!guest && eligible.length === 0 && (
+              <div className={styles.empty} role="status">
+                <strong>{rows.length === 0 ? "No cards in this wallet yet" : "None of these cards can battle yet"}</strong>
+                <span>{rows.length === 0 ? "Cards you own show up here automatically." : "Only supported creature cards can be played."} You can still battle as a guest with rental creatures.</span>
+                <button className="pf-btn" data-size="sm" onClick={() => playAsGuest()}>Battle as a guest</button>
+              </div>
+            )}
             <div className={styles.grid} role="radiogroup" aria-label="Cards">
               {rows.map((r) => {
                 const key = r.pick?.key ?? r.asset?.id ?? r.label;
@@ -209,7 +237,7 @@ export default function LoadoutPage() {
                   <button key={key} role="radio" aria-checked={isSel} className={styles.card} data-selected={isSel || undefined} disabled={!r.pick}
                     onClick={() => { if (r.pick) { setSelected(r.pick.key); summonCard(r.pick.key); } }} title={r.reason ?? undefined}>
                     <span className={styles.art}>
-                      {r.image ? <img src={r.image} alt="" loading="lazy" /> : r.pick ? <Sprite species={r.pick.species} size={88} /> : null}
+                      {r.image ? <CardArt src={r.image} species={r.pick?.species ?? null} /> : r.pick ? <Sprite species={r.pick.species} size={88} /> : null}
                       {r.reason && <span className={styles.reason}>{r.reason}</span>}
                     </span>
                     <span className={styles.cardMeta}>
@@ -224,6 +252,7 @@ export default function LoadoutPage() {
                 );
               })}
             </div>
+            </>
           )}
         </section>
 
@@ -239,7 +268,8 @@ export default function LoadoutPage() {
               </div>
             </div>
           </div>
-          {leadSpecies?.failed && <p className={styles.warn}>Couldn&apos;t load this creature&apos;s moves. Check your connection.</p>}
+          {notice && <p className={styles.warn} role="alert">{notice}</p>}
+          {leadSpecies?.failed && !notice && <p className={styles.warn}>Couldn&apos;t load this creature&apos;s moves. Check your connection.</p>}
           <ul className={styles.moves}>
             {(leadSpecies?.species?.moves ?? [null, null, null, null]).map((m, i) => (
               <li key={m?.id ?? i} style={m ? ({ "--type": TYPE_COLORS[m.type] } as React.CSSProperties) : undefined}>
@@ -266,14 +296,15 @@ export default function LoadoutPage() {
           <p className={styles.label}>Entry</p>
           <div className={styles.chips}>
             {ENTRY_PRESETS.map((n) => (
-              <button key={n} data-on={entry === n && !custom || undefined} disabled={guest && n > 0} onClick={() => { setCustom(""); setEntry(n); }}>{formatDollars(n)}</button>
+              <button key={n} data-on={entry === n && !custom || undefined} disabled={guest && n > 0} onClick={() => { setCustom(""); setEntryError(null); setEntry(n); }}>{formatDollars(n)}</button>
             ))}
             <label className={styles.custom} data-on={!!custom || undefined}>
               <span>$</span>
-              <input inputMode="decimal" placeholder="Custom" value={custom} disabled={guest} aria-label="Custom entry in dollars" onChange={(e) => setCustomEntry(e.target.value.replace(/[^0-9.]/g, ""))} />
+              <input inputMode="decimal" placeholder="Custom" value={custom} disabled={guest} aria-label="Custom entry in dollars" onChange={(e) => setCustomEntry(e.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
             </label>
           </div>
-          <div className={styles.pot}>
+          {entryError && <p id="entry-error" className={styles.warn} role="alert">{entryError}</p>}
+          <div className={styles.pot} hidden={!!entryError}>
             <span>{entry ? <>Winner takes <strong>{formatDollars(quote.winnerTakes)}</strong></> : <>Free match, ranked only</>}</span>
             <em>Demo: no real money</em>
           </div>
@@ -288,12 +319,12 @@ export default function LoadoutPage() {
             </div>
           ) : <span className={styles.moveSkeleton} />}
 
-          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !leadSpecies?.species} onClick={findMatch}>Find match</button>
+          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !leadSpecies?.species || !!entryError || queue.status !== "idle"} onClick={findMatch}>Find match</button>
         </aside>
       </main>
 
       {queue.status !== "idle" && (
-        <div className={styles.overlay} role="dialog" aria-modal="true" aria-label="Matchmaking">
+        <div ref={overlayRef} tabIndex={-1} className={styles.overlay} role="dialog" aria-modal="true" aria-label="Matchmaking">
           <div className={`pf-panel ${styles.matchBox}`}>
             {queue.status === "searching" ? (
               <>

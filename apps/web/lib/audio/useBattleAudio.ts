@@ -1,5 +1,6 @@
 "use client";
 
+import { local } from "../storage";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BattleEvent, BattleState } from "../battle/types";
 
@@ -91,14 +92,14 @@ export function useBattleAudio(createProvider: () => AudioCueProvider = () => ne
   const factory = useRef(createProvider);
 
   useEffect(() => {
-    setMuted(localStorage.getItem(MUTE_KEY) === "1");
+    setMuted(local.get(MUTE_KEY) === "1");
     provider.current = factory.current();
     return () => provider.current?.dispose?.();
   }, []);
 
   const toggleMute = useCallback(() => {
     setMuted((m) => {
-      localStorage.setItem(MUTE_KEY, m ? "0" : "1");
+      local.set(MUTE_KEY, m ? "0" : "1");
       return !m;
     });
   }, []);

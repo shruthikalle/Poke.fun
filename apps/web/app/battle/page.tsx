@@ -27,7 +27,7 @@ import styles from "../../components/battle/battle.module.css";
 
 type Load =
   | { status: "loading" }
-  | { status: "error" }
+  | { status: "error"; fatal: boolean }
   | { status: "ready"; ticket: MatchTicket; teams: Record<Side, Creature[]> };
 
 interface MatchResult { outcome: "win" | "loss" | "draw"; payout: number; before: RankInfo; after: RankInfo; delta: number }
@@ -73,7 +73,7 @@ export default function BattlePage() {
     setLoad({ status: "loading" });
     Promise.all([toCreatures(ticket.you.team, "p1"), toCreatures(ticket.opponent.team, "p2")])
       .then(([p1, p2]) => live && setLoad({ status: "ready", ticket, teams: { p1, p2 } }))
-      .catch(() => live && setLoad({ status: "error" }));
+      .catch((e: unknown) => live && setLoad({ status: "error", fatal: /→ 404/.test(String(e)) }));
     return () => { live = false; };
   }, [router, attempt]);
 
@@ -166,8 +166,10 @@ export default function BattlePage() {
               <div className={styles.field} />
               {load.status === "error" ? (
                 <div className={styles.loadError}>
-                  Couldn&apos;t load creature data. Check your connection and try again.
-                  <button className={styles.button} onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+                  {load.fatal ? "This match uses a creature we can't load. Pick your cards again." : "Couldn't load creature data. Check your connection and try again."}
+                  {load.fatal
+                    ? <button className={styles.button} onClick={() => router.push("/loadout")}>Back to loadout</button>
+                    : <button className={styles.button} onClick={() => setAttempt((n) => n + 1)}>Try again</button>}
                 </div>
               ) : <div className={styles.connecting}>Connecting…</div>}
             </div>

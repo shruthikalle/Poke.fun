@@ -1,3 +1,5 @@
+import { local } from "../storage";
+
 const memory = new Map<string, Promise<unknown>>();
 
 /** Memoises `load` in memory and localStorage under `key`. Failed loads are not cached. */
@@ -7,11 +9,11 @@ export function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
   if (hit) return hit as Promise<T>;
   const promise = (async () => {
     try {
-      const raw = typeof window !== "undefined" ? window.localStorage.getItem(storageKey) : null;
+      const raw = local.get(storageKey);
       if (raw) return JSON.parse(raw) as T;
-    } catch { /* corrupt or blocked storage: refetch */ }
+    } catch { /* corrupt entry: refetch */ }
     const value = await load();
-    try { window.localStorage.setItem(storageKey, JSON.stringify(value)); } catch { /* quota: memory only */ }
+    local.set(storageKey, JSON.stringify(value));
     return value;
   })();
   memory.set(storageKey, promise);

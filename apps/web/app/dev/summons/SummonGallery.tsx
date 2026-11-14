@@ -1,5 +1,7 @@
 "use client";
 
+import { local } from "../../../lib/storage";
+
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Emblem } from "../../../components/Emblem";
@@ -25,7 +27,7 @@ export function SummonGallery() {
   const [full, setFull] = useState<{ entry: CatalogEntry; species: SpeciesData | null; n: number } | null>(null);
   const [minis, setMinis] = useState<Record<string, { species: SpeciesData; n: number }>>({});
   const [check, setCheck] = useState<Check | null>(null);
-  const [scenario, setScenario] = useState<MockScenario>(() => (typeof window === "undefined" ? "default" : (localStorage.getItem(MOCK_SCENARIO_KEY) as MockScenario | null) ?? "default"));
+  const [scenario, setScenario] = useState<MockScenario>(() => ((local.get(MOCK_SCENARIO_KEY) as MockScenario | null) ?? "default"));
 
   const cards = useMemo(() => CARD_CATALOG.entries.filter((e) =>
     (set === "all" || e.set === set) && (!query || `${e.name} ${e.species} ${e.number}`.toLowerCase().includes(query.toLowerCase()))), [set, query]);
@@ -61,7 +63,7 @@ export function SummonGallery() {
 
   const chooseScenario = (s: MockScenario) => {
     setScenario(s);
-    localStorage.setItem(MOCK_SCENARIO_KEY, s);
+    local.set(MOCK_SCENARIO_KEY, s);
   };
 
   return (

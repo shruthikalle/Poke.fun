@@ -1,5 +1,7 @@
 "use client";
 
+import { session as tabStorage } from "../../lib/storage";
+
 import { useCallback, useEffect, useState } from "react";
 import { api, type Card, type Match, type Session } from "../../lib/api";
 import "./legacy.css";
@@ -34,9 +36,9 @@ export default function Home() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    const saved = sessionStorage.getItem(SESSION_KEY);
+    const saved = tabStorage.get(SESSION_KEY);
     if (saved) {
-      try { setSession(JSON.parse(saved) as Session); } catch { sessionStorage.removeItem(SESSION_KEY); }
+      try { setSession(JSON.parse(saved) as Session); } catch { tabStorage.remove(SESSION_KEY); }
     }
     api.cards().then((data) => {
       setCards(data);
@@ -71,7 +73,7 @@ export default function Home() {
       const next = mode === "create"
         ? await api.create(name.trim(), cardId)
         : await api.join(roomCode.trim().toUpperCase(), name.trim(), cardId);
-      sessionStorage.setItem(SESSION_KEY, JSON.stringify(next));
+      tabStorage.set(SESSION_KEY, JSON.stringify(next));
       setSession(next);
       await refresh(next);
     } catch (cause) {
@@ -95,7 +97,7 @@ export default function Home() {
   }
 
   function leave() {
-    sessionStorage.removeItem(SESSION_KEY);
+    tabStorage.remove(SESSION_KEY);
     setSession(null);
     setMatch(null);
     setError("");
