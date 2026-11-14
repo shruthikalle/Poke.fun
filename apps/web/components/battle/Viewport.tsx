@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { BattleState, Creature, Side, SideState } from "../../lib/battle/types";
 import type { MarketOdds } from "../../lib/markets/useOdds";
 import { hpPercent } from "./format";
@@ -30,7 +31,7 @@ function HpBar({ creature, role }: { creature: Creature; role: "foe" | "me" }) {
 function TeamBalls({ side, you }: { side: SideState; you: boolean }) {
   return (
     <div className={styles.balls}>
-      {Array.from({ length: 6 }, (_, i) => {
+      {Array.from({ length: Math.max(1, side.team.length) }, (_, i) => {
         const c = side.team[i];
         const state = !c ? "empty" : c.fainted ? "fainted" : i === side.activeIndex ? "active" : "healthy";
         const label = !c ? "Empty slot" : you || c.fainted || i === side.activeIndex ? `${c.species} (${hpPercent(c.hp, c.maxHp)}%)` : "Not revealed yet";
@@ -61,14 +62,15 @@ function Sprite({ state, side }: { state: BattleState; side: Side }) {
   return (
     <div className={styles.spriteSlot} data-role={facing}>
       <div key={anim ? `${anim.kind}-${anim.seq}` : "idle"} className={styles.spriteAction} data-anim={anim?.kind} data-fainted={creature.fainted || undefined}>
-        <img className={styles.sprite} src={`/sprites/${creature.spriteId}-${facing}.png`} alt={creature.species} width={96} height={96} draggable={false} />
+        <img key={creature.id} className={styles.sprite} src={facing === "back" ? creature.sprites.back : creature.sprites.front} alt={creature.species} draggable={false}
+          onError={(e) => { const fallback = facing === "back" ? creature.sprites.backStatic : creature.sprites.frontStatic; if (e.currentTarget.src !== fallback) e.currentTarget.src = fallback; }} />
       </div>
       <div className={styles.shadow} />
     </div>
   );
 }
 
-export function Viewport({ state, odds }: { state: BattleState; odds: MarketOdds | null }) {
+export function Viewport({ state, odds, badge }: { state: BattleState; odds: MarketOdds | null; badge?: ReactNode }) {
   const me = state.you;
   const foe = me === "p1" ? "p2" : "p1";
   const myActive = state.sides[me].team[state.sides[me].activeIndex];
@@ -78,6 +80,7 @@ export function Viewport({ state, odds }: { state: BattleState; odds: MarketOdds
     <div className={styles.viewport}>
       <div className={styles.field} />
       {started && <div className={styles.turnBadge}>Turn {state.turn}</div>}
+      {badge && <div className={styles.stakeBadge}>{badge}</div>}
       {started && foeActive && !foeActive.fainted && <HpBar creature={foeActive} role="foe" />}
       {started && myActive && !myActive.fainted && <HpBar creature={myActive} role="me" />}
       <Sprite state={state} side={foe} />

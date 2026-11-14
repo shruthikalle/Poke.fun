@@ -34,10 +34,11 @@ npm install
 npm run dev
 ```
 
-The frontend has three routes:
+The frontend has four routes:
 
-- `/`: pixel-art landing page with Phantom sign-in (or guest play).
-- `/battle`: multi-creature battle screen. It runs on its own with mock data, so the Go API is not needed.
+- `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
+- `/loadout`: pick a card from your collection, a format (Champion 1v1 or Squad of 3) and an entry amount, see your rank, then find a match.
+- `/battle`: battle screen for the matched cards. It runs on its own with mock data, so the Go API is not needed. Opening it without a match sends you to `/loadout`.
 - `/play`: the original one-card demo that talks to the Go API.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
@@ -46,7 +47,7 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 ### Frontend integration seams
 
-`/battle` reads all live data through typed interfaces in `apps/web/lib`, each backed by a mock for now. To swap in a real service, implement the interface; the UI code doesn't change.
+`/loadout` and `/battle` read all live data through typed interfaces in `apps/web/lib`, each backed by a mock for now. To swap in a real service, implement the interface; the UI code doesn't change.
 
 | Seam | Interface | Mock | TODO |
 | --- | --- | --- | --- |
@@ -55,6 +56,14 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
 | Sign-in | `AuthService` (`lib/wallet`) | `mockAuthService` | Go API nonce + signature check |
 | Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | `MockLobbyService`, `MockRoomChatService` | Presence and chat API |
+| Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | `MockCollectionService` | DAS RPC (QuickNode) |
+| Card → creature | `CARD_MAPPING`, `resolveCard` (`lib/cards/mapping.ts`) | Versioned table | Reviewed card list |
+| Creature data | `SpeciesService` (`lib/pokemon`) | Live PokéAPI, cached in memory + localStorage | — |
+| Rank | `RankService` (`lib/rank`) | `MockRankService` (localStorage Elo) | Go API ratings |
+| Entry and winnings | `StakeService` (`lib/stake`) | `MockStakeService` (no money moves) | Devnet USDC escrow, after legal review |
+| Matchmaking | `MatchmakingService` (`lib/match`) | `MockMatchmakingService` | Go API queue |
+
+Creature stats, moves and sprites come from [PokéAPI](https://pokeapi.co); card art comes from the Pokémon TCG API image CDN. Pokémon is a trademark of Nintendo / The Pokémon Company, so get a rights review before any public launch.
 
 Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run build`.
 

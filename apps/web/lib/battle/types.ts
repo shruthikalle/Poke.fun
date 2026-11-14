@@ -1,6 +1,6 @@
 export type ElementType =
   | "Normal" | "Fire" | "Water" | "Grass" | "Electric" | "Ice" | "Fighting" | "Ground"
-  | "Flying" | "Psychic" | "Rock" | "Ghost" | "Dragon" | "Dark" | "Fairy";
+  | "Flying" | "Psychic" | "Rock" | "Ghost" | "Dragon" | "Dark" | "Fairy" | "Bug" | "Poison" | "Steel";
 
 export type Side = "p1" | "p2";
 
@@ -19,10 +19,20 @@ export interface Move {
   maxPp: number;
 }
 
+export interface CreatureSprites {
+  front: string;
+  back: string;
+  frontStatic: string;
+  backStatic: string;
+}
+
 export interface Creature {
   id: string;
   species: string;
   spriteId: string;
+  sprites: CreatureSprites;
+  speed: number;
+  stats: { atk: number; def: number; spa: number; spd: number };
   level: number;
   gender: "M" | "F" | null;
   types: ElementType[];

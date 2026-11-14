@@ -1,7 +1,7 @@
-import { MOCK_FORMAT, randomTeam, speciesById, typeMultiplier } from "./roster";
+import { makeFormat, typeMultiplier } from "./roster";
 import {
   otherSide,
-  type BattleChoice, type BattleEvent, type BattleStreamSource, type Creature, type Effectiveness,
+  type BattleChoice, type BattleEvent, type BattleFormat, type BattleStreamSource, type Creature, type Effectiveness,
   type Side, type SideState, type Trainer, type Unsubscribe,
 } from "./types";
 
@@ -10,13 +10,16 @@ const OPPONENT_LINES = ["gl hf", "nice switch", "oof", "that crit tho", "gg", "c
 export interface MockBattleOptions {
   you: Trainer;
   opponent?: Trainer;
+  /** Teams locked in at matchmaking. Each battle (and rematch) starts from a fresh copy. */
+  teams: Record<Side, Creature[]>;
+  format?: BattleFormat;
   /** Multiplier for every delay; tests can pass a small value. */
   speed?: number;
 }
 
 /**
- * In-memory stand-in for the live battle feed. It plays a random
- * opponent and emits the same events a real transport would.
+ * In-memory stand-in for the live battle feed. It plays the matched
+ * opponent's team and emits the same events a real transport would.
  */
 export class MockBattleStream implements BattleStreamSource {
   private listener: ((event: BattleEvent) => void) | null = null;
@@ -33,8 +36,12 @@ export class MockBattleStream implements BattleStreamSource {
   private readonly speed: number;
   private readonly you: Trainer;
   private readonly opponent: Trainer;
+  private readonly teams: Record<Side, Creature[]>;
+  private readonly format: BattleFormat;
 
   constructor(options: MockBattleOptions) {
+    this.teams = options.teams;
+    this.format = options.format ?? makeFormat("Champion 1v1", []);
     this.you = options.you;
     this.opponent = options.opponent ?? { id: "thar07", name: "thar07", avatar: "kai" };
     this.speed = options.speed ?? 1;
@@ -112,16 +119,15 @@ export class MockBattleStream implements BattleStreamSource {
     this.needsSwitch = false;
     this.awaiting = false;
     this.over = false;
-    const p1Team = randomTeam(6);
     this.sides = {
-      p1: { side: "p1", trainer: this.you, team: p1Team, activeIndex: 0 },
-      p2: { side: "p2", trainer: this.opponent, team: randomTeam(6), activeIndex: 0 },
+      p1: { side: "p1", trainer: this.you, team: structuredClone(this.teams.p1), activeIndex: 0 },
+      p2: { side: "p2", trainer: this.opponent, team: structuredClone(this.teams.p2), activeIndex: 0 },
     };
     this.emit({
       type: "init",
       state: {
-        id: `battle-gen9randombattle-${Math.floor(Math.random() * 9e9) + 1e9}`,
-        format: MOCK_FORMAT,
+        id: `battle-${Math.floor(Math.random() * 9e9) + 1e9}`,
+        format: this.format,
         turn: 1,
         you: "p1",
         sides: structuredClone(this.sides),
@@ -221,8 +227,10 @@ export class MockBattleStream implements BattleStreamSource {
       const mult = typeMultiplier(m.type, defender.types);
       const stab = attacker.types.includes(m.type) ? 1.5 : 1;
       const crit = Math.random() < 0.06;
-      const base = (((2 * attacker.level) / 5 + 2) * m.power * 1.1) / 50 + 2;
-      const damage = Math.round(base * stab * mult * (crit ? 1.5 : 1) * (0.85 + Math.random() * 0.15) * 1.6);
+      const [atk, def] = m.category === "physical" ? [attacker.stats.atk, defender.stats.def] : [attacker.stats.spa, defender.stats.spd];
+      const base = (((2 * attacker.level) / 5 + 2) * m.power * (atk / def)) / 50 + 2;
+      // Scaled below the games' formula so one-card matches last a few turns.
+      const damage = Math.max(1, Math.round(base * stab * mult * (crit ? 1.5 : 1) * (0.85 + Math.random() * 0.15) * 0.55));
       defender.hp = Math.max(0, defender.hp - damage);
       const effectiveness: Effectiveness = mult === 0 ? "immune" : mult > 1 ? "super" : mult < 1 ? "resisted" : "normal";
       this.emit({ type: "damage", side: defenderSide, hp: defender.hp, effectiveness, crit });
@@ -260,7 +268,7 @@ export class MockBattleStream implements BattleStreamSource {
 
   private speedOf(side: Side) {
     const c = this.active(side);
-    return (speciesById(c.spriteId)?.base.spe ?? 70) + c.level / 10 + Math.random();
+    return c.speed + c.level / 10 + Math.random();
   }
 
   private active(side: Side): Creature {

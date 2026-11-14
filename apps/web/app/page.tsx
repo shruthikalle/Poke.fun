@@ -56,11 +56,11 @@ export default function Landing() {
     setPaused(window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   }, []);
 
-  const enter = () => (playerName ? router.push("/battle") : setSignInOpen(true));
+  const enter = () => (playerName ? router.push("/loadout") : setSignInOpen(true));
   const close = useCallback(() => setSignInOpen(false), []);
   const onSignedIn = useCallback(() => {
     setSignInOpen(false);
-    router.push("/battle");
+    router.push("/loadout");
   }, [router]);
 
   return (
@@ -80,10 +80,10 @@ export default function Landing() {
           </Link>
           <nav className={styles.nav} aria-label="Main">
             {NAV.map((n) => <a key={n.href} href={n.href}>{n.label}</a>)}
-            <Link href="/battle">Play</Link>
+            <Link href="/loadout">Play</Link>
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
-                extra={<Link className={styles.menuItem} href="/battle">Go to battle</Link>} />
+                extra={<Link className={styles.menuItem} href="/loadout">Play a match</Link>} />
             ) : (
               <button className={styles.signIn} onClick={() => setSignInOpen(true)}>Sign in</button>
             )}
@@ -153,7 +153,7 @@ export default function Landing() {
         </section>
 
         <footer className={styles.footer}>
-          <span>© Poke.fun · Original creatures and art. Not affiliated with any game publisher.</span>
+          <span>© Poke.fun · Creature data and sprites from PokéAPI. Pokémon is a trademark of Nintendo / The Pokémon Company; this demo is not affiliated with them.</span>
           <Link href="/play">Classic one-card demo →</Link>
         </footer>
       </main>

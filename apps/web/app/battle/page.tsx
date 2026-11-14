@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ActionBar } from "../../components/battle/ActionBar";
 import { LogPanel, type BattleOptions } from "../../components/battle/LogPanel";
@@ -11,28 +12,83 @@ import { SignInDialog } from "../../components/SignInDialog";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { MockBattleStream } from "../../lib/battle/MockBattleStream";
-import type { BattleStreamSource, Trainer } from "../../lib/battle/types";
+import { createCreature, makeFormat } from "../../lib/battle/roster";
+import type { BattleStreamSource, Creature, Side } from "../../lib/battle/types";
+import { FORMAT_LABEL, type CardPick } from "../../lib/cards/mapping";
 import { useLobby, type ChatRoom } from "../../lib/lobby/useLobby";
 import { useOdds } from "../../lib/markets/useOdds";
+import { loadTicket, type MatchTicket } from "../../lib/match/MatchmakingService";
+import { speciesService } from "../../lib/pokemon/SpeciesService";
+import { rankService, type RankInfo } from "../../lib/rank/RankService";
+import { formatDollars, stakeService } from "../../lib/stake/StakeService";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "../../components/battle/battle.module.css";
 
-const OPPONENTS: Trainer[] = [
-  { id: "thar07", name: "thar07", avatar: "kai" },
-  { id: "mossy_mo", name: "mossy_mo", avatar: "theo" },
-  { id: "pyrefly", name: "pyrefly", avatar: "rook" },
-];
+type Load =
+  | { status: "loading" }
+  | { status: "error" }
+  | { status: "ready"; ticket: MatchTicket; teams: Record<Side, Creature[]> };
+
+interface MatchResult { outcome: "win" | "loss" | "draw"; payout: number; before: RankInfo; after: RankInfo; delta: number }
+
+async function toCreatures(picks: CardPick[], side: Side): Promise<Creature[]> {
+  const species = await Promise.all(picks.map((p) => speciesService.getSpecies(p.species)));
+  return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${picks[i].key}`));
+}
+
+function ResultSummary({ result, entry }: { result: MatchResult; entry: number }) {
+  const money = result.outcome === "win" ? `+${formatDollars(result.payout)}` : result.outcome === "draw" ? `${formatDollars(result.payout)} back` : entry ? `−${formatDollars(entry)}` : "$0";
+  return (
+    <div className={styles.result}>
+      <div>
+        <span>{entry ? "Winnings" : "Free match"}</span>
+        <strong data-tone={result.outcome === "win" && entry ? "up" : result.outcome === "loss" && entry ? "down" : undefined}>{entry ? money : "No entry"}</strong>
+        <small>{entry ? `Entry ${formatDollars(entry)} · demo, no real money` : "Nothing was at stake"}</small>
+      </div>
+      <div>
+        <span>Rank</span>
+        <strong data-tone={result.delta > 0 ? "up" : result.delta < 0 ? "down" : undefined}>{result.before.rating} → {result.after.rating} ({result.delta >= 0 ? "+" : ""}{result.delta})</strong>
+        <small>{result.after.tier} · {result.after.wins}–{result.after.losses}</small>
+      </div>
+    </div>
+  );
+}
 
 export default function BattlePage() {
+  const router = useRouter();
   const { ready, playerName: signedInName } = useWallet();
   const playerName = signedInName ?? "Guest";
-  const [battleNo, setBattleNo] = useState(0);
+  const [load, setLoad] = useState<Load>({ status: "loading" });
+  const [attempt, setAttempt] = useState(0);
+  const [result, setResult] = useState<MatchResult | null>(null);
+
+  useEffect(() => {
+    const ticket = loadTicket();
+    if (!ticket) {
+      router.replace("/loadout");
+      return;
+    }
+    let live = true;
+    setLoad({ status: "loading" });
+    Promise.all([toCreatures(ticket.you.team, "p1"), toCreatures(ticket.opponent.team, "p2")])
+      .then(([p1, p2]) => live && setLoad({ status: "ready", ticket, teams: { p1, p2 } }))
+      .catch(() => live && setLoad({ status: "error" }));
+    return () => { live = false; };
+  }, [router, attempt]);
+
+  const ticket = load.status === "ready" ? load.ticket : null;
 
   // TODO(realtime): construct the QuickNode Streams / Go API source here instead.
   const source = useMemo<BattleStreamSource | null>(() => {
-    if (!ready) return null;
-    return new MockBattleStream({ you: { id: playerName, name: playerName, avatar: "maya" }, opponent: OPPONENTS[battleNo % OPPONENTS.length] });
-  }, [ready, playerName, battleNo]);
+    if (!ready || load.status !== "ready") return null;
+    const t = load.ticket;
+    const { winnerTakes } = stakeService.quote(t.entry);
+    const format = makeFormat(FORMAT_LABEL[t.format], [
+      { name: "Entry", description: t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
+      { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
+    ]);
+    return new MockBattleStream({ you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format });
+  }, [ready, load, playerName]);
 
   const battle = useBattleStream(source);
   const { state } = battle;
@@ -54,7 +110,19 @@ export default function BattlePage() {
   useEffect(() => battle.subscribe((event, s) => {
     const cue = cueForEvent(event, s);
     if (cue) play(cue);
-  }), [battle.subscribe, play]);
+    if (!ticket) return;
+    if (event.type === "init") {
+      setResult(null);
+      void stakeService.deposit(ticket.matchId, ticket.entry);
+    }
+    if (event.type === "win") {
+      const outcome = event.winner === "draw" ? "draw" : event.winner === (s?.you ?? "p1") ? "win" : "loss";
+      void Promise.all([
+        rankService.recordResult(playerName, ticket.opponent.trainer.name, ticket.opponent.rating, outcome),
+        stakeService.settle(ticket.matchId, ticket.entry, outcome),
+      ]).then(([rank, settlement]) => setResult({ outcome, payout: settlement.payout, ...rank }));
+    }
+  }), [battle.subscribe, play, ticket, playerName]);
 
   const openRoom = useCallback((room: ChatRoom) => {
     setRooms((rs) => (rs.some((r) => r.id === room.id) ? rs : [...rs, room]));
@@ -72,22 +140,35 @@ export default function BattlePage() {
   };
 
   const activeRoom = rooms.find((r) => r.id === tab);
+  const title = ticket ? FORMAT_LABEL[ticket.format] : "Battle";
   const subtitle = state ? `${state.sides.p2.trainer.name} vs. ${state.sides.p1.trainer.name}` : "Connecting…";
+  const badge = ticket && (ticket.entry
+    ? <>Entry <b>{formatDollars(ticket.entry)}</b> · Winner takes <b>{formatDollars(stakeService.quote(ticket.entry).winnerTakes)}</b> · Demo</>
+    : <>Free match · Ranked</>);
 
   return (
     <div className={styles.app} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
-      <TopBar title="Random Battle" subtitle={subtitle} rooms={rooms} activeTab={tab} onSelect={setTab} onCloseRoom={closeRoom}
-        onNewBattle={() => { setBattleNo((n) => n + 1); setTab("battle"); }} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => setSignIn(true)} />
+      <TopBar title={title} subtitle={subtitle} rooms={rooms} activeTab={tab} onSelect={setTab} onCloseRoom={closeRoom}
+        onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => setSignIn(true)} />
 
       <div className={styles.body}>
         <div className={styles.left}>
-          {state ? (
+          {state && ticket ? (
             <>
-              <Viewport state={state} odds={options.showOdds ? odds : null} />
-              <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={battle.rematch} />
+              <Viewport state={state} odds={options.showOdds ? odds : null} badge={badge} />
+              <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={battle.rematch}
+                summary={result ? <ResultSummary result={result} entry={ticket.entry} /> : null} />
             </>
           ) : (
-            <div className={styles.viewport}><div className={styles.field} /><div className={styles.connecting}>Connecting…</div></div>
+            <div className={styles.viewport}>
+              <div className={styles.field} />
+              {load.status === "error" ? (
+                <div className={styles.loadError}>
+                  Couldn&apos;t load creature data. Check your connection and try again.
+                  <button className={styles.button} onClick={() => setAttempt((n) => n + 1)}>Try again</button>
+                </div>
+              ) : <div className={styles.connecting}>Connecting…</div>}
+            </div>
           )}
         </div>
 

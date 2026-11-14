@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import type { ReactNode } from "react";
 import type { BattleChoice, BattleState } from "../../lib/battle/types";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { formatClock, hpPercent } from "./format";
@@ -12,6 +13,8 @@ interface Props {
   cancel: () => void;
   toggleTimer: () => void;
   rematch: () => void;
+  /** Extra content for the ended state, e.g. winnings and rank change. */
+  summary?: ReactNode;
 }
 
 function TimerButton({ state, toggleTimer }: Pick<Props, "state" | "toggleTimer">) {
@@ -25,7 +28,7 @@ function TimerButton({ state, toggleTimer }: Pick<Props, "state" | "toggleTimer"
   );
 }
 
-export function ActionBar({ state, choose, cancel, toggleTimer, rematch }: Props) {
+export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary }: Props) {
   const mine = state.sides[state.you];
   const active = mine.team[mine.activeIndex];
 
@@ -33,8 +36,10 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch }: Props
     return (
       <div className={styles.actions}>
         <p className={styles.prompt}><strong>{state.winner === "draw" ? "The battle ended in a draw." : state.winner === state.you ? "You won the battle!" : `${state.sides[state.winner === "p1" ? "p1" : "p2"].trainer.name} won the battle.`}</strong></p>
+        {summary}
         <div className={styles.endRow}>
           <button className={styles.button} onClick={rematch}>Rematch</button>
+          <Link className={styles.button} href="/loadout">Change loadout</Link>
           <Link className={styles.button} href="/">Main menu</Link>
         </div>
       </div>
@@ -101,7 +106,7 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch }: Props
           return (
             <button key={c.id} className={styles.switch} disabled={c.fainted || isActive} data-active={isActive || undefined} data-fainted={c.fainted || undefined}
               onClick={() => choose({ kind: "switch", teamIndex: i })} title={`${c.species} · L${c.level} · ${pct}% HP${isActive ? " · active" : ""}`}>
-              <img src={`/sprites/${c.spriteId}-front.png`} alt="" width={24} height={24} />
+              <img src={c.sprites.frontStatic} alt="" width={24} height={24} />
               <span>{c.species}</span>
               <i className={styles.miniHp}><b style={{ width: `${pct}%` }} /></i>
             </button>
