@@ -31,7 +31,12 @@ export function createCreature(species: SpeciesData, level: number, uid: string,
   };
 }
 
-/** Wraps caller-supplied rules (match, entry, ranks) with the format's standard clauses. */
+/**
+ * Wraps caller-supplied rules (match, entry, ranks) with the clauses the battle
+ * enforces: one of each species per team (see buildTeam) and HP shown as a
+ * percentage. Status-based clauses are omitted because the engine has no status
+ * effects yet.
+ */
 export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFormat {
   return {
     name,
@@ -39,7 +44,6 @@ export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFo
     rules: [
       { name: "Species Clause", description: "Limit one of each creature" },
       { name: "HP Percentage Mod", description: "HP is shown in percentages" },
-      { name: "Sleep Clause Mod", description: "Limit one foe put to sleep" },
       ...rules,
     ],
   };
