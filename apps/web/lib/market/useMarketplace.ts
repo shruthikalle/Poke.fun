@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWallet } from "../wallet/WalletProvider";
 import { marketplaceService } from "./mockMarketplace";
+import { useWalletSolBalance } from "./useWalletSolBalance";
 import type { Card, ImportSource, Listing, MarketplaceService, MarketResult, OfferAnswer, Trade } from "./types";
 
 const SIGN_IN_FIRST = { ok: false as const, error: "Sign in to continue." };
@@ -20,6 +21,7 @@ export function useMarketplace(service: MarketplaceService = marketplaceService)
   }, [service]);
 
   const me = connected ? address : null;
+  const walletBalanceSol = useWalletSolBalance(me);
   useEffect(() => { if (me) service.ensureAccount(me, playerName ?? "You"); }, [service, me, playerName]);
 
   const derived = useMemo(() => {
@@ -55,6 +57,7 @@ export function useMarketplace(service: MarketplaceService = marketplaceService)
   return {
     state,
     me,
+    walletBalanceSol,
     ...derived,
     priceHistory: service.priceHistory.bind(service),
     valueOf: service.valueOf.bind(service),

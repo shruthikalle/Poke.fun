@@ -100,3 +100,10 @@
 .empty strong { color: var(--text); font-size: 14px; }
 .empty :global(.pf-btn) { align-self: flex-start; margin-top: 6px; }
 .artMissing { padding: 8px; text-align: center; font-size: 11px; color: var(--text-faint); }
+.modes { margin-top: var(--space-3); text-align: center; }
+.modes a { color: var(--accent); }
+.modes a:hover { color: var(--accent-hi); }
+.nav { display: flex; gap: var(--space-5); }
+.nav a { padding: 6px 2px; font-family: var(--font-label); font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--text-dim); text-decoration: none; border-bottom: 2px solid transparent; }
+.nav a:hover { color: var(--text); }
+.nav a[aria-current="page"] { color: var(--accent); border-bottom-color: var(--accent); }

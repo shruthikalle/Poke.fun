@@ -11,7 +11,7 @@
 
 Poke.fun is a browser-based, turn-based 1v1 card battle game. A player selects one collectible card, gets matched with another player, chooses attacks, and tries to knock out the opposing card. The long-term concept lets players stake equal amounts of USDC or mutually agreed tokenized physical cards, with the winner receiving the stakes. The hackathon version must first prove that the battle itself is fun, fair, and reliable.
 
-The current repository contains a playable free-match demo with fictional cards. It does **not** connect wallets, verify NFTs, or hold stakes. This PRD separates that working base from proposed hackathon additions and later production features.
+The current repository contains playable free matches: a one-card duel with fictional cards, and a team battle with creatures built from PokéAPI that two real players can play through matchmaking (or one player against a server AI). Sign-in runs only in the web client; the server does **not** verify wallets or NFTs, and nothing holds stakes. This PRD separates that working base from proposed hackathon additions and later production features.
 
 ## 2. Problem and opportunity
 
@@ -104,13 +104,14 @@ Spectators, voice commentary, and prediction markets are outside the first relea
 | S-03 | P2 | Failed setup refund | No match can strand the first player's deposit when the second player fails to fund. |
 | M-01 | P2 | Skill matchmaking | Queue pairs players in the same format/power tier, then uses rating and stake band. |
 
-P0 is required for a playable demo, P1 is the recommended hackathon extension, and P2 is conditional on time and review. The existing starter meets B-01 through B-06 for local free matches, with in-memory state only.
+P0 is required for a playable demo, P1 is the recommended hackathon extension, and P2 is conditional on time and review. The existing starter meets B-01 through B-06 for local free matches, with in-memory state only. It also now implements R-02 (a 60-second turn deadline that auto-plays the player's quick attack) and the rules/catalog version locking described in §8. The `/battle` team battle now meets B-01 to B-05 for two real players: hidden simultaneous choices, server-only state, a shared event log so both screens match, and M-01-style matchmaking by format, power tier and entry (with an AI fallback). A refresh rejoins a live match while the server is running; persistence across restarts (R-01), rating bands, and the wallet/NFT/stake requirements remain open.
 
 ## 8. Initial game rules
 
 - Match format: one card per player, one chosen attack per player per turn.
 - Both attacks resolve simultaneously. Damage is applied to both cards before checking for a knockout.
 - A quick attack costs zero energy and grants one energy. A heavy attack costs two energy and deals more damage.
+- Attacks have an element. Quick attacks are neutral; heavy attacks use the card's element, gaining a same-type bonus and a type-effectiveness multiplier against the opponent's element. The full damage and type rules are in [battle-spec.md](battle-spec.md).
 - Energy and HP are server-owned values. Negative HP is displayed as zero.
 - If one card is knocked out, the other player wins. If both are knocked out on the same turn, the result is a draw.
 - The combat catalog is versioned. A match locks its card definitions and rules version when it starts, so later balance changes cannot alter an active match.

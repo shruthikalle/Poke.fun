@@ -5,6 +5,10 @@ out/
 .env.local
 !.env.example
 *.log
+*.tsbuildinfo
 .DS_Store
 coverage/
 bin/
+*.tsbuildinfo
+contracts/target/
+contracts/.anchor/

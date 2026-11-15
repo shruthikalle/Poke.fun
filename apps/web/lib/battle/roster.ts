@@ -1,6 +1,15 @@
-import type { BattleFormat, Creature, ElementType } from "./types";
+import type { BattleFormat, Creature } from "./types";
 import type { SpeciesData } from "../pokemon/SpeciesService";
 
+// Re-exported so existing UI imports (`from ".../battle/roster"`) keep working
+// while the type-chart logic lives in its own module.
+export { ELEMENT_TYPES, TYPE_COLORS, typeMultiplier } from "./typeChart";
+
+/**
+ * Builds a battle-ready Creature from PokéAPI species data, scaling HP and
+ * stats to the given level with the standard stat formulas. Moves start at full
+ * PP.
+ */
 export function createCreature(species: SpeciesData, level: number, uid: string, cardArt: string | null = null): Creature {
   const maxHp = Math.floor(((2 * species.base.hp + 31) * level) / 100) + level + 10;
   const stat = (b: number) => Math.floor(((2 * b + 31) * level) / 100) + 5;
@@ -22,6 +31,12 @@ export function createCreature(species: SpeciesData, level: number, uid: string,
   };
 }
 
+/**
+ * Wraps caller-supplied rules (match, entry, ranks) with the clauses the battle
+ * enforces: one of each species per team (see buildTeam) and HP shown as a
+ * percentage. Status-based clauses are omitted because the engine has no status
+ * effects yet.
+ */
 export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFormat {
   return {
     name,
@@ -29,50 +44,7 @@ export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFo
     rules: [
       { name: "Species Clause", description: "Limit one of each creature" },
       { name: "HP Percentage Mod", description: "HP is shown in percentages" },
-      { name: "Sleep Clause Mod", description: "Limit one foe put to sleep" },
       ...rules,
     ],
   };
 }
-
-type Row = { super: ElementType[]; resisted: ElementType[]; immune?: ElementType[] };
-
-const CHART: Record<ElementType, Row> = {
-  Normal: { super: [], resisted: ["Rock", "Steel"], immune: ["Ghost"] },
-  Fire: { super: ["Grass", "Ice", "Bug", "Steel"], resisted: ["Fire", "Water", "Rock", "Dragon"] },
-  Water: { super: ["Fire", "Ground", "Rock"], resisted: ["Water", "Grass", "Dragon"] },
-  Grass: { super: ["Water", "Ground", "Rock"], resisted: ["Fire", "Grass", "Poison", "Flying", "Bug", "Dragon", "Steel"] },
-  Electric: { super: ["Water", "Flying"], resisted: ["Electric", "Grass", "Dragon"], immune: ["Ground"] },
-  Ice: { super: ["Grass", "Ground", "Flying", "Dragon"], resisted: ["Fire", "Water", "Ice", "Steel"] },
-  Fighting: { super: ["Normal", "Ice", "Rock", "Dark", "Steel"], resisted: ["Poison", "Flying", "Psychic", "Bug", "Fairy"], immune: ["Ghost"] },
-  Poison: { super: ["Grass", "Fairy"], resisted: ["Poison", "Ground", "Rock", "Ghost"], immune: ["Steel"] },
-  Ground: { super: ["Fire", "Electric", "Poison", "Rock", "Steel"], resisted: ["Grass", "Bug"], immune: ["Flying"] },
-  Flying: { super: ["Grass", "Fighting", "Bug"], resisted: ["Electric", "Rock", "Steel"] },
-  Psychic: { super: ["Fighting", "Poison"], resisted: ["Psychic", "Steel"], immune: ["Dark"] },
-  Bug: { super: ["Grass", "Psychic", "Dark"], resisted: ["Fire", "Fighting", "Poison", "Flying", "Ghost", "Steel", "Fairy"] },
-  Rock: { super: ["Fire", "Ice", "Flying", "Bug"], resisted: ["Fighting", "Ground", "Steel"] },
-  Ghost: { super: ["Psychic", "Ghost"], resisted: ["Dark"], immune: ["Normal"] },
-  Dragon: { super: ["Dragon"], resisted: ["Steel"], immune: ["Fairy"] },
-  Dark: { super: ["Psychic", "Ghost"], resisted: ["Fighting", "Dark", "Fairy"] },
-  Steel: { super: ["Ice", "Rock", "Fairy"], resisted: ["Fire", "Water", "Electric", "Steel"] },
-  Fairy: { super: ["Fighting", "Dragon", "Dark"], resisted: ["Fire", "Poison", "Steel"] },
-};
-
-export const ELEMENT_TYPES = Object.keys(CHART) as ElementType[];
-
-export function typeMultiplier(attack: ElementType, defender: ElementType[]): number {
-  const row = CHART[attack];
-  return defender.reduce((mult, t) => {
-    if (row.immune?.includes(t)) return 0;
-    if (row.super.includes(t)) return mult * 2;
-    if (row.resisted.includes(t)) return mult * 0.5;
-    return mult;
-  }, 1);
-}
-
-export const TYPE_COLORS: Record<ElementType, string> = {
-  Normal: "#a8a77a", Fire: "#ee8130", Water: "#6390f0", Grass: "#7ac74c", Electric: "#f7d02c",
-  Ice: "#96d9d6", Fighting: "#c22e28", Ground: "#e2bf65", Flying: "#a98ff3", Psychic: "#f95587",
-  Rock: "#b6a136", Ghost: "#735797", Dragon: "#6f35fc", Dark: "#705746", Fairy: "#d685ad",
-  Bug: "#a6b91a", Poison: "#a33ea1", Steel: "#b7b7ce",
-};

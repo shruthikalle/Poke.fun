@@ -91,7 +91,7 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
         <div className={`pf-panel ${styles.stat}`}><span>Cards</span><strong>{market.myCards.length}</strong><small>{imported ? `${imported} imported` : "Bought or traded"}</small></div>
         <div className={`pf-panel ${styles.stat}`} data-tone="gold"><span>Collection value</span><strong>{format(worth, { compact: true })}</strong><small>Based on recent sales</small></div>
         <div className={`pf-panel ${styles.stat}`}><span>For sale</span><strong>{market.myListings.length}</strong><small>{market.sales.length ? `${market.sales.length} sold · ${format(earned, { compact: true })} earned` : "Nothing sold yet"}</small></div>
-        <div className={`pf-panel ${styles.stat}`}><span>Balance</span><strong>{format(market.balanceSol, { compact: true })}</strong><small>Ready to spend</small></div>
+        <div className={`pf-panel ${styles.stat}`}><span>Wallet SOL · Devnet</span><strong>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</strong><small>Marketplace demo credit: {market.balanceSol} SOL</small></div>
       </div>
 
       <aside className={`pf-panel ${styles.filters}`} aria-label="Activity">

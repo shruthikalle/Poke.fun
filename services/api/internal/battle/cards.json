@@ -5,8 +5,8 @@
     "element": "Fire",
     "maxHp": 100,
     "attacks": [
-      { "id": "claw", "name": "Quick Claw", "damage": 20, "cost": 0, "gain": 1 },
-      { "id": "flare", "name": "Flare Burst", "damage": 45, "cost": 2, "gain": 0 }
+      { "id": "claw", "name": "Quick Claw", "element": "Normal", "damage": 20, "cost": 0, "gain": 1 },
+      { "id": "flare", "name": "Flare Burst", "element": "Fire", "damage": 45, "cost": 2, "gain": 0 }
     ]
   },
   {
@@ -15,8 +15,8 @@
     "element": "Water",
     "maxHp": 110,
     "attacks": [
-      { "id": "splash", "name": "Quick Splash", "damage": 18, "cost": 0, "gain": 1 },
-      { "id": "wave", "name": "Wave Crash", "damage": 48, "cost": 2, "gain": 0 }
+      { "id": "splash", "name": "Quick Splash", "element": "Normal", "damage": 18, "cost": 0, "gain": 1 },
+      { "id": "wave", "name": "Wave Crash", "element": "Water", "damage": 48, "cost": 2, "gain": 0 }
     ]
   },
   {
@@ -25,8 +25,8 @@
     "element": "Grass",
     "maxHp": 120,
     "attacks": [
-      { "id": "vine", "name": "Quick Vine", "damage": 16, "cost": 0, "gain": 1 },
-      { "id": "bloom", "name": "Bloom Strike", "damage": 50, "cost": 2, "gain": 0 }
+      { "id": "vine", "name": "Quick Vine", "element": "Normal", "damage": 16, "cost": 0, "gain": 1 },
+      { "id": "bloom", "name": "Bloom Strike", "element": "Grass", "damage": 50, "cost": 2, "gain": 0 }
     ]
   }
 ]

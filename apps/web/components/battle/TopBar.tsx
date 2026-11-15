@@ -85,7 +85,7 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
           {settings && (
             <div className={styles.menu} role="menu">
               <button className={styles.menuItem} onClick={() => { onToggleMute(); setSettings(false); }}>{muted ? "Turn sound on" : "Turn sound off"}</button>
-              <Link className={styles.menuItem} href="/play">Classic one-card demo</Link>
+              <Link className={styles.menuItem} href="/loadout">Live 1v1 matchmaking</Link>
               <Link className={styles.menuItem} href="/">Back to home</Link>
             </div>
           )}

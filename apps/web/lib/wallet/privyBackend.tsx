@@ -3,11 +3,25 @@
 import { PrivyProvider, useLinkAccount, useLoginWithEmail, useLogout, usePrivy, type User } from "@privy-io/react-auth";
 import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
-import { useCallback, useMemo, useRef, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { connectPhantom, getPhantomProvider } from "./phantom";
 import type { AuthBackend, AuthUser } from "./types";
 
 const DEVNET_HTTP = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 const DEVNET_WS = DEVNET_HTTP.replace(/^http/, "ws");
+type SignedWalletSession = { address: string; expiresAt: number };
+
+async function authRequest<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
+  const response = await fetch(`/api/auth${path}`, {
+    method,
+    credentials: "same-origin",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const result = await response.json();
+  if (!response.ok) throw new Error(result.error ?? `Wallet sign-in failed (${response.status})`);
+  return result as T;
+}
 
 type Wallet = { type: string; chainType?: string; walletClientType?: string; address?: string };
 
@@ -17,14 +31,24 @@ function toAuthUser(user: User | null): AuthUser | null {
   const solana = wallets.filter((w) => w.chainType === "solana");
   const embedded = solana.find((w) => w.walletClientType === "privy");
   const external = solana.find((w) => w.walletClientType !== "privy");
-  return { id: user.id, email: user.email?.address ?? null, address: embedded?.address ?? null, linkedAddress: external?.address ?? null };
+  const email = user.email?.address ?? null;
+  return { id: user.id, email, address: email ? embedded?.address ?? external?.address ?? null : external?.address ?? embedded?.address ?? null, linkedAddress: external?.address ?? null };
 }
 
 function usePrivyBackend(): AuthBackend {
   const { ready, authenticated, user } = usePrivy();
   const { sendCode, loginWithCode } = useLoginWithEmail();
   const { logout } = useLogout();
+  const [walletSession, setWalletSession] = useState<SignedWalletSession | null>(null);
+  const [walletReady, setWalletReady] = useState(false);
   const linkWaiter = useRef<{ resolve: () => void; reject: (e: unknown) => void } | null>(null);
+
+  useEffect(() => {
+    authRequest<SignedWalletSession>("GET", "")
+      .then(setWalletSession)
+      .catch(() => setWalletSession(null))
+      .finally(() => setWalletReady(true));
+  }, []);
   const { linkWallet } = useLinkAccount({
     onSuccess: () => { linkWaiter.current?.resolve(); linkWaiter.current = null; },
     onError: (error) => { linkWaiter.current?.reject(new Error(String(error))); linkWaiter.current = null; },
@@ -37,20 +61,39 @@ function usePrivyBackend(): AuthBackend {
 
   return {
     kind: "privy",
-    ready,
-    user: authenticated ? toAuthUser(user) : null,
+    ready: walletReady && ready,
+    user: walletSession
+      ? { id: `wallet-${walletSession.address}`, email: null, address: walletSession.address, linkedAddress: walletSession.address }
+      : authenticated ? toAuthUser(user) : null,
     sendCode: (email) => sendCode({ email }),
     verifyCode: (code) => loginWithCode({ code }),
-    linkPhantom,
-    signOut: logout,
+    loginWithPhantom: () => {
+      const provider = getPhantomProvider();
+      if (!provider?.signMessage) throw new Error("Phantom with message signing is required. Open this page in a browser with Phantom installed.");
+      const signMessage = provider.signMessage.bind(provider);
+      return (async () => {
+        const address = await connectPhantom(provider);
+        const { challenge, message } = await authRequest<{ challenge: string; message: string }>("GET", `?address=${encodeURIComponent(address)}`);
+        const { signature: rawSignature } = await signMessage(new TextEncoder().encode(message), "utf8");
+        const signature = btoa(String.fromCharCode(...rawSignature));
+        setWalletSession(await authRequest<SignedWalletSession>("POST", "", { address, challenge, signature }));
+      })();
+    },
+    linkPhantom: walletSession ? async () => {} : linkPhantom,
+    signOut: async () => {
+      if (walletSession) {
+        await authRequest("DELETE", "").catch(() => {});
+        setWalletSession(null);
+      } else await logout();
+    },
   };
 }
 
-/** Privy-backed sign-in: email + one-time code, with a Solana devnet account created silently on sign-up. */
+/** Privy-backed sign-in: Phantom or email, with a Solana devnet account created on sign-up. */
 export function PrivyBridge({ appId, children }: { appId: string; children: (backend: AuthBackend) => ReactNode }) {
   const config = useMemo(() => ({
-    loginMethods: ["email" as const],
-    appearance: { theme: "light" as const, accentColor: "#5a7bb5" as `#${string}`, walletChainType: "solana-only" as const, showWalletLoginFirst: false },
+    loginMethods: ["wallet" as const, "email" as const],
+    appearance: { theme: "light" as const, accentColor: "#5a7bb5" as `#${string}`, walletChainType: "solana-only" as const, walletList: ["phantom" as const, "detected_solana_wallets" as const], showWalletLoginFirst: true },
     embeddedWallets: { solana: { createOnLogin: "all-users" as const }, ethereum: { createOnLogin: "off" as const }, showWalletUIs: false },
     externalWallets: { solana: { connectors: toSolanaWalletConnectors() } },
     solana: {

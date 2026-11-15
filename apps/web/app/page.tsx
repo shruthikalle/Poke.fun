@@ -234,7 +234,7 @@ export default function Landing() {
           <ol className={styles.steps}>
             <li>
               <div className={styles.art}><PixelAvatar seed="trainer" size={36} /><span className={styles.or}>or</span><img src={SPRITE(133)} alt="" width={56} height={56} /></div>
-              <span>01</span><h3>Sign in</h3><p>Create a free account with your email, or play as a guest with rental Pokémon.</p>
+              <span>01</span><h3>Sign in</h3><p>Connect Phantom, use email, or play as a guest with rental Pokémon.</p>
             </li>
             <li>
               <div className={styles.art}><img className={styles.thumb} src="https://images.pokemontcg.io/base3/5.png" alt="" width={40} height={56} loading="lazy" /><i className={styles.arrow} /><img src={SPRITE(94)} alt="" width={56} height={56} /></div>
@@ -287,7 +287,7 @@ export default function Landing() {
 
         <footer className={styles.footer}>
           <span>© Poke.fun · Creature data and sprites from PokéAPI. Pokémon is a trademark of Nintendo / The Pokémon Company; this demo is not affiliated with them.</span>
-          <Link href="/play">Classic one-card demo →</Link>
+          <Link href="/loadout">Live 1v1 matchmaking →</Link>
         </footer>
       </main>
 

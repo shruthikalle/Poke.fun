@@ -76,7 +76,7 @@ export function MarketShell({ section, market, children }: { section: Section; m
           </nav>
           <div className={styles.account}>
             <CurrencyToggle />
-            {connected && <span className={styles.balance} title="Your Poke.fun balance"><small>Balance</small><b>{format(market.balanceSol)}</b></span>}
+            {connected && <span className={styles.balance} title={`Devnet wallet SOL. Marketplace demo credit: ${market.balanceSol} SOL`}><small>Wallet SOL</small><b>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</b></span>}
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
                 extra={<>

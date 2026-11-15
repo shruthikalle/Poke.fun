@@ -1,7 +1,8 @@
-import { makeFormat, typeMultiplier } from "./roster";
+import { makeFormat } from "./roster";
+import { chooseAiMove, computeDamage, effectiveSpeed } from "./rules";
 import {
   otherSide,
-  type BattleChoice, type BattleEvent, type BattleFormat, type BattleStreamSource, type Creature, type Effectiveness,
+  type BattleChoice, type BattleEvent, type BattleFormat, type BattleStreamSource, type Creature,
   type Side, type SideState, type Trainer, type Unsubscribe,
 } from "./types";
 
@@ -232,15 +233,8 @@ export class MockBattleStream implements BattleStreamSource {
         this.emit({ type: "miss", side: defenderSide });
         return;
       }
-      const mult = typeMultiplier(m.type, defender.types);
-      const stab = attacker.types.includes(m.type) ? 1.5 : 1;
-      const crit = Math.random() < 0.06;
-      const [atk, def] = m.category === "physical" ? [attacker.stats.atk, defender.stats.def] : [attacker.stats.spa, defender.stats.spd];
-      const base = (((2 * attacker.level) / 5 + 2) * m.power * (atk / def)) / 50 + 2;
-      // Scaled below the games' formula so one-card matches last a few turns.
-      const damage = Math.max(1, Math.round(base * stab * mult * (crit ? 1.5 : 1) * (0.85 + Math.random() * 0.15) * 0.55));
+      const { damage, effectiveness, crit } = computeDamage(attacker, defender, m);
       defender.hp = Math.max(0, defender.hp - damage);
-      const effectiveness: Effectiveness = mult === 0 ? "immune" : mult > 1 ? "super" : mult < 1 ? "resisted" : "normal";
       this.emit({ type: "damage", side: defenderSide, hp: defender.hp, effectiveness, crit });
       if (defender.hp === 0) {
         defender.fainted = true;
@@ -266,17 +260,11 @@ export class MockBattleStream implements BattleStreamSource {
   }
 
   private pickOpponentMove(): number {
-    const attacker = this.active("p2");
-    const defender = this.active("p1");
-    const scored = attacker.moves
-      .map((m, i) => ({ i, score: m.pp > 0 ? m.power * typeMultiplier(m.type, defender.types) * (0.7 + Math.random() * 0.6) : -1 }))
-      .sort((a, b) => b.score - a.score);
-    return scored[0].i;
+    return chooseAiMove(this.active("p2"), this.active("p1"));
   }
 
   private speedOf(side: Side) {
-    const c = this.active(side);
-    return c.speed + c.level / 10 + Math.random();
+    return effectiveSpeed(this.active(side));
   }
 
   private active(side: Side): Creature {
