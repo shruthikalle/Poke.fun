@@ -263,9 +263,9 @@ export default function ArenaPage() {
     {liveBattleRoute && !session ? <section className={styles.panel}><div className={styles.waiting}><h2>Connecting to live battle…</h2></div></section> : queue && !session ? <section className={styles.panel}><div className={styles.waiting}><h2>Finding an opponent…</h2><p>You’re in the live queue. The next available player will be matched with you automatically.</p><button className={styles.secondary} disabled={busy} onClick={() => void cancelSearch()}>Cancel search</button></div></section> : !session ? <div className={styles.setup}>
       <section className={styles.panel}><h2>Choose your fighter</h2><label htmlFor="arena-name">Your name</label><input id="arena-name" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} placeholder="Player name" />
         <div className={styles.cards}>{cards.map((card) => <button type="button" className={styles.card} data-selected={card.id === cardId || undefined} key={card.id} onClick={() => setCardId(card.id)}>
-          <img src={sprites[card.id]} alt="" /><strong>{card.name}</strong><small>Lv. {card.level} · {card.maxHp} HP</small>{owned.includes(card.id) && <em>Devnet card in wallet</em>}
+          <img src={sprites[card.id]} alt="" /><strong>{card.name}</strong><small>Lv. {card.level} · {card.maxHp} HP</small>{owned.includes(card.id) && <em>In your collection</em>}
         </button>)}</div>
-        <p className={styles.note}>Training fighters are available to everyone. A connected Devnet card is shown for your reference; this free arena does not authorize NFT wagers.</p>
+        <p className={styles.note}>Training fighters are available to everyone. Your own cards are shown for reference; this free arena never puts them at stake.</p>
       </section>
       <section className={styles.panel}><h2>Find a real opponent</h2><p className={styles.note}>One click enters the free live queue. When another player is waiting, the match starts automatically.</p><button className={styles.primary} disabled={busy || !cards.length} onClick={() => void findMatch()}>Find match</button><p className={styles.note}>Play from two different browsers or devices to test with a friend. No room code needed.</p></section>
     </div> : <section className={styles.game}>

@@ -134,7 +134,7 @@ export default function LoadoutPage() {
     setAssets(null);
     if (session) void collectionService.getOwnedCollectibles(session.address)
       .then((a) => { if (live) setAssets(a); })
-      .catch(() => { if (live) { setCollectionError("Could not verify your cards on Solana Devnet. Try again later."); setAssets([]); } });
+      .catch(() => { if (live) { setCollectionError("Couldn't load your cards right now. Try again later."); setAssets([]); } });
     else setAssets([]);
     return () => { live = false; };
   }, [playerName, session]);
@@ -217,7 +217,7 @@ export default function LoadoutPage() {
       <div className={styles.backdrop} aria-hidden="true" />
       <header className={styles.top}>
         <Link href="/" className={styles.brand}><Emblem size={22} /><span>Poke.fun</span></Link>
-        <span className="pf-eyebrow">Loadout</span>
+        <nav className={styles.nav} aria-label="Main"><Link href="/loadout" aria-current="page">Battle</Link><Link href="/market">Marketplace</Link><Link href="/collection">My Cards</Link></nav>
         <div className={styles.account}>
           {playerName ? <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }} /> : null}
         </div>
@@ -303,7 +303,7 @@ export default function LoadoutPage() {
           {entryError && <p id="entry-error" className={styles.warn} role="alert">{entryError}</p>}
           <div className={styles.pot} hidden={!!entryError}>
             <span>{entry ? <>Demo entry <strong>{formatDollars(entry)}</strong> per player</> : "Free live match"}</span>
-            <em>Demo only · no money or NFT transfers</em>
+            <em>Demo only · no real money moves</em>
           </div>
 
           <p className={styles.label}>Demo rating</p>
@@ -316,6 +316,7 @@ export default function LoadoutPage() {
 
           {lead && lead.species !== "pikachu" && lead.species !== "charmander" && <p className={styles.warn}>Live matchmaking currently supports Pikachu and Charmander.</p>}
           <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !!entryError || finding || queue.status !== "idle" || (lead.species !== "pikachu" && lead.species !== "charmander")} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
+          <p className={`${styles.hint} ${styles.modes}`}>More ways to play: <Link href="/battle">Team battle</Link> · <Link href="/play">Room-code duel</Link></p>
         </aside>
       </main>
 
