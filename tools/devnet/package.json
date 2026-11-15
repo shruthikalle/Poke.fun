@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "mint:test-cards": "node mint-test-cards.mjs",
+    "mint:tiered-cards": "node mint-tiered-cards.mjs",
     "verify:test-cards": "node verify-test-cards.mjs",
     "refresh:test-cards": "node refresh-test-cards.mjs"
   },

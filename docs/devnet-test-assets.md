@@ -4,6 +4,25 @@ These Metaplex Core NFTs are **test assets only**. They are not Collector Crypt 
 
 The original two assets are listed below. The [full 17-card roster and powers](devnet-test-card-powers.md) includes six newer cards in `5EBw…shru`: two each at tiers 1, 2, and 3.
 
+## Two six-card test wallets
+
+Each wallet below received two cards at each power tier on November 15, 2026. Pikachu and Charmander are the tier 1 cards in both wallets so each can use the current live 1v1 mode. These are separate NFT assets in the same Devnet test collection.
+
+| Wallet | Tier | Card | Onchain asset |
+| --- | ---: | --- | --- |
+| `Dxx5…Q8p6z` | 1 | Pikachu | [Explorer](https://explorer.solana.com/address/2saYysNiJBMMMYK5CYcXW22WjetLfhYqL2mCGRhfAx5C?cluster=devnet) |
+| `Dxx5…Q8p6z` | 1 | Charmander | [Explorer](https://explorer.solana.com/address/VAkQKRThWPhhRMweRqN8ppQazBBoa3QuFBRRAX8nB88?cluster=devnet) |
+| `Dxx5…Q8p6z` | 2 | Gyarados | [Explorer](https://explorer.solana.com/address/7deiPk2zHesJpUb9x8EQJjj8vT1q7tRavXFB7oBRczsn?cluster=devnet) |
+| `Dxx5…Q8p6z` | 2 | Ninetales | [Explorer](https://explorer.solana.com/address/4bEL3B5oUD8WDXqv7m6BFRtFe8G4yfasbYgemysWCFRG?cluster=devnet) |
+| `Dxx5…Q8p6z` | 3 | Charizard | [Explorer](https://explorer.solana.com/address/Dv22ETnw4BgZLwhHZ9ndeyVVSfzPEnUuway3Bbdf3Xy8?cluster=devnet) |
+| `Dxx5…Q8p6z` | 3 | Blastoise | [Explorer](https://explorer.solana.com/address/F1q4SfLKcfQNZjfRkcjvyKYCSurYhuojfJz3nBVVQtY?cluster=devnet) |
+| `7Aug…793k` | 1 | Pikachu | [Explorer](https://explorer.solana.com/address/BNLBcZsMp1JLTC9jAvqLig99fGP2TvUkBDgvmLnKFisV?cluster=devnet) |
+| `7Aug…793k` | 1 | Charmander | [Explorer](https://explorer.solana.com/address/H4WfZot9AEJ2AtzLQmd93uMEFHnQ2drSACW2FeFK18r7?cluster=devnet) |
+| `7Aug…793k` | 2 | Raichu | [Explorer](https://explorer.solana.com/address/DmNsMXpGcN4GagXfa8CH4DgbuuyKv78kBTNL47Ta7Jmc?cluster=devnet) |
+| `7Aug…793k` | 2 | Dragonair | [Explorer](https://explorer.solana.com/address/FxmLku8GtjZgUXX5ii5h7bYWbJPWTDZfNbKWMwEhZ2kT?cluster=devnet) |
+| `7Aug…793k` | 3 | Venusaur | [Explorer](https://explorer.solana.com/address/Dt57tyyV8RozG3iBcfueaqf6rKSLTUCUGUFKVfZwKaFm?cluster=devnet) |
+| `7Aug…793k` | 3 | Zapdos | [Explorer](https://explorer.solana.com/address/89cJj5R3RqDtf1tRHfc8959DwgPf2275dscXC5ciDaom?cluster=devnet) |
+
 | Test card | Asset | Recipient wallet |
 | --- | --- | --- |
 | Pikachu stand-in | [`DVSLcvn…Mk5Yn`](https://explorer.solana.com/address/DVSLcvnNv2JtWXsLmUWUsPtZCveuLSbc4ximXmSMk5Yn?cluster=devnet) | `5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru` |

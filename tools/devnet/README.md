@@ -15,3 +15,5 @@ The payer keypair is written with owner-only permissions to `/private/tmp/pokefu
 The app reads NFTs in its test collection from the connected Devnet wallet through a DAS-enabled RPC. Devnet assets can disappear if the network resets.
 
 Run `npm run verify:test-cards` to check the collection, each owner's onchain address, and the off-chain metadata. Use a DAS-enabled Devnet RPC for wallet collection reads in the app.
+
+To mint the separate six-card tiered batch for two wallets, run `npm run mint:tiered-cards -- FIRST_SOLANA_ADDRESS SECOND_SOLANA_ADDRESS`. It uses the existing test collection and payer, and records the new public asset addresses in `/private/tmp/pokefun-devnet-tiered-2026-11-15.json`. The command resumes safely after a partial run for the same two wallets. Verify that batch with `POKEFUN_DEVNET_STATE_PATH=/private/tmp/pokefun-devnet-tiered-2026-11-15.json npm run verify:test-cards`.
