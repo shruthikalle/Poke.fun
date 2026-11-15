@@ -183,14 +183,18 @@ func (m *Match) ApplyTimeout(now time.Time) bool {
 	return true
 }
 
-// autoAttack picks the cheapest affordable attack, i.e. a quick (zero-cost)
-// move. Every card has one, so this always returns a playable attack.
+// autoAttack picks the lowest-cost attack the player can currently afford (its
+// quick, zero-cost move in practice). It does not assume a particular attack
+// order, so it stays correct if the catalog lists the heavy attack first.
 func autoAttack(player *Player) string {
-	best := player.Card.Attacks[0]
+	best := Attack{Cost: math.MaxInt}
 	for _, attack := range player.Card.Attacks {
 		if player.Energy >= attack.Cost && attack.Cost < best.Cost {
 			best = attack
 		}
+	}
+	if best.ID == "" { // no affordable attack (shouldn't happen: quick costs 0)
+		return player.Card.Attacks[0].ID
 	}
 	return best.ID
 }
