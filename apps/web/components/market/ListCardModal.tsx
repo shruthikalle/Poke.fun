@@ -12,7 +12,7 @@ export function ListCardModal({ mint, market, onClose }: { mint: string; market:
   const { format, toSol, fromSol, currency } = useCurrency();
   const card = market.state.cards[mint];
   const estimate = market.valueOf(mint);
-  const existing = market.listingFor(mint);
+  const [existing] = useState(() => market.listingFor(mint));
   const start = existing?.priceSol ?? estimate;
   const [price, setPrice] = useState(() => (currency === "SOL" ? fromSol(start).toFixed(2) : String(Math.round(fromSol(start)))));
   const [step, setStep] = useState<"edit" | "confirm" | "done">("edit");
