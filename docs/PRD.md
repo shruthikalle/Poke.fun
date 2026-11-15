@@ -104,7 +104,7 @@ Spectators, voice commentary, and prediction markets are outside the first relea
 | S-03 | P2 | Failed setup refund | No match can strand the first player's deposit when the second player fails to fund. |
 | M-01 | P2 | Skill matchmaking | Queue pairs players in the same format/power tier, then uses rating and stake band. |
 
-P0 is required for a playable demo, P1 is the recommended hackathon extension, and P2 is conditional on time and review. The existing starter meets B-01 through B-06 for local free matches, with in-memory state only. It also now implements R-02 (a 60-second turn deadline that auto-plays the player's quick attack) and the rules/catalog version locking described in §8. R-01 persistence/reconnect and the wallet/NFT/stake requirements remain open.
+P0 is required for a playable demo, P1 is the recommended hackathon extension, and P2 is conditional on time and review. The existing starter meets B-01 through B-06 for local free matches, with in-memory state only. It also now implements R-02 (a 60-second turn deadline that auto-plays the player's quick attack) and the rules/catalog version locking described in §8. The `/battle` team battle now meets B-01 to B-05 for two real players: hidden simultaneous choices, server-only state, a shared event log so both screens match, and M-01-style matchmaking by format, power tier and entry (with an AI fallback). A refresh rejoins a live match while the server is running; persistence across restarts (R-01), rating bands, and the wallet/NFT/stake requirements remain open.
 
 ## 8. Initial game rules
 

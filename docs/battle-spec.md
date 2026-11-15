@@ -88,26 +88,28 @@ Wallet login, NFT ownership/eligibility, matchmaking, and any staking or escrow.
 Those live in other services and branches; they must not change these
 authoritative rules.
 
-## Rich team battle (`/battle`)
+## Team battle (`/battle`)
 
-The `/battle` screen uses a second, richer ruleset served by the
-`internal/livebattle` package — teams of up to three creatures, PP-limited
-moves, accuracy, crits, the physical/special split, speed-ordered turns and
-switching, scored from PokéAPI stats. It is **also server-authoritative**: the
-web client builds the creature teams (species stats and sprites come from
-PokéAPI) and posts them to `POST /api/battles`; the server runs the battle,
-including the AI opponent, and returns the ordered `BattleEvent`s the client
-reducer renders. `ServerBattleStream` replaces the former client-side
-`MockBattleStream`; the mock remains only as an offline fallback
-(`NEXT_PUBLIC_LIVE_BATTLE=0`).
+The `/battle` screen uses the canonical, full-featured ruleset served by the
+`internal/livebattle` package: teams of up to three creatures, PP-limited moves,
+accuracy, crits, the physical/special split and switching, scored from PokéAPI
+stats. It shares this file's core turn rule — **both sides choose in secret and
+the turn resolves only once both have chosen** — but applies the resolved turn
+in order: switches first, then moves by speed.
 
-Endpoints: `POST /api/battles` (create + opening events), and, authenticated by
-the returned token, `POST /api/battles/{id}/choice|timer|chat|rematch`. Each
-battle runs from a per-match seed, so a given sequence of choices is
-reproducible. The type chart is shared with the one-card engine
-(`battle.TypeMultiplier`).
+- **Opponents.** A second human found through matchmaking (`POST /api/queue`,
+  paired by format, card power tier and entry), or the server AI when no rival
+  appears within 20 seconds.
+- **Shared log.** Every outcome is appended to one event log per battle; both
+  clients poll `GET /api/battles/{id}/events?since=N`, so both screens show the
+  identical battle. Each side has its own bearer token and can only act for
+  itself; a player's choice never appears in the log before the turn resolves.
+- **Forced switches** ask only the side whose creature fainted; the other waits.
+- **Deadlines.** Online matches always run a 150-second turn clock, enforced by
+  the server on the next poll (it auto-plays the stalling side). Against the AI
+  the timer is optional.
+- **Determinism.** Each battle runs from a per-match seed; a given sequence of
+  choices replays identically.
 
-The two engines are not yet unified; the one-card simultaneous model above is
-the canonical staking-path ruleset, while the rich model drives the richer
-single-player-vs-AI `/battle` experience. Real-time two-player play and merging
-the models remain future work.
+See [`game-mechanics.md`](game-mechanics.md) for the formulas, the full turn
+flow, the matchmaking rules and the HTTP API.

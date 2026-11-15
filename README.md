@@ -40,7 +40,7 @@ The frontend has four routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
 - `/loadout`: pick a card from your collection, a format (Champion 1v1 or Squad of 3) and an entry amount, see your rank, then find a match.
-- `/battle`: battle screen for the matched cards. It is now **server-authoritative**: the client sends the matched teams to the Go API, which runs the battle (including the AI opponent) and returns the events to display. Start the Go API for `/battle` to work, or set `NEXT_PUBLIC_LIVE_BATTLE=0` to fall back to the offline client-side simulation. Opening it without a match sends you to `/loadout`.
+- `/battle`: the team battle, **server-authoritative** and **two-player**. Find match on `/loadout` pairs you with a real player in the same format, card tier and entry through the Go API queue; if nobody turns up within 20 seconds you battle the server AI instead. To try two-player locally, open `/loadout` in two browsers (or a normal and a private window) and press Find match in both. Without the Go API, single-player battles fall back to the offline client-side simulation; `NEXT_PUBLIC_LIVE_BATTLE=0` forces offline mode. Opening it without a match sends you to `/loadout`.
 - `/play`: the original one-card demo that talks to the Go API.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
@@ -53,7 +53,7 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 | Seam | Interface | Mock | TODO |
 | --- | --- | --- | --- |
-| Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `ServerBattleStream` → Go API (authoritative); `MockBattleStream` offline | Real-time 2-player feed (QuickNode Streams / WebSocket) |
+| Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `ServerBattleStream` → Go API shared event log (polling); `MockBattleStream` offline | Push transport (WebSocket / QuickNode Streams) instead of polling |
 | Win odds | `OddsProvider`, `useOdds` (`lib/markets`) | `MockOddsProvider` | Gemini prediction markets |
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
 | Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | `useMockBackend` (any 6-digit code) when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
@@ -65,7 +65,7 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 | Creature data | `SpeciesService` (`lib/pokemon`) | Live PokéAPI, cached in memory + localStorage | — |
 | Rank | `RankService` (`lib/rank`) | `MockRankService` (localStorage Elo) | Go API ratings |
 | Entry and winnings | `StakeService` (`lib/stake`) | `MockStakeService` (no money moves) | Devnet USDC escrow, after legal review |
-| Matchmaking | `MatchmakingService` (`lib/match`) | `MockMatchmakingService` | Go API queue |
+| Matchmaking | `MatchmakingService` (`lib/match`) | `ServerMatchmakingService` → Go API queue; `MockMatchmakingService` AI fallback | Rating bands, persistent queue |
 
 Creature stats, moves and sprites come from [PokéAPI](https://pokeapi.co); card art comes from the Pokémon TCG API image CDN. Pokémon is a trademark of Nintendo / The Pokémon Company, so get a rights review before any public launch.
 
