@@ -18,8 +18,8 @@ import (
 
 type Server struct {
 	mu      sync.Mutex
-	matches map[string]*battle.Match
-	battles map[string]*livebattle.Battle
+	matches map[string]*battle.Match      // one-card duels (/play)
+	battles map[string]*livebattle.Battle // team battles (/battle)
 	origin  string
 }
 
@@ -49,8 +49,10 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("POST /api/matches/{id}/join", s.joinMatch)
 	mux.HandleFunc("GET /api/matches/{id}", s.getMatch)
 	mux.HandleFunc("POST /api/matches/{id}/attacks", s.submitAttack)
-	// Live (rich team) battle, authoritative replacement for MockBattleStream.
+	// Team battles (live.go): single-player vs AI, or two players.
 	mux.HandleFunc("POST /api/battles", s.createBattle)
+	mux.HandleFunc("GET /api/battles/{id}/events", s.battleEvents)
+	mux.HandleFunc("POST /api/battles/{id}/team", s.battleTeam)
 	mux.HandleFunc("POST /api/battles/{id}/choice", s.battleChoice)
 	mux.HandleFunc("POST /api/battles/{id}/timer", s.battleTimer)
 	mux.HandleFunc("POST /api/battles/{id}/chat", s.battleChat)

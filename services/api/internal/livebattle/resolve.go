@@ -6,38 +6,45 @@ import (
 	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
 )
 
-// resolveTurn plays out one turn from the pending player choice and the AI's
-// reply, then either forces a switch or opens the next turn.
-func (b *Battle) resolveTurn() []Event {
-	choice := *b.pending
-	b.pending = nil
+// resolveTurn plays out a turn once both hidden choices are in: switches
+// happen first, then moves in speed order. Afterwards fainted creatures are
+// replaced (the AI swaps itself in; humans are asked, one side at a time) or
+// the next turn opens. All resulting events go to the shared log.
+func (b *Battle) resolveTurn() {
+	choices := map[string]Choice{"p1": *b.pending["p1"], "p2": *b.pending["p2"]}
+	b.pending = map[string]*Choice{}
 	events := []Event{evResolving()}
 
-	if choice.Kind == "switch" {
-		b.sides["p1"].ActiveIndex = choice.TeamIndex
-		events = append(events, evSwitch("p1", choice.TeamIndex))
-	}
-
-	for _, act := range b.turnOrder(choice) {
-		events = append(events, b.performMove(act.side, act.moveIndex)...)
-		if b.checkOver(&events) {
-			return events // a whole side fainted; the battle is over
+	// Switching takes priority over attacking, as in the games.
+	for _, side := range sides {
+		if c := choices[side]; c.Kind == "switch" {
+			b.sides[side].ActiveIndex = c.TeamIndex
+			events = append(events, evSwitch(side, c.TeamIndex))
 		}
 	}
 
-	// A fainted opponent brings in its next creature automatically.
-	if b.active("p2").Fainted {
-		next := b.firstAlive("p2")
-		b.sides["p2"].ActiveIndex = next
-		events = append(events, evSwitch("p2", next))
+	for _, act := range b.turnOrder(choices) {
+		events = append(events, b.performMove(act.side, act.moveIndex)...)
+		if b.checkOver(&events) {
+			b.record(events...)
+			return // a whole side fainted; the battle is over
+		}
 	}
-	// A fainted player creature must be replaced before the next turn.
-	if b.active("p1").Fainted {
-		b.needsSwitch = true
-		b.awaiting = true
-		return append(events, evRequest("switching"))
+
+	for _, side := range sides {
+		if !b.active(side).Fainted {
+			continue
+		}
+		if b.mode == ModeAI && side == "p2" {
+			next := b.firstAlive("p2")
+			b.sides["p2"].ActiveIndex = next
+			events = append(events, evSwitch("p2", next))
+			continue
+		}
+		b.switchQueue = append(b.switchQueue, side)
 	}
-	return append(events, b.beginTurn(false)...)
+	b.record(events...)
+	b.record(b.nextDecision()...)
 }
 
 type action struct {
@@ -45,15 +52,15 @@ type action struct {
 	moveIndex int
 }
 
-// turnOrder lists the moves to resolve this turn, faster creature first. A
-// player switch spends the turn, so only the opponent acts.
-func (b *Battle) turnOrder(choice Choice) []action {
-	opponentMove := b.pickOpponentMove()
+// turnOrder lists this turn's moves, faster creature first. A side that
+// switched spent its turn and does not attack.
+func (b *Battle) turnOrder(choices map[string]Choice) []action {
 	var order []action
-	if choice.Kind == "move" {
-		order = append(order, action{"p1", choice.MoveIndex})
+	for _, side := range sides {
+		if c := choices[side]; c.Kind == "move" {
+			order = append(order, action{side, c.MoveIndex})
+		}
 	}
-	order = append(order, action{"p2", opponentMove})
 	// Faster creature acts first; ties broken by the seeded RNG inside speedOf.
 	if len(order) == 2 && b.speedOf(order[1].side) > b.speedOf(order[0].side) {
 		order[0], order[1] = order[1], order[0]
@@ -142,9 +149,10 @@ func (b *Battle) checkOver(events *[]Event) bool {
 	return true
 }
 
-// pickOpponentMove scores each move by power × type effectiveness with a little
-// randomness, so the AI favours strong, super-effective moves without being
-// perfectly predictable.
+// pickOpponentMove is the AI (side p2) policy: score each move by power × type
+// effectiveness with a little randomness, so the bot favours strong,
+// super-effective moves without being perfectly predictable. It chooses at the
+// same moment the human does, against the creature the human currently has out.
 func (b *Battle) pickOpponentMove() int {
 	attacker := b.active("p2")
 	defender := b.active("p1")

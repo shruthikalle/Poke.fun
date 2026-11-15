@@ -10,11 +10,16 @@ func evJoin(name string) Event { return Event{"type": "join", "name": name} }
 func evStart() Event           { return Event{"type": "start"} }
 func evResolving() Event       { return Event{"type": "resolving"} }
 func evTurn(number int) Event  { return Event{"type": "turn", "turn": number} }
-func evRequest(phase string) Event {
-	return Event{"type": "request", "phase": phase}
-}
-func evChoiceAccepted(choice Choice) Event {
-	return Event{"type": "choice-accepted", "choice": choice}
+
+// evRequest asks for a decision. "choosing" applies to both players; a
+// "switching" request names the one side that must replace a fainted creature,
+// so the other client knows to wait.
+func evRequest(phase, side string) Event {
+	e := Event{"type": "request", "phase": phase}
+	if side != "" {
+		e["side"] = side
+	}
+	return e
 }
 func evSwitch(side string, teamIndex int) Event {
 	return Event{"type": "switch", "side": side, "teamIndex": teamIndex}
@@ -36,9 +41,10 @@ func evTimer(enabled bool, secondsLeft any) Event {
 }
 
 // evInit carries the full opening state (minus log/animation/phase, which the
-// client adds). The sides map echoes the teams the client sent; the server is
-// authoritative over every mutation emitted after this.
-func evInit(id string, format Format, sides map[string]*SideState, userName string, timerEnabled bool) Event {
+// client adds). It is shared by both players, so "you" is a placeholder: each
+// client replaces it with its own side. The server is authoritative over every
+// mutation recorded after this.
+func evInit(id string, format Format, sides map[string]*SideState, users []string, timerEnabled bool) Event {
 	var secondsLeft any
 	if timerEnabled {
 		secondsLeft = turnSeconds
@@ -51,7 +57,7 @@ func evInit(id string, format Format, sides map[string]*SideState, userName stri
 			"turn":          1,
 			"you":           "p1",
 			"sides":         sides,
-			"users":         []string{userName},
+			"users":         users,
 			"pendingChoice": nil,
 			"winner":        nil,
 			"timer":         map[string]any{"enabled": timerEnabled, "secondsLeft": secondsLeft, "secondsPerTurn": turnSeconds},

@@ -4,51 +4,79 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/livebattle"
 )
 
-// Live (rich team) battle endpoints. The client builds creature teams from
-// PokéAPI and posts them here; the server runs the authoritative battle and
-// returns the ordered events the client reducer applies. This replaces the
-// client-side MockBattleStream.
+// Rich team battle endpoints. A battle keeps a shared, append-only event log;
+// each client polls it (GET …/events?since=N) and submits its own side's hidden
+// choices with the token that identifies that side. Single-player battles are
+// created here directly against the AI; two-player battles are created by
+// matchmaking (matchmaking.go), after which each player submits their team.
 
+// createBattle starts a single-player battle against the server AI. The client
+// sends both teams (its own and the bot's).
 func (s *Server) createBattle(w http.ResponseWriter, r *http.Request) {
 	var cfg livebattle.Config
 	if !decodeBattle(w, r, &cfg) {
 		return
 	}
-	s.mu.Lock()
-	code, err := randomCode()
-	if err != nil {
-		s.mu.Unlock()
-		writeError(w, http.StatusInternalServerError, "could not create battle")
-		return
-	}
-	for s.battles[code] != nil {
-		if code, err = randomCode(); err != nil {
-			s.mu.Unlock()
-			writeError(w, http.StatusInternalServerError, "could not create battle")
-			return
-		}
-	}
+	cfg.Mode = livebattle.ModeAI
 	token, err := randomToken()
 	if err != nil {
+		writeError(w, http.StatusInternalServerError, "could not create battle")
+		return
+	}
+	s.mu.Lock()
+	id, err := s.newBattleID()
+	if err != nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusInternalServerError, "could not create battle")
 		return
 	}
-	b, err := livebattle.New(code, token, cfg)
+	b, err := livebattle.New(id, cfg)
 	if err != nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	s.battles[code] = b
-	events := b.Open()
+	b.SetToken("p1", token)
+	s.battles[id] = b
 	s.mu.Unlock()
-	writeJSON(w, http.StatusCreated, map[string]any{"id": code, "token": token, "events": events})
+	writeJSON(w, http.StatusCreated, map[string]any{"id": id, "token": token, "side": "p1"})
+}
+
+// battleEvents returns the log entries after ?since=N. Polling also advances
+// any turn whose deadline has passed, so a stalled player can't freeze a match.
+func (s *Server) battleEvents(w http.ResponseWriter, r *http.Request) {
+	since, _ := strconv.Atoi(r.URL.Query().Get("since"))
+	s.mu.Lock()
+	b, side := s.authedBattle(r)
+	if b == nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusUnauthorized, "battle or token not found")
+		return
+	}
+	b.ApplyTimeout(time.Now())
+	events, cursor := b.EventsSince(since)
+	started := b.Started()
+	s.mu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"events": events, "cursor": cursor, "side": side, "started": started})
+}
+
+// battleTeam submits a two-player battle's team for the caller's side.
+func (s *Server) battleTeam(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Team   []livebattle.Creature `json:"team"`
+		Format livebattle.Format     `json:"format"`
+	}
+	if !decodeBattle(w, r, &req) {
+		return
+	}
+	s.act(w, r, func(b *livebattle.Battle, side string) error { return b.SetTeam(side, req.Team, req.Format) })
 }
 
 func (s *Server) battleChoice(w http.ResponseWriter, r *http.Request) {
@@ -56,24 +84,7 @@ func (s *Server) battleChoice(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &choice) {
 		return
 	}
-	s.mu.Lock()
-	b := s.authedBattle(r)
-	if b == nil {
-		s.mu.Unlock()
-		writeError(w, http.StatusUnauthorized, "battle or token not found")
-		return
-	}
-	events, err := b.Choose(choice)
-	s.mu.Unlock()
-	if err != nil {
-		status := http.StatusBadRequest
-		if errors.Is(err, livebattle.ErrFinished) || errors.Is(err, livebattle.ErrNotYourTurn) {
-			status = http.StatusConflict
-		}
-		writeError(w, status, err.Error())
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	s.act(w, r, func(b *livebattle.Battle, side string) error { return b.SubmitChoice(side, choice) })
 }
 
 func (s *Server) battleTimer(w http.ResponseWriter, r *http.Request) {
@@ -83,7 +94,7 @@ func (s *Server) battleTimer(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	s.withBattle(w, r, func(b *livebattle.Battle) []livebattle.Event { return b.SetTimer(req.Enabled) })
+	s.act(w, r, func(b *livebattle.Battle, side string) error { b.SetTimer(side, req.Enabled); return nil })
 }
 
 func (s *Server) battleChat(w http.ResponseWriter, r *http.Request) {
@@ -97,51 +108,83 @@ func (s *Server) battleChat(w http.ResponseWriter, r *http.Request) {
 	if len(text) > 300 {
 		text = text[:300]
 	}
-	if text == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"events": []livebattle.Event{}})
-		return
-	}
-	s.withBattle(w, r, func(b *livebattle.Battle) []livebattle.Event { return b.Chat(text) })
+	s.act(w, r, func(b *livebattle.Battle, side string) error {
+		if text != "" {
+			b.Chat(side, text)
+		}
+		return nil
+	})
 }
 
+// battleRematch restarts a battle. In a two-player battle it is only allowed
+// once the match is over, so neither player can wipe a battle in progress.
 func (s *Server) battleRematch(w http.ResponseWriter, r *http.Request) {
-	s.withBattle(w, r, func(b *livebattle.Battle) []livebattle.Event { return b.Open() })
+	s.act(w, r, func(b *livebattle.Battle, _ string) error {
+		if b.Mode() == livebattle.ModePvP && !b.Over() {
+			return livebattle.ErrNotYourTurn
+		}
+		b.Open()
+		return nil
+	})
 }
 
-// withBattle authenticates the battle and returns the events from fn.
-func (s *Server) withBattle(w http.ResponseWriter, r *http.Request, fn func(*livebattle.Battle) []livebattle.Event) {
+// act authenticates the caller's side, runs fn under the server lock and maps
+// engine errors to HTTP statuses. Results reach clients through the event log.
+func (s *Server) act(w http.ResponseWriter, r *http.Request, fn func(b *livebattle.Battle, side string) error) {
 	s.mu.Lock()
-	b := s.authedBattle(r)
+	b, side := s.authedBattle(r)
 	if b == nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusUnauthorized, "battle or token not found")
 		return
 	}
-	events := fn(b)
+	err := fn(b, side)
 	s.mu.Unlock()
-	writeJSON(w, http.StatusOK, map[string]any{"events": events})
+	switch {
+	case err == nil:
+		writeJSON(w, http.StatusOK, map[string]bool{"ok": true})
+	case errors.Is(err, livebattle.ErrFinished), errors.Is(err, livebattle.ErrNotYourTurn), errors.Is(err, livebattle.ErrNotStarted):
+		writeError(w, http.StatusConflict, err.Error())
+	default:
+		writeError(w, http.StatusBadRequest, err.Error())
+	}
 }
 
-// authedBattle must be called while s.mu is held.
-func (s *Server) authedBattle(r *http.Request) *livebattle.Battle {
+// authedBattle resolves the battle and the side the bearer token controls. It
+// must be called while s.mu is held.
+func (s *Server) authedBattle(r *http.Request) (*livebattle.Battle, string) {
 	b := s.battles[strings.ToUpper(r.PathValue("id"))]
 	header := r.Header.Get("Authorization")
 	if b == nil || !strings.HasPrefix(header, "Bearer ") {
-		return nil
+		return nil, ""
 	}
-	if strings.TrimPrefix(header, "Bearer ") != b.Token {
-		return nil
+	side := b.SideFor(strings.TrimPrefix(header, "Bearer "))
+	if side == "" {
+		return nil, ""
 	}
-	return b
+	return b, side
 }
 
-// decodeBattle reads a battle config. Unlike decode, it allows a larger body
+// newBattleID returns an unused battle code. It must be called while s.mu is held.
+func (s *Server) newBattleID() (string, error) {
+	for {
+		code, err := randomCode()
+		if err != nil {
+			return "", err
+		}
+		if s.battles[code] == nil {
+			return code, nil
+		}
+	}
+}
+
+// decodeBattle reads a battle payload. Unlike decode, it allows a larger body
 // (full creature teams with sprite URLs) and ignores unknown fields so the
 // client creature shape can evolve without breaking battle creation.
 func decodeBattle(w http.ResponseWriter, r *http.Request, target any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
 	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid battle setup")
+		writeError(w, http.StatusBadRequest, "invalid battle payload")
 		return false
 	}
 	return true
