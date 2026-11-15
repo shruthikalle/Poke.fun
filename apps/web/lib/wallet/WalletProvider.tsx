@@ -1,6 +1,6 @@
 "use client";
 
-import { local } from "../storage";
+import { session as tabStorage } from "../storage";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { mockAuthService, type AuthService, type PlayerSession } from "./auth";
 import { connectPhantom, getPhantomProvider, isUserRejection, signText } from "./phantom";
@@ -30,7 +30,7 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    const saved = local.get(SESSION_KEY);
+    const saved = tabStorage.get(SESSION_KEY);
     if (!saved) {
       setReady(true);
       return;
@@ -45,7 +45,7 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
       }
       const provider = getPhantomProvider();
       if (!parsed.session || !provider) {
-        local.remove(SESSION_KEY);
+        tabStorage.remove(SESSION_KEY);
         setReady(true);
         return;
       }
@@ -55,10 +55,10 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
           setSession(parsed.session!);
           setStatus("signed-in");
         })
-        .catch(() => local.remove(SESSION_KEY))
+        .catch(() => tabStorage.remove(SESSION_KEY))
         .finally(() => setReady(true));
     } catch {
-      local.remove(SESSION_KEY);
+      tabStorage.remove(SESSION_KEY);
       setReady(true);
     }
   }, []);
@@ -66,26 +66,30 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
   useEffect(() => {
     const provider = getPhantomProvider();
     if (!provider?.on || !session) return;
-    const onChange = () => {
+    const clearSession = () => {
       setSession(null);
       setStatus("idle");
-      local.remove(SESSION_KEY);
+      tabStorage.remove(SESSION_KEY);
+    };
+    const onAccountChanged = (next?: { toString(): string } | null) => {
+      const current = next === null ? null : next?.toString() ?? provider.publicKey?.toString();
+      if (!current || current !== session.address) clearSession();
     };
     // Some wallets switch accounts without an event; re-check when the tab regains focus.
     const recheck = () => {
       const current = provider.publicKey?.toString();
-      if (current && current !== session.address) onChange();
+      if (current && current !== session.address) clearSession();
     };
     window.addEventListener("focus", recheck);
     document.addEventListener("visibilitychange", recheck);
     recheck();
-    provider.on("accountChanged", onChange);
-    provider.on("disconnect", onChange);
+    provider.on("accountChanged", onAccountChanged);
+    provider.on("disconnect", clearSession);
     return () => {
       window.removeEventListener("focus", recheck);
       document.removeEventListener("visibilitychange", recheck);
-      provider.removeListener?.("accountChanged", onChange);
-      provider.removeListener?.("disconnect", onChange);
+      provider.removeListener?.("accountChanged", onAccountChanged);
+      provider.removeListener?.("disconnect", clearSession);
     };
   }, [session]);
 
@@ -105,7 +109,7 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
       setSession(next);
       setGuestName(null);
       setStatus("signed-in");
-      local.set(SESSION_KEY, JSON.stringify({ session: next }));
+      tabStorage.set(SESSION_KEY, JSON.stringify({ session: next }));
     } catch (error) {
       setStatus(isUserRejection(error) ? "rejected" : "error");
     }
@@ -116,15 +120,15 @@ export function WalletProvider({ children, auth = mockAuthService }: { children:
     setGuestName(name);
     setSession(null);
     setStatus("guest");
-    local.set(SESSION_KEY, JSON.stringify({ guest: name }));
+    tabStorage.set(SESSION_KEY, JSON.stringify({ guest: name }));
   }, []);
 
   const signOut = useCallback(async () => {
-    local.remove(SESSION_KEY);
+    tabStorage.remove(SESSION_KEY);
     setSession(null);
     setGuestName(null);
     setStatus("idle");
-    try { await getPhantomProvider()?.disconnect(); } catch { /* already disconnected */ }
+    // Sign out of this app tab without disconnecting Phantom in other tabs.
   }, []);
 
   const reset = useCallback(() => {
