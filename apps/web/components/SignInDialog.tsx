@@ -48,9 +48,9 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
 
   if (!open) return null;
 
-  const run = async (task: () => Promise<void>) => {
+  const run = async (task: () => Promise<void>, showWalletError = false) => {
     setBusy(true); setError(null);
-    try { await task(); } catch (e) { setError(friendly(e)); } finally { setBusy(false); }
+    try { await task(); } catch (e) { setError(showWalletError && e instanceof Error ? e.message : friendly(e)); } finally { setBusy(false); }
   };
 
   const submitEmail = (e: FormEvent) => {
@@ -75,14 +75,17 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
         {step === "email" ? (
           <form className={styles.form} onSubmit={submitEmail} noValidate>
             <h2 id="signin-title" className={styles.title}>{creating ? "Create your account" : "Sign in to Poke.fun"}</h2>
-            <p className={styles.body}>{creating ? "Just your email. We'll send a code to confirm it's you." : "Your cards, your rank, your battles."}</p>
+            <p className={styles.body}>{provider === "privy" ? "Connect your Solana wallet to play with your cards." : creating ? "Just your email. We'll send a code to confirm it's you." : "Your cards, your rank, your battles."}</p>
+            {provider === "privy" && <button type="button" className={`pf-btn ${styles.primary}`} data-variant="primary" onClick={() => void run(async () => { await auth.loginWithPhantom?.(); }, true)} disabled={busy}>{busy ? "Signing in…" : "Continue with Phantom"}</button>}
+            {provider === "privy" && <p className={styles.fine}>Phantom signs a Devnet login message. No transaction is sent.</p>}
+            {provider === "privy" && <p className={styles.or}>or use email</p>}
             <label className={styles.field}>
               <span>Email</span>
               <input className="pf-input" type="email" autoComplete="email" placeholder="you@example.com" value={email}
                 onChange={(e) => setEmail(e.target.value)} autoFocus disabled={busy} />
             </label>
             {error && <p className={styles.error} role="alert">{error}</p>}
-            <button className={`pf-btn ${styles.primary}`} data-variant="primary" disabled={busy}>
+            <button className={`pf-btn ${provider === "privy" ? styles.secondary : styles.primary}`} data-variant={provider === "privy" ? "ghost" : "primary"} disabled={busy}>
               {busy ? "Sending code…" : creating ? "Create account" : "Continue"}
             </button>
             <button type="button" className={styles.link} onClick={() => { setMode(creating ? "sign-in" : "create"); setError(null); }} disabled={busy}>
@@ -108,7 +111,7 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
           </form>
         )}
 
-        <p className={styles.fine}>{provider === "mock" ? "Demo mode: any 6-digit code works." : "No passwords to remember. We'll email you a code each time."}</p>
+        <p className={styles.fine}>{provider === "mock" ? "Demo mode: any 6-digit code works." : "Phantom signs you in with your wallet. Email uses a one-time code."}</p>
       </div>
     </div>
   );

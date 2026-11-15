@@ -85,6 +85,7 @@ export default function LoadoutPage() {
   const { ready, playerName, session, status, playAsGuest, signIn } = useWallet();
   const { formatUsd: formatDollars } = useCurrency();
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
+  const [assetError, setAssetError] = useState<string | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [format, setFormat] = useState<MatchFormat>("champion");
@@ -107,8 +108,12 @@ export default function LoadoutPage() {
   useEffect(() => {
     if (!playerName) return;
     let live = true;
+    setAssets(null);
+    setAssetError(null);
     void rankService.getRank(playerName).then((r) => live && setRank(r));
-    if (session) void collectionService.getOwnedCollectibles(session.address).then((a) => live && setAssets(a));
+    if (session) void collectionService.getOwnedCollectibles(session.address)
+      .then((a) => { if (live) setAssets(a); })
+      .catch(() => { if (live) { setAssetError("Could not load Devnet cards. Refresh to try again."); setAssets([]); } });
     else setAssets([]);
     return () => { live = false; };
   }, [playerName, session]);
@@ -211,6 +216,7 @@ export default function LoadoutPage() {
         <section className={styles.collection}>
           <h1>Choose your champion</h1>
           {guest && <p className={styles.lede}>Rental creatures. Sign in to battle with your own cards.</p>}
+          {assetError && <p role="alert">{assetError}</p>}
 
           {!assets ? (
             <div className={styles.grid}>{[0, 1, 2, 3].map((i) => <div key={i} className={styles.cardSkeleton} />)}</div>

@@ -30,7 +30,7 @@ export interface WalletContextValue {
   playAsGuest(): void;
   signOut(): Promise<void>;
   /** Lower-level steps used by the dialog. */
-  auth: Pick<AuthBackend, "sendCode" | "verifyCode">;
+  auth: Pick<AuthBackend, "sendCode" | "verifyCode" | "loginWithPhantom">;
 }
 
 const WalletContext = createContext<WalletContextValue | null>(null);
@@ -73,7 +73,7 @@ function WalletState({ backend, children }: { backend: AuthBackend; children: Re
     local.set(GUEST_KEY, name);
   }, []);
 
-  const { signOut: backendSignOut, linkPhantom, sendCode, verifyCode } = backend;
+  const { signOut: backendSignOut, linkPhantom, loginWithPhantom, sendCode, verifyCode } = backend;
   const signOut = useCallback(async () => {
     local.remove(GUEST_KEY);
     setGuestName(null);
@@ -97,9 +97,9 @@ function WalletState({ backend, children }: { backend: AuthBackend; children: Re
       linkPhantom,
       playAsGuest,
       signOut,
-      auth: { sendCode, verifyCode },
+      auth: { sendCode, verifyCode, loginWithPhantom },
     };
-  }, [user, guestName, backend.ready, backend.kind, restored, signIn, linkPhantom, playAsGuest, signOut, sendCode, verifyCode]);
+  }, [user, guestName, backend.ready, backend.kind, restored, signIn, linkPhantom, playAsGuest, signOut, sendCode, verifyCode, loginWithPhantom]);
 
   return (
     <WalletContext.Provider value={value}>

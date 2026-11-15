@@ -1,0 +1,815 @@
+{
+  "network": "solana:devnet",
+  "collection": "9cu8Rf7ryTHPrN24D62Q4xsEHnP8aBHS28mBdy4WRuCv",
+  "generatedAt": "2026-11-15T05:58:43.839Z",
+  "cards": [
+    {
+      "asset": "DVSLcvnNv2JtWXsLmUWUsPtZCveuLSbc4ximXmSMk5Yn",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-58",
+      "card": "Pikachu",
+      "set": "Base Set",
+      "number": "58",
+      "image": "https://images.pokemontcg.io/base1/58.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Electric"
+      ],
+      "base": {
+        "hp": 35,
+        "attack": 55,
+        "defense": 40,
+        "special-attack": 50,
+        "special-defense": 50,
+        "speed": 90
+      },
+      "battle": {
+        "hp": 110,
+        "attack": 75,
+        "defense": 60,
+        "specialAttack": 70,
+        "specialDefense": 70,
+        "speed": 90
+      },
+      "moves": [
+        {
+          "id": "wild-charge",
+          "name": "Wild Charge",
+          "type": "Electric",
+          "category": "physical",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/wild-charge"
+        },
+        {
+          "id": "thunderbolt",
+          "name": "Thunderbolt",
+          "type": "Electric",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/thunderbolt"
+        },
+        {
+          "id": "iron-tail",
+          "name": "Iron Tail",
+          "type": "Steel",
+          "category": "physical",
+          "power": 100,
+          "accuracy": 75,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/iron-tail"
+        },
+        {
+          "id": "slam",
+          "name": "Slam",
+          "type": "Normal",
+          "category": "physical",
+          "power": 80,
+          "accuracy": 75,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/slam"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/pikachu"
+    },
+    {
+      "asset": "EK1GUyC9CzUhQKFV8Jvx2voHqsUaxbjNCKhTuypxiiSs",
+      "owner": "HN7Q2DrJPVZ4zv8jaRgi77BpYuD6DuQF9pMp5zBPWLLo",
+      "cardId": "base1-46",
+      "card": "Charmander",
+      "set": "Base Set",
+      "number": "46",
+      "image": "https://images.pokemontcg.io/base1/46.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Fire"
+      ],
+      "base": {
+        "hp": 39,
+        "attack": 52,
+        "defense": 43,
+        "special-attack": 60,
+        "special-defense": 50,
+        "speed": 65
+      },
+      "battle": {
+        "hp": 114,
+        "attack": 72,
+        "defense": 63,
+        "specialAttack": 80,
+        "specialDefense": 70,
+        "speed": 65
+      },
+      "moves": [
+        {
+          "id": "flare-blitz",
+          "name": "Flare Blitz",
+          "type": "Fire",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flare-blitz"
+        },
+        {
+          "id": "flamethrower",
+          "name": "Flamethrower",
+          "type": "Fire",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flamethrower"
+        },
+        {
+          "id": "slash",
+          "name": "Slash",
+          "type": "Normal",
+          "category": "physical",
+          "power": 70,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/slash"
+        },
+        {
+          "id": "dragon-breath",
+          "name": "Dragon Breath",
+          "type": "Dragon",
+          "category": "special",
+          "power": 60,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/dragon-breath"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/charmander"
+    },
+    {
+      "asset": "6ctcSJbeCbo8TXsgCAKLwrEaJww84ufvJypAihMKxeBP",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-2",
+      "card": "Blastoise",
+      "set": "Base Set",
+      "number": "2",
+      "image": "https://images.pokemontcg.io/base1/2.png",
+      "level": 50,
+      "tier": 3,
+      "types": [
+        "Water"
+      ],
+      "base": {
+        "hp": 79,
+        "attack": 83,
+        "defense": 100,
+        "special-attack": 85,
+        "special-defense": 105,
+        "speed": 78
+      },
+      "battle": {
+        "hp": 154,
+        "attack": 103,
+        "defense": 120,
+        "specialAttack": 105,
+        "specialDefense": 125,
+        "speed": 78
+      },
+      "moves": [
+        {
+          "id": "wave-crash",
+          "name": "Wave Crash",
+          "type": "Water",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/wave-crash"
+        },
+        {
+          "id": "hydro-pump",
+          "name": "Hydro Pump",
+          "type": "Water",
+          "category": "special",
+          "power": 110,
+          "accuracy": 80,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/hydro-pump"
+        },
+        {
+          "id": "skull-bash",
+          "name": "Skull Bash",
+          "type": "Normal",
+          "category": "physical",
+          "power": 130,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/skull-bash"
+        },
+        {
+          "id": "bite",
+          "name": "Bite",
+          "type": "Dark",
+          "category": "physical",
+          "power": 60,
+          "accuracy": 100,
+          "maxPp": 25,
+          "source": "https://pokeapi.co/api/v2/move/bite"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/blastoise"
+    },
+    {
+      "asset": "CUQx9BLc8JxwB5FrgcQjM9S8VEG7fxgTmaZSGKD1jjvk",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-14",
+      "card": "Raichu",
+      "set": "Base Set",
+      "number": "14",
+      "image": "https://images.pokemontcg.io/base1/14.png",
+      "level": 50,
+      "tier": 2,
+      "types": [
+        "Electric"
+      ],
+      "base": {
+        "hp": 60,
+        "attack": 90,
+        "defense": 55,
+        "special-attack": 90,
+        "special-defense": 80,
+        "speed": 110
+      },
+      "battle": {
+        "hp": 135,
+        "attack": 110,
+        "defense": 75,
+        "specialAttack": 110,
+        "specialDefense": 100,
+        "speed": 110
+      },
+      "moves": [
+        {
+          "id": "thunderbolt",
+          "name": "Thunderbolt",
+          "type": "Electric",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/thunderbolt"
+        },
+        {
+          "id": "thunder",
+          "name": "Thunder",
+          "type": "Electric",
+          "category": "special",
+          "power": 110,
+          "accuracy": 70,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/thunder"
+        },
+        {
+          "id": "iron-tail",
+          "name": "Iron Tail",
+          "type": "Steel",
+          "category": "physical",
+          "power": 100,
+          "accuracy": 75,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/iron-tail"
+        },
+        {
+          "id": "swift",
+          "name": "Swift",
+          "type": "Normal",
+          "category": "special",
+          "power": 60,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/swift"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/raichu"
+    },
+    {
+      "asset": "D2X3VLWcZa96zsom2rr6DrNh1xxCjGqtSLnntCfKEgVn",
+      "owner": "HN7Q2DrJPVZ4zv8jaRgi77BpYuD6DuQF9pMp5zBPWLLo",
+      "cardId": "base1-15",
+      "card": "Venusaur",
+      "set": "Base Set",
+      "number": "15",
+      "image": "https://images.pokemontcg.io/base1/15.png",
+      "level": 50,
+      "tier": 3,
+      "types": [
+        "Grass",
+        "Poison"
+      ],
+      "base": {
+        "hp": 80,
+        "attack": 82,
+        "defense": 83,
+        "special-attack": 100,
+        "special-defense": 100,
+        "speed": 80
+      },
+      "battle": {
+        "hp": 155,
+        "attack": 102,
+        "defense": 103,
+        "specialAttack": 120,
+        "specialDefense": 120,
+        "speed": 80
+      },
+      "moves": [
+        {
+          "id": "solar-beam",
+          "name": "Solar Beam",
+          "type": "Grass",
+          "category": "special",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/solar-beam"
+        },
+        {
+          "id": "petal-dance",
+          "name": "Petal Dance",
+          "type": "Grass",
+          "category": "special",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/petal-dance"
+        },
+        {
+          "id": "double-edge",
+          "name": "Double-Edge",
+          "type": "Normal",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/double-edge"
+        },
+        {
+          "id": "power-whip",
+          "name": "Power Whip",
+          "type": "Grass",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 85,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/power-whip"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/venusaur"
+    },
+    {
+      "asset": "GeB9HQ7CTUrJd5nc43gYVTwQrRUR1USkL1EqtFytKHJn",
+      "owner": "HN7Q2DrJPVZ4zv8jaRgi77BpYuD6DuQF9pMp5zBPWLLo",
+      "cardId": "base1-6",
+      "card": "Gyarados",
+      "set": "Base Set",
+      "number": "6",
+      "image": "https://images.pokemontcg.io/base1/6.png",
+      "level": 50,
+      "tier": 2,
+      "types": [
+        "Water",
+        "Flying"
+      ],
+      "base": {
+        "hp": 95,
+        "attack": 125,
+        "defense": 79,
+        "special-attack": 60,
+        "special-defense": 100,
+        "speed": 81
+      },
+      "battle": {
+        "hp": 170,
+        "attack": 145,
+        "defense": 99,
+        "specialAttack": 80,
+        "specialDefense": 120,
+        "speed": 81
+      },
+      "moves": [
+        {
+          "id": "hydro-pump",
+          "name": "Hydro Pump",
+          "type": "Water",
+          "category": "special",
+          "power": 110,
+          "accuracy": 80,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/hydro-pump"
+        },
+        {
+          "id": "aqua-tail",
+          "name": "Aqua Tail",
+          "type": "Water",
+          "category": "physical",
+          "power": 90,
+          "accuracy": 90,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/aqua-tail"
+        },
+        {
+          "id": "hyper-beam",
+          "name": "Hyper Beam",
+          "type": "Normal",
+          "category": "special",
+          "power": 150,
+          "accuracy": 90,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/hyper-beam"
+        },
+        {
+          "id": "outrage",
+          "name": "Outrage",
+          "type": "Dragon",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/outrage"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/gyarados"
+    },
+    {
+      "asset": "3fZEsKusnWLP2SBbJh8C356FDFNTJkhKYVVdu8WCpEbz",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-44",
+      "card": "Bulbasaur",
+      "set": "Base Set",
+      "number": "44",
+      "image": "https://images.pokemontcg.io/base1/44.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Grass",
+        "Poison"
+      ],
+      "base": {
+        "hp": 45,
+        "attack": 49,
+        "defense": 49,
+        "special-attack": 65,
+        "special-defense": 65,
+        "speed": 45
+      },
+      "battle": {
+        "hp": 120,
+        "attack": 69,
+        "defense": 69,
+        "specialAttack": 85,
+        "specialDefense": 85,
+        "speed": 45
+      },
+      "moves": [
+        {
+          "id": "solar-beam",
+          "name": "Solar Beam",
+          "type": "Grass",
+          "category": "special",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/solar-beam"
+        },
+        {
+          "id": "power-whip",
+          "name": "Power Whip",
+          "type": "Grass",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 85,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/power-whip"
+        },
+        {
+          "id": "double-edge",
+          "name": "Double-Edge",
+          "type": "Normal",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/double-edge"
+        },
+        {
+          "id": "seed-bomb",
+          "name": "Seed Bomb",
+          "type": "Grass",
+          "category": "physical",
+          "power": 80,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/seed-bomb"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/bulbasaur"
+    },
+    {
+      "asset": "9kCFE7UBAeE1E9HtSqZPoogUMxrqXwLxhpDB7AwJ453E",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-46",
+      "card": "Charmander",
+      "set": "Base Set",
+      "number": "46",
+      "image": "https://images.pokemontcg.io/base1/46.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Fire"
+      ],
+      "base": {
+        "hp": 39,
+        "attack": 52,
+        "defense": 43,
+        "special-attack": 60,
+        "special-defense": 50,
+        "speed": 65
+      },
+      "battle": {
+        "hp": 114,
+        "attack": 72,
+        "defense": 63,
+        "specialAttack": 80,
+        "specialDefense": 70,
+        "speed": 65
+      },
+      "moves": [
+        {
+          "id": "flare-blitz",
+          "name": "Flare Blitz",
+          "type": "Fire",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flare-blitz"
+        },
+        {
+          "id": "flamethrower",
+          "name": "Flamethrower",
+          "type": "Fire",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flamethrower"
+        },
+        {
+          "id": "slash",
+          "name": "Slash",
+          "type": "Normal",
+          "category": "physical",
+          "power": 70,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/slash"
+        },
+        {
+          "id": "dragon-breath",
+          "name": "Dragon Breath",
+          "type": "Dragon",
+          "category": "special",
+          "power": 60,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/dragon-breath"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/charmander"
+    },
+    {
+      "asset": "Hawz8gU9hvAwFf9BdKaFMC3FPpzDfvLQy49f2C7FV33t",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-63",
+      "card": "Squirtle",
+      "set": "Base Set",
+      "number": "63",
+      "image": "https://images.pokemontcg.io/base1/63.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Water"
+      ],
+      "base": {
+        "hp": 44,
+        "attack": 48,
+        "defense": 65,
+        "special-attack": 50,
+        "special-defense": 64,
+        "speed": 43
+      },
+      "battle": {
+        "hp": 119,
+        "attack": 68,
+        "defense": 85,
+        "specialAttack": 70,
+        "specialDefense": 84,
+        "speed": 43
+      },
+      "moves": [
+        {
+          "id": "wave-crash",
+          "name": "Wave Crash",
+          "type": "Water",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/wave-crash"
+        },
+        {
+          "id": "hydro-pump",
+          "name": "Hydro Pump",
+          "type": "Water",
+          "category": "special",
+          "power": 110,
+          "accuracy": 80,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/hydro-pump"
+        },
+        {
+          "id": "skull-bash",
+          "name": "Skull Bash",
+          "type": "Normal",
+          "category": "physical",
+          "power": 130,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/skull-bash"
+        },
+        {
+          "id": "bite",
+          "name": "Bite",
+          "type": "Dark",
+          "category": "physical",
+          "power": 60,
+          "accuracy": 100,
+          "maxPp": 25,
+          "source": "https://pokeapi.co/api/v2/move/bite"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/squirtle"
+    },
+    {
+      "asset": "CeCov3xQBZyL1G1yNz81sb4xAWCt6N6TbQEJqiPytPPh",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-4",
+      "card": "Charizard",
+      "set": "Base Set",
+      "number": "4",
+      "image": "https://images.pokemontcg.io/base1/4.png",
+      "level": 50,
+      "tier": 3,
+      "types": [
+        "Fire",
+        "Flying"
+      ],
+      "base": {
+        "hp": 78,
+        "attack": 84,
+        "defense": 78,
+        "special-attack": 109,
+        "special-defense": 85,
+        "speed": 100
+      },
+      "battle": {
+        "hp": 153,
+        "attack": 104,
+        "defense": 98,
+        "specialAttack": 129,
+        "specialDefense": 105,
+        "speed": 100
+      },
+      "moves": [
+        {
+          "id": "flare-blitz",
+          "name": "Flare Blitz",
+          "type": "Fire",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flare-blitz"
+        },
+        {
+          "id": "flamethrower",
+          "name": "Flamethrower",
+          "type": "Fire",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flamethrower"
+        },
+        {
+          "id": "air-slash",
+          "name": "Air Slash",
+          "type": "Flying",
+          "category": "special",
+          "power": 75,
+          "accuracy": 95,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/air-slash"
+        },
+        {
+          "id": "slash",
+          "name": "Slash",
+          "type": "Normal",
+          "category": "physical",
+          "power": 70,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/slash"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/charizard"
+    },
+    {
+      "asset": "CWF1Zru2Y4sTvxnwuzkgM1AbMHn63XUZNS1NFhUgrjPb",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-15",
+      "card": "Venusaur",
+      "set": "Base Set",
+      "number": "15",
+      "image": "https://images.pokemontcg.io/base1/15.png",
+      "level": 50,
+      "tier": 3,
+      "types": [
+        "Grass",
+        "Poison"
+      ],
+      "base": {
+        "hp": 80,
+        "attack": 82,
+        "defense": 83,
+        "special-attack": 100,
+        "special-defense": 100,
+        "speed": 80
+      },
+      "battle": {
+        "hp": 155,
+        "attack": 102,
+        "defense": 103,
+        "specialAttack": 120,
+        "specialDefense": 120,
+        "speed": 80
+      },
+      "moves": [
+        {
+          "id": "solar-beam",
+          "name": "Solar Beam",
+          "type": "Grass",
+          "category": "special",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/solar-beam"
+        },
+        {
+          "id": "petal-dance",
+          "name": "Petal Dance",
+          "type": "Grass",
+          "category": "special",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/petal-dance"
+        },
+        {
+          "id": "double-edge",
+          "name": "Double-Edge",
+          "type": "Normal",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/double-edge"
+        },
+        {
+          "id": "power-whip",
+          "name": "Power Whip",
+          "type": "Grass",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 85,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/power-whip"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/venusaur"
+    }
+  ]
+}
