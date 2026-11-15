@@ -82,16 +82,10 @@ type Choice struct {
 	TeamIndex int    `json:"teamIndex"`
 }
 
-// effectiveness multiplies the shared type chart over each of the defender's
-// types, matching apps/web/lib/battle/roster.ts. Dual-type defenders can stack
-// to 4x or 0.25x. The label is produced by battle.EffectivenessLabel so both
-// rulesets describe effectiveness with the same words.
+// effectiveness is the shared multi-type chart (battle.Effectiveness), matching
+// apps/web/lib/battle/typeChart.ts.
 func effectiveness(moveType string, defenderTypes []string) float64 {
-	mult := 1.0
-	for _, t := range defenderTypes {
-		mult *= battle.TypeMultiplier(battle.Element(moveType), battle.Element(t))
-	}
-	return mult
+	return battle.Effectiveness(moveType, defenderTypes)
 }
 
 func contains(list []string, target string) bool {
