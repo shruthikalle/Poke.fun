@@ -82,31 +82,16 @@ type Choice struct {
 	TeamIndex int    `json:"teamIndex"`
 }
 
-// Event is one BattleEvent. Shapes vary by "type", so it is an open map that
-// marshals to the discriminated union the client reducer switches on.
-type Event map[string]any
-
-// effectiveness multiplies the chart over each of the defender's types, matching
-// apps/web/lib/battle/roster.ts.
+// effectiveness multiplies the shared type chart over each of the defender's
+// types, matching apps/web/lib/battle/roster.ts. Dual-type defenders can stack
+// to 4x or 0.25x. The label is produced by battle.EffectivenessLabel so both
+// rulesets describe effectiveness with the same words.
 func effectiveness(moveType string, defenderTypes []string) float64 {
 	mult := 1.0
 	for _, t := range defenderTypes {
 		mult *= battle.TypeMultiplier(battle.Element(moveType), battle.Element(t))
 	}
 	return mult
-}
-
-func effectivenessLabel(mult float64) string {
-	switch {
-	case mult == 0:
-		return "immune"
-	case mult > 1:
-		return "super"
-	case mult < 1:
-		return "resisted"
-	default:
-		return "normal"
-	}
 }
 
 func contains(list []string, target string) bool {
