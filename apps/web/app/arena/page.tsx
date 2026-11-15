@@ -4,6 +4,8 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { arenaApi, ARENA_QUEUE_STORAGE_KEY, ARENA_SESSION_STORAGE_KEY, type ArenaCard, type ArenaQueueTicket, type ArenaSession, type ArenaView, type Fighter } from "../../lib/arena";
+import { AccountChip } from "../../components/AccountChip";
+import { Emblem } from "../../components/Emblem";
 import { collectionService } from "../../lib/cards/collection";
 import { session as tabStorage } from "../../lib/storage";
 import { useWallet } from "../../lib/wallet/WalletProvider";
@@ -83,6 +85,8 @@ export default function ArenaPage() {
   const socket = useRef<WebSocket | null>(null);
   const keys = useRef(new Set<string>());
   const aim = useRef<{ x: number; y: number } | null>(null);
+  const previous = useRef<ArenaView | null>(null);
+  const [feed, setFeed] = useState<{ id: number; text: string; tone?: "you" | "them" | "event" }[]>([]);
 
   useEffect(() => {
     if (liveBattleRoute && !tabStorage.get(ARENA_SESSION_STORAGE_KEY)) { router.replace("/loadout"); return; }
@@ -186,6 +190,28 @@ export default function ArenaPage() {
     return () => { active = false; window.clearInterval(inputTimer); window.clearTimeout(reconnect); socket.current?.close(); socket.current = null; };
   }, [session]);
 
+  useEffect(() => {
+    if (!view) return;
+    const before = previous.current;
+    previous.current = view;
+    if (!before || before.id !== view.id) { setFeed([]); if (view.status === "playing") setFeed([{ id: view.tick, text: "Battle in progress", tone: "event" }]); return; }
+    const entries: { id: number; text: string; tone?: "you" | "them" | "event" }[] = [];
+    if (before.status === "waiting" && view.status === "playing") entries.push({ id: view.tick, text: "Battle start!", tone: "event" });
+    view.fighters.forEach((fighter, i) => {
+      const old = before.fighters[i];
+      if (!fighter || !old || !fighter.lastAttack || fighter.lastAttackTick === old.lastAttackTick) return;
+      const move = fighter.lastAttack === "special" ? fighter.card.special : fighter.card.basic;
+      const target = view.fighters[1 - i];
+      const lost = target && before.fighters[1 - i] ? before.fighters[1 - i]!.hp - target.hp : 0;
+      const result = fighter.lastAttackHit ? lost > 0 ? ` · ${lost} damage` : " · hit" : " · missed";
+      entries.push({ id: view.tick * 2 + i, text: `${i === view.you ? "Your" : `${fighter.name}'s`} ${fighter.card.name} used ${move.name}${result}`, tone: i === view.you ? "you" : "them" });
+    });
+    if (view.status === "finished" && before.status !== "finished") {
+      entries.push({ id: view.tick * 2 + 9, text: view.winner === "draw" ? "Time! The battle is a draw." : view.winner === `player${view.you + 1}` ? "You won the battle!" : `${view.fighters[1 - view.you]?.name ?? "Your opponent"} won the battle.`, tone: "event" });
+    }
+    if (entries.length) setFeed((current) => [...entries.reverse(), ...current].slice(0, 40));
+  }, [view]);
+
   const findMatch = async () => {
     if (!name.trim() || !cardId) { setError("Enter a name and choose a fighter."); return; }
     setBusy(true); setError("");
@@ -224,7 +250,14 @@ export default function ArenaPage() {
   };
 
   return <main className={styles.page}>
-    <header className={styles.header}><Link href="/" className={styles.brand}>POKE<span>.FUN</span></Link><strong>{liveBattleRoute ? "LIVE BATTLE" : "LIVE 1V1 ARENA"}</strong><span className={styles.connection}>{session ? connection : queue ? "SEARCHING" : "FREE DEMO"}</span></header>
+    <header className={styles.header}>
+      <Link href="/" className={styles.brand}><Emblem size={22} /><span>Poke.fun</span></Link>
+      <nav className={styles.nav} aria-label="Main"><Link href="/loadout">Battle</Link><Link href="/market">Marketplace</Link><Link href="/collection">My Cards</Link></nav>
+      <div className={styles.account}>
+        <span className={styles.connection} data-state={session ? connection : queue ? "searching" : "idle"}>{session ? connection : queue ? "searching" : liveBattleRoute ? "live battle" : "free demo"}</span>
+        {playerName ? <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }} /> : null}
+      </div>
+    </header>
     {!liveBattleRoute && <section className={styles.intro}><p>One card · one opponent · real-time combat</p><h1>Enter the arena</h1><p>Land basic attacks to build energy. Spend it on your special, aim for an opening, and dodge incoming hits. No real money or card transfers.</p></section>}
     {error && <div className={styles.error} role="alert">{error}</div>}
     {liveBattleRoute && !session ? <section className={styles.panel}><div className={styles.waiting}><h2>Connecting to live battle…</h2></div></section> : queue && !session ? <section className={styles.panel}><div className={styles.waiting}><h2>Finding an opponent…</h2><p>You’re in the live queue. The next available player will be matched with you automatically.</p><button className={styles.secondary} disabled={busy} onClick={() => void cancelSearch()}>Cancel search</button></div></section> : !session ? <div className={styles.setup}>
@@ -237,12 +270,18 @@ export default function ArenaPage() {
       <section className={styles.panel}><h2>Find a real opponent</h2><p className={styles.note}>One click enters the free live queue. When another player is waiting, the match starts automatically.</p><button className={styles.primary} disabled={busy || !cards.length} onClick={() => void findMatch()}>Find match</button><p className={styles.note}>Play from two different browsers or devices to test with a friend. No room code needed.</p></section>
     </div> : <section className={styles.game}>
       <div className={styles.room}><span>LIVE MATCH <strong>{session.id}</strong>{session.entryCents ? ` · Demo $${(session.entryCents / 100).toFixed(2)} entry, no transfer` : " · Free"}</span><button onClick={leave}>{liveBattleRoute ? "Back to loadout" : "Leave view"}</button></div>
-      {!view || view.status === "waiting" ? <div className={styles.waiting}><h2>Connecting to arena</h2><p>Loading the match state…</p></div> : <>
+      {!view || view.status === "waiting" ? <div className={styles.waiting}><h2>{view ? "Waiting for your opponent…" : "Connecting to arena"}</h2><p>{view ? "The battle starts as soon as both players are connected." : "Loading the match state…"}</p></div> : <div className={styles.layout}><div className={styles.main}>
         <div className={styles.score}>{[view?.fighters[0], view?.fighters[1]].map((fighter, i) => fighter ? <div key={i}><strong>{fighter.name} · {fighter.card.name}</strong><span>Lv. 50 · {fighter.hp}/{fighter.card.maxHp} HP · {fighter.energy}/3 energy</span><div className={styles.hp}><span style={{ width: `${fighter.hp / fighter.card.maxHp * 100}%` }} /></div><div className={styles.energy} aria-label={`${fighter.energy} of 3 energy`}>{[0, 1, 2].map((slot) => <i key={slot} data-filled={slot < fighter.energy || undefined} />)}</div></div> : null)}<div className={styles.timer}>{Math.ceil((view?.timeLeftMs ?? 0) / 1000)}s</div></div>
-        <div className={styles.stage} onPointerMove={pointAim} onPointerLeave={() => { aim.current = null; }}><svg className={styles.effects} viewBox="0 0 960 540" preserveAspectRatio="none" aria-hidden="true">{view.fighters.map((fighter, i) => fighter ? <ChargeEffect key={`charge-${i}`} fighter={fighter} /> : null)}{view.fighters.map((fighter, i) => fighter ? <AttackEffect key={i} fighter={fighter} tick={view.tick} index={i} /> : null)}</svg>{view.fighters.map((fighter, i) => fighter ? <FighterToken key={i} fighter={fighter} index={i} tick={view.tick} you={view.you} /> : null)}{view.status === "finished" && <div className={styles.overlay}><h2>{outcome}</h2><p>{view.winner === "draw" ? "Both fighters are even." : "The arena has a winner."}</p><button onClick={leave}>Play again</button></div>}</div>
+        <div className={styles.stage} onPointerMove={pointAim} onPointerLeave={() => { aim.current = null; }}><svg className={styles.effects} viewBox="0 0 960 540" preserveAspectRatio="none" aria-hidden="true">{view.fighters.map((fighter, i) => fighter ? <ChargeEffect key={`charge-${i}`} fighter={fighter} /> : null)}{view.fighters.map((fighter, i) => fighter ? <AttackEffect key={i} fighter={fighter} tick={view.tick} index={i} /> : null)}</svg>{view.fighters.map((fighter, i) => fighter ? <FighterToken key={i} fighter={fighter} index={i} tick={view.tick} you={view.you} /> : null)}{view.status === "finished" && <div className={styles.overlay}><h2>{outcome}</h2><p>{view.winner === "draw" ? "Both fighters finished even." : `${me?.card.name ?? "Your fighter"} ${me?.hp ?? 0} HP · ${them?.card.name ?? "Opponent"} ${them?.hp ?? 0} HP`}</p><div className={styles.overlayActions}><button className="pf-btn" data-variant="primary" onClick={leave}>Find another match</button><Link className="pf-btn" data-variant="ghost" href="/collection">My Cards</Link></div></div>}</div>
         <div className={styles.controls}><div className={styles.dpad}><span /><button aria-label="Move up" {...hold("w")}>↑</button><span /><button aria-label="Move left" {...hold("a")}>←</button><button aria-label="Move down" {...hold("s")}>↓</button><button aria-label="Move right" {...hold("d")}>→</button></div><div className={styles.moves}><button {...hold("j")} disabled={view?.status !== "playing" || !!me?.charging}>J / Space<br /><strong>{me?.card.basic.name ?? "Basic"}</strong><small>{me?.card.basic.damage} dmg · +1 energy on hit</small></button><button {...hold("k")} disabled={view?.status !== "playing" || !!me?.charging || (me?.energy ?? 0) < 2}>K<br /><strong>{me?.card.special.name ?? "Special"}</strong><small>{me?.card.special.damage} dmg · 2 energy · {me?.specialCooldownMs ? `${(me.specialCooldownMs / 1000).toFixed(1)}s` : "ready"}</small></button><button {...hold("shift")} disabled={view?.status !== "playing" || !!me?.charging || !!me?.dodgeCooldownMs}>Shift<br /><strong>Dodge</strong><small>{me?.dodgeCooldownMs ? `${(me.dodgeCooldownMs / 1000).toFixed(1)}s` : "ready"}</small></button></div></div>
         <p className={styles.note}>Move: WASD or arrows. Basic: hold J or Space to build energy on hits. Special: press K with 2 energy, then watch its 0.4-second warning area. Dodge: press Shift to dash out or avoid the impact. Hover over the arena to aim Flamethrower; otherwise it auto-aims.</p>
-      </>}
+      </div>
+        <aside className={styles.feed} aria-label="Battle feed">
+          <p className="pf-eyebrow">Battle feed</p>
+          <ol aria-live="polite">{feed.length ? feed.map((entry) => <li key={entry.id} data-tone={entry.tone}>{entry.text}</li>) : <li data-tone="event">Land a hit to start the feed.</li>}</ol>
+          <p className={styles.feedNote}>The server referees every move, hit and timer, so both players see the same result.</p>
+        </aside>
+      </div>}
     </section>}
   </main>;
 }
