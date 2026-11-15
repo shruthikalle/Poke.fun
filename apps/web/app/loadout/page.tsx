@@ -12,7 +12,7 @@ import { arenaApi, ARENA_QUEUE_STORAGE_KEY, ARENA_SESSION_STORAGE_KEY, type Aren
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { session as tabStorage } from "../../lib/storage";
 import { TYPE_COLORS } from "../../lib/battle/roster";
-import { collectionService, type DasAsset } from "../../lib/cards/collection";
+import { collectionService, DEVNET_TEST_COLLECTION_ADDRESS, type DasAsset } from "../../lib/cards/collection";
 import { FAUX_ART_WINDOW, resolveCard, type CardPick } from "../../lib/cards/mapping";
 import { speciesService, type SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
@@ -23,6 +23,13 @@ import styles from "./loadout.module.css";
 
 interface CardRow { asset: DasAsset | null; pick: CardPick | null; label: string; image: string | null; grade: string | null; reason: string | null }
 type QueueState = { status: "idle" } | { status: "searching"; ticket: ArenaQueueTicket; since: number } | { status: "found"; ticket: ArenaQueueTicket };
+
+function devnetExplorerUrl(asset: DasAsset | null): string | null {
+  if (!asset || asset.interface !== "MplCoreAsset" ||
+    !asset.grouping?.some((group) => group.group_key === "collection" && group.group_value === DEVNET_TEST_COLLECTION_ADDRESS) ||
+    !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(asset.id)) return null;
+  return `https://explorer.solana.com/address/${asset.id}?cluster=devnet`;
+}
 
 const ARENA_RENTALS: CardPick[] = ["pikachu", "charmander"].map((species) => ({
   key: `arena-rental-${species}`, species, label: species === "pikachu" ? "Pikachu" : "Charmander",
@@ -243,22 +250,26 @@ export default function LoadoutPage() {
               {rows.map((r) => {
                 const key = r.pick?.key ?? r.asset?.id ?? r.label;
                 const isSel = !!r.pick && r.pick.key === selected;
+                const explorerUrl = devnetExplorerUrl(r.asset);
                 return (
-                  <button key={key} role="radio" aria-checked={isSel} className={`pf-frame ${styles.card}`} data-selected={isSel || undefined} disabled={!r.pick}
-                    onClick={() => { if (r.pick) { setSelected(r.pick.key); summonCard(r.pick.key); } }} title={r.reason ?? undefined}>
-                    <span className={styles.art}>
-                      {r.image ? <CardArt src={r.image} species={r.pick?.species ?? null} /> : r.pick ? <Sprite species={r.pick.species} size={88} /> : null}
-                      {r.reason && <span className={styles.reason}>{r.reason}</span>}
-                    </span>
-                    <span className={styles.cardMeta}>
-                      <strong>{r.label}</strong>
-                      <span>
-                        {r.grade && <em className={styles.grade}>{r.grade}</em>}
-                        {r.pick?.rental && <em className={styles.grade}>Rental</em>}
-                        {r.pick ? <TierPips tier={r.pick.tier} /> : <small>Can&apos;t battle</small>}
+                  <div key={key} className={styles.cardSlot}>
+                    <button role="radio" aria-checked={isSel} className={`pf-frame ${styles.card}`} data-selected={isSel || undefined} disabled={!r.pick}
+                      onClick={() => { if (r.pick) { setSelected(r.pick.key); summonCard(r.pick.key); } }} title={r.reason ?? undefined}>
+                      <span className={styles.art}>
+                        {r.image ? <CardArt src={r.image} species={r.pick?.species ?? null} /> : r.pick ? <Sprite species={r.pick.species} size={88} /> : null}
+                        {r.reason && <span className={styles.reason}>{r.reason}</span>}
                       </span>
-                    </span>
-                  </button>
+                      <span className={styles.cardMeta}>
+                        <strong>{r.label}</strong>
+                        <span>
+                          {r.grade && <em className={styles.grade}>{r.grade}</em>}
+                          {r.pick?.rental && <em className={styles.grade}>Rental</em>}
+                          {r.pick ? <TierPips tier={r.pick.tier} /> : <small>Can&apos;t battle</small>}
+                        </span>
+                      </span>
+                    </button>
+                    {explorerUrl && <a className={styles.explorerLink} href={explorerUrl} target="_blank" rel="noopener noreferrer" aria-label={`View ${r.label} on Solana Explorer (Devnet)`}>View on Solana ↗</a>}
+                  </div>
                 );
               })}
             </div>
