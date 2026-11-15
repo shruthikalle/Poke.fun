@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
 )
@@ -139,6 +140,7 @@ func (s *Server) getMatch(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "match or player token not found")
 		return
 	}
+	match.ApplyTimeout(time.Now())
 	view := match.ViewFor(index)
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, view)
@@ -156,6 +158,7 @@ func (s *Server) submitAttack(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "match or player token not found")
 		return
 	}
+	match.ApplyTimeout(time.Now())
 	err := match.Submit(index, req.AttackID)
 	view := match.ViewFor(index)
 	s.mu.Unlock()
