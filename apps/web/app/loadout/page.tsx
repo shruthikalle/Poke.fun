@@ -2,27 +2,32 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useMotionPreference } from "../../lib/motion";
+import { arenaApi, ARENA_QUEUE_STORAGE_KEY, ARENA_SESSION_STORAGE_KEY, type ArenaQueueTicket } from "../../lib/arena";
 import { useFocusTrap } from "../../lib/useFocusTrap";
+import { session as tabStorage } from "../../lib/storage";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { collectionService, type DasAsset } from "../../lib/cards/collection";
-import { buildTeam, FORMAT_LABEL, RENTAL_POOL, resolveCard, type CardPick, type MatchFormat } from "../../lib/cards/mapping";
-import { matchmakingService, saveTicket, type MatchSearch, type MatchTicket } from "../../lib/match/MatchmakingService";
+import { FAUX_ART_WINDOW, resolveCard, type CardPick } from "../../lib/cards/mapping";
 import { speciesService, type SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
 import { useCurrency } from "../../lib/market/currency";
-import { ENTRY_PRESETS, MAX_ENTRY, stakeService } from "../../lib/stake/StakeService";
+import { ENTRY_PRESETS, MAX_ENTRY } from "../../lib/stake/StakeService";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "./loadout.module.css";
 
 interface CardRow { asset: DasAsset | null; pick: CardPick | null; label: string; image: string | null; grade: string | null; reason: string | null }
+type QueueState = { status: "idle" } | { status: "searching"; ticket: ArenaQueueTicket; since: number } | { status: "found"; ticket: ArenaQueueTicket };
 
-type Queue = { status: "idle" } | { status: "searching"; since: number } | { status: "found"; ticket: MatchTicket; countdown: number };
+const ARENA_RENTALS: CardPick[] = ["pikachu", "charmander"].map((species) => ({
+  key: `arena-rental-${species}`, species, label: species === "pikachu" ? "Pikachu" : "Charmander",
+  image: null, grade: null, level: 50, tier: 1, rental: true, artWindow: FAUX_ART_WINDOW,
+}));
 
 function useSpecies(key: string | null) {
   const [data, setData] = useState<{ key: string; species: SpeciesData | null; failed: boolean } | null>(null);
@@ -44,28 +49,6 @@ function Sprite({ species, size = 96 }: { species: string; size?: number }) {
     onError={(e) => { if (data.species && e.currentTarget.src !== data.species.sprites.frontStatic) e.currentTarget.src = data.species.sprites.frontStatic; }} />;
 }
 
-function useSpeciesList(keys: string[]) {
-  const [map, setMap] = useState<Record<string, SpeciesData>>({});
-  const joined = keys.join(",");
-  useEffect(() => {
-    let live = true;
-    for (const key of joined ? joined.split(",") : []) {
-      speciesService.getSpecies(key).then((s) => live && setMap((m) => (m[key] ? m : { ...m, [key]: s }))).catch(() => {});
-    }
-    return () => { live = false; };
-  }, [joined]);
-  return map;
-}
-
-function SummonedSprite({ pick, from, reduced }: { pick: CardPick; from: "left" | "right"; reduced: boolean }) {
-  const data = useSpecies(pick.species);
-  return (
-    <div className={styles.summoned}>
-      <CardSummon mode="mini" keepSprite card={pick} species={data?.species ?? null} from={from} reduced={reduced} spriteScale={1.2} />
-    </div>
-  );
-}
-
 function CardArt({ src, species }: { src: string; species: string | null }) {
   const [failed, setFailed] = useState(false);
   if (failed || !src) return species ? <Sprite species={species} size={88} /> : <span className={styles.artMissing}>Card art unavailable</span>;
@@ -85,21 +68,59 @@ export default function LoadoutPage() {
   const { ready, playerName, session, status, playAsGuest, signIn } = useWallet();
   const { formatUsd: formatDollars } = useCurrency();
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
-  const [assetError, setAssetError] = useState<string | null>(null);
+  const [collectionError, setCollectionError] = useState<string | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const [format, setFormat] = useState<MatchFormat>("champion");
-  const [entry, setEntry] = useState(5);
+  const [entry, setEntry] = useState(0);
   const [custom, setCustom] = useState("");
-  const [queue, setQueue] = useState<Queue>({ status: "idle" });
-  const [now, setNow] = useState(0);
-  const search = useRef<MatchSearch | null>(null);
+  const [entryError, setEntryError] = useState<string | null>(null);
+  const [finding, setFinding] = useState(false);
+  const [queue, setQueue] = useState<QueueState>({ status: "idle" });
+  const [notice, setNotice] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [summon, setSummon] = useState<{ key: string; n: number } | null>(null);
   const motion = useMotionPreference();
   const audio = useBattleAudio();
-  useFocusTrap(overlayRef, queue.status !== "idle");
   const guest = status === "guest" || !session;
+  useFocusTrap(overlayRef, queue.status !== "idle");
+
+  useEffect(() => {
+    const saved = tabStorage.get(ARENA_QUEUE_STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const ticket = JSON.parse(saved) as ArenaQueueTicket;
+      if (ticket.id && ticket.token) setQueue(ticket.status === "matched" ? { status: "found", ticket } : { status: "searching", ticket, since: Date.now() });
+    } catch { tabStorage.remove(ARENA_QUEUE_STORAGE_KEY); }
+  }, []);
+
+  useEffect(() => {
+    if (queue.status !== "searching") return;
+    let live = true;
+    const check = async () => {
+      try {
+        const latest = await arenaApi.queueStatus(queue.ticket);
+        if (live && latest.status === "matched" && latest.arena) setQueue({ status: "found", ticket: latest });
+      } catch (cause) {
+        if (!live) return;
+        setNotice((cause as Error).message);
+        tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
+        setQueue({ status: "idle" });
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 700);
+    return () => { live = false; window.clearInterval(timer); };
+  }, [queue]);
+
+  useEffect(() => {
+    if (queue.status !== "found" || !queue.ticket.arena) return;
+    const timer = window.setTimeout(() => {
+      tabStorage.set(ARENA_SESSION_STORAGE_KEY, JSON.stringify(queue.ticket.arena));
+      tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
+      router.push("/battle/live");
+    }, 1000);
+    return () => window.clearTimeout(timer);
+  }, [queue, router]);
 
   useEffect(() => {
     if (ready && !playerName) signIn({ onCancel: () => router.push("/") });
@@ -108,21 +129,20 @@ export default function LoadoutPage() {
   useEffect(() => {
     if (!playerName) return;
     let live = true;
-    setAssets(null);
-    setAssetError(null);
     void rankService.getRank(playerName).then((r) => live && setRank(r));
+    setCollectionError(null);
+    setAssets(null);
     if (session) void collectionService.getOwnedCollectibles(session.address)
       .then((a) => { if (live) setAssets(a); })
-      .catch(() => { if (live) { setAssetError("Could not load Devnet cards. Refresh to try again."); setAssets([]); } });
+      .catch(() => { if (live) { setCollectionError("Could not verify your cards on Solana Devnet. Try again later."); setAssets([]); } });
     else setAssets([]);
     return () => { live = false; };
   }, [playerName, session]);
 
-  useEffect(() => { if (status === "guest") setEntry(0); }, [status]);
 
   const rows = useMemo<CardRow[]>(() => {
     if (!assets) return [];
-    if (guest) return RENTAL_POOL.map((pick) => ({ asset: null, pick, label: pick.label, image: null, grade: null, reason: null }));
+    if (guest) return ARENA_RENTALS.map((pick) => ({ asset: null, pick, label: pick.label, image: null, grade: null, reason: null }));
     return assets.map((asset) => {
       const r = resolveCard(asset);
       return r.eligible
@@ -137,75 +157,59 @@ export default function LoadoutPage() {
   }, [eligible, selected]);
 
   const lead = eligible.find((p) => p.key === selected) ?? null;
-  const team = useMemo(() => (lead ? buildTeam(lead, eligible, format) : []), [lead, eligible, format]);
   const leadSpecies = useSpecies(lead?.species ?? null);
-  const bench = useMemo(() => (format === "squad" ? team.slice(1) : []), [format, team]);
-  const benchSpecies = useSpeciesList(bench.map((p) => p.species));
   const summonCard = (key: string) => { setNotice(null); setSummon({ key, n: Date.now() }); };
 
-  const [notice, setNotice] = useState<string | null>(null);
   useEffect(() => {
     if (!leadSpecies?.failed) return;
     setSummon(null);
     setNotice("Couldn't wake this card: creature data didn't load. Check your connection and pick it again.");
   }, [leadSpecies?.failed]);
-  const quote = stakeService.quote(entry);
-  const preview = rank ? rankService.preview(rank.rating, rank.rating) : null;
 
-  const findMatch = () => {
-    if (!lead || !rank || !playerName) return;
+  const findMatch = async () => {
+    if (!lead || !rank || !playerName || finding || (lead.species !== "pikachu" && lead.species !== "charmander")) return;
+    setFinding(true);
     setNotice(null);
-    setQueue({ status: "searching", since: Date.now() });
-    const s = matchmakingService.find({ player: playerName, rating: rank.rating, format, tier: lead.tier, entry, team });
-    search.current = s;
-    s.result.then((ticket) => {
-      if (search.current !== s) return;
-      search.current = null;
-      setQueue({ status: "found", ticket, countdown: 3 });
-    }).catch((error: unknown) => {
-      if (search.current !== s) return;
-      search.current = null;
-      setQueue({ status: "idle" });
-      setNotice(error instanceof Error ? error.message : "Could not join matchmaking. Try again.");
-    });
-  };
-  const cancelSearch = () => {
-    search.current?.cancel();
-    search.current = null;
-    setQueue({ status: "idle" });
-  };
-
-  useEffect(() => {
-    if (queue.status === "idle") return;
-    const id = setInterval(() => {
-      setNow(Date.now());
-      setQueue((q) => (q.status === "found" && q.countdown > 0 ? { ...q, countdown: q.countdown - 1 } : q));
-    }, 1000);
-    return () => clearInterval(id);
-  }, [queue.status]);
-
-  useEffect(() => {
-    if (queue.status === "found" && queue.countdown === 0) {
-      saveTicket(queue.ticket);
-      router.push("/battle");
+    try {
+      const ownedAsset = process.env.NEXT_PUBLIC_COLLECTION_SOURCE === "devnet" && session && !lead.rental
+        ? { assetId: lead.key, walletAddress: session.address }
+        : undefined;
+      const ticket = await arenaApi.enqueue(playerName, lead.species, rank.rating, Math.round(entry * 100), ownedAsset);
+      tabStorage.remove(ARENA_SESSION_STORAGE_KEY);
+      tabStorage.set(ARENA_QUEUE_STORAGE_KEY, JSON.stringify(ticket));
+      setQueue(ticket.status === "matched" ? { status: "found", ticket } : { status: "searching", ticket, since: Date.now() });
+      setFinding(false);
+    } catch (cause) {
+      setNotice((cause as Error).message);
+      setFinding(false);
     }
-  }, [queue, router]);
+  };
 
-  useEffect(() => () => search.current?.cancel(), []);
+  const cancelSearch = async () => {
+    if (queue.status !== "searching") return;
+    setFinding(true);
+    try {
+      await arenaApi.cancelQueue(queue.ticket);
+      tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
+      setQueue({ status: "idle" });
+    } catch (cause) {
+      const latest = await arenaApi.queueStatus(queue.ticket).catch(() => null);
+      if (latest?.status === "matched" && latest.arena) setQueue({ status: "found", ticket: latest });
+      else setNotice((cause as Error).message);
+    } finally { setFinding(false); }
+  };
 
-
-  const [entryError, setEntryError] = useState<string | null>(null);
   const setCustomEntry = (raw: string) => {
     const cleaned = raw.replace(/[^0-9.]/g, "");
     const [whole, ...rest] = cleaned.split(".");
-    const v = rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
-    setCustom(v);
-    if (!v) { setEntryError(null); setEntry(5); return; }
-    const n = Number(v);
-    if (!Number.isFinite(n) || n < 1) { setEntryError("Minimum entry is $1"); return; }
-    if (n > MAX_ENTRY) { setEntryError(`Maximum entry is $${MAX_ENTRY}`); return; }
+    const value = rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+    setCustom(value);
+    if (!value) { setEntryError(null); setEntry(0); return; }
+    const amount = Number(value);
+    if (!Number.isFinite(amount) || amount < 1) { setEntryError("Minimum demo entry is $1"); return; }
+    if (amount > MAX_ENTRY) { setEntryError(`Maximum demo entry is $${MAX_ENTRY}`); return; }
     setEntryError(null);
-    setEntry(Math.round(n * 100) / 100);
+    setEntry(Math.round(amount * 100) / 100);
   };
 
   return (
@@ -213,11 +217,7 @@ export default function LoadoutPage() {
       <div className={styles.backdrop} aria-hidden="true" />
       <header className={styles.top}>
         <Link href="/" className={styles.brand}><Emblem size={22} /><span>Poke.fun</span></Link>
-        <nav className={styles.nav} aria-label="Main">
-          <Link href="/market">Marketplace</Link>
-          <Link href="/collection">My Cards</Link>
-          <Link href="/loadout" aria-current="page">Battle</Link>
-        </nav>
+        <span className="pf-eyebrow">Loadout</span>
         <div className={styles.account}>
           {playerName ? <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }} /> : null}
         </div>
@@ -227,7 +227,7 @@ export default function LoadoutPage() {
         <section className={styles.collection}>
           <h1>Choose your champion</h1>
           {guest && <p className={styles.lede}>Rental creatures. Sign in to battle with your own cards.</p>}
-          {assetError && <p role="alert">{assetError}</p>}
+          {collectionError && <p className={styles.warn} role="alert">{collectionError}</p>}
 
           {!assets ? (
             <div className={styles.grid}>{[0, 1, 2, 3].map((i) => <div key={i} className={styles.cardSkeleton} />)}</div>
@@ -235,7 +235,7 @@ export default function LoadoutPage() {
             <>
             {!guest && eligible.length === 0 && (
               <div className={styles.empty} role="status">
-                <strong>{rows.length === 0 ? "No cards yet" : "None of these can battle"}</strong>
+                <strong>{rows.length === 0 ? "No supported cards in this wallet" : "None of these can battle"}</strong>
                 <button className="pf-btn" data-size="sm" onClick={() => playAsGuest()}>Battle as a guest</button>
               </div>
             )}
@@ -289,94 +289,50 @@ export default function LoadoutPage() {
           </ul>
 
           <p className={styles.label}>Format</p>
-          <div className={styles.segment} role="radiogroup" aria-label="Format">
-            {(["champion", "squad"] as const).map((f) => (
-              <button key={f} role="radio" aria-checked={format === f} className="pf-chip" data-on={format === f || undefined} onClick={() => setFormat(f)}>{FORMAT_LABEL[f]}</button>
-            ))}
-          </div>
-          <p className={styles.hint}>{format === "champion" ? "One card, no switching." : "Your lead plus two bench creatures. Empty slots use shared rentals."}</p>
-          {format === "squad" && (
-            <div className={styles.squad}>
-              {team.map((p, i) => (
-                <div key={p.key} className={styles.slot}><Sprite species={p.species} size={44} /><span>{p.label}</span><small>{i === 0 ? "Lead" : p.rental ? "Rental" : "Yours"}</small></div>
-              ))}
-            </div>
-          )}
+          <div className={styles.segment}><button className="pf-chip" data-on>Champion 1v1</button><button className="pf-chip" disabled>Squad of 3 · coming soon</button></div>
+          <p className={styles.hint}>One card, live against another queued player.</p>
 
           <p className={styles.label}>Entry</p>
           <div className={styles.chips}>
-            {ENTRY_PRESETS.map((n) => (
-              <button key={n} className="pf-chip" data-on={entry === n && !custom || undefined} disabled={guest && n > 0} onClick={() => { setCustom(""); setEntryError(null); setEntry(n); }}>{formatDollars(n)}</button>
-            ))}
+            {ENTRY_PRESETS.map((amount) => <button key={amount} className="pf-chip" data-on={entry === amount && !custom || undefined} onClick={() => { setCustom(""); setEntryError(null); setEntry(amount); }}>{formatDollars(amount)}</button>)}
             <label className={`pf-input ${styles.custom}`} data-on={!!custom || undefined}>
               <span>$</span>
-              <input inputMode="decimal" placeholder="0.00" value={custom} disabled={guest} aria-label="Custom entry in dollars" onChange={(e) => setCustomEntry(e.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
+              <input inputMode="decimal" placeholder="0.00" value={custom} aria-label="Custom demo entry in dollars" onChange={(event) => setCustomEntry(event.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
             </label>
           </div>
           {entryError && <p id="entry-error" className={styles.warn} role="alert">{entryError}</p>}
           <div className={styles.pot} hidden={!!entryError}>
-            <span>{entry ? <>Winner takes <strong>{formatDollars(quote.winnerTakes)}</strong></> : <>Free match, ranked only</>}</span>
-            <em>Demo: no real money</em>
+            <span>{entry ? <>Demo entry <strong>{formatDollars(entry)}</strong> per player</> : "Free live match"}</span>
+            <em>Demo only · no money or NFT transfers</em>
           </div>
-          {guest && <p className={styles.hint}>Sign in to add an entry.</p>}
 
-          <p className={styles.label}>Your rank</p>
+          <p className={styles.label}>Demo rating</p>
           {rank ? (
             <div className={styles.rank}>
               <RankBadge rank={rank} />
               <span>{rank.wins}–{rank.losses}</span>
-              {preview && <span className={styles.delta}><b data-tone="up">Win +{preview.win}</b> <b data-tone="down">Loss {preview.loss}</b></span>}
             </div>
           ) : <span className={styles.moveSkeleton} />}
 
-          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !leadSpecies?.species || !!entryError || queue.status !== "idle"} onClick={findMatch}>Find match</button>
+          {lead && lead.species !== "pikachu" && lead.species !== "charmander" && <p className={styles.warn}>Live matchmaking currently supports Pikachu and Charmander.</p>}
+          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !!entryError || finding || queue.status !== "idle" || (lead.species !== "pikachu" && lead.species !== "charmander")} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
         </aside>
       </main>
 
-      {queue.status !== "idle" && (
-        <div ref={overlayRef} tabIndex={-1} className={styles.overlay} role="dialog" aria-modal="true" aria-label="Matchmaking">
-          <div className={`pf-panel ${styles.matchBox}`}>
-            {queue.status === "searching" ? (
-              <>
-                <div className={styles.radar}><Emblem size={56} /></div>
-                <p className="pf-eyebrow">Finding a match</p>
-                <h2>Searching… {Math.max(0, Math.floor((now - queue.since) / 1000))}s</h2>
-                <p className={styles.hint}>{FORMAT_LABEL[format]} · tier {lead?.tier} cards · {formatDollars(entry)} entry. Your friend must select the same format, tier, and entry.</p>
-                <button className="pf-btn" data-variant="ghost" onClick={cancelSearch}>Cancel</button>
-              </>
-            ) : (
-              <>
-                <p className="pf-eyebrow">Match found</p>
-                <div className={styles.versus}>
-                  <div>
-                    <SummonedSprite pick={queue.ticket.you.team[0]} from="left" reduced={motion.reduced} />
-                    <strong>{playerName}</strong>
-                    <RankBadge rank={{ tier: rank?.tier ?? "", rating: queue.ticket.you.rating }} />
-                    <small>{queue.ticket.you.team.map((p) => p.label).join(" · ")}</small>
-                  </div>
-                  <span className={styles.vs}>VS</span>
-                  <div>
-                    <SummonedSprite pick={queue.ticket.opponent.team[0]} from="right" reduced={motion.reduced} />
-                    <strong>{queue.ticket.opponent.trainer.name}</strong>
-                    <RankBadge rank={queue.ticket.opponent} />
-                    <small>{queue.ticket.opponent.team.map((p) => p.label).join(" · ")}</small>
-                  </div>
-                </div>
-                <div className={styles.pot}>
-                  <span>{queue.ticket.entry ? <>Entry {formatDollars(queue.ticket.entry)} each · Winner takes <strong>{formatDollars(stakeService.quote(queue.ticket.entry).winnerTakes)}</strong></> : "Free match, ranked only"}</span>
-                  {rank && <span className={styles.delta}><b data-tone="up">Win +{rankService.preview(rank.rating, queue.ticket.opponent.rating).win}</b> <b data-tone="down">Loss {rankService.preview(rank.rating, queue.ticket.opponent.rating).loss}</b></span>}
-                </div>
-                <h2 className={styles.countdown}>Battle starts in {queue.countdown}</h2>
-              </>
-            )}
-          </div>
+      {queue.status !== "idle" && <div ref={overlayRef} tabIndex={-1} className={styles.overlay} role="dialog" aria-modal="true" aria-label="Matchmaking">
+        <div className={`pf-panel ${styles.matchBox}`}>
+          <div className={styles.radar}><Emblem size={56} /></div>
+          <p className="pf-eyebrow">{queue.status === "found" ? "Match found" : "Finding a match"}</p>
+          <h2>{queue.status === "found" ? `Matched with ${queue.ticket.opponent ?? "another player"}` : "Waiting for another player…"}</h2>
+          <p className={styles.hint}>{queue.status === "found" ? "Opening the live battle now." : `Searching for ${formatDollars(queue.ticket.entryCents / 100)} demo entry · closest available demo rating first.`}</p>
+          {queue.status === "searching" && <button className="pf-btn" data-variant="ghost" disabled={finding} onClick={() => void cancelSearch()}>Cancel search</button>}
         </div>
-      )}
+      </div>}
 
       {summon && lead && lead.key === summon.key && (
         <CardSummon key={summon.n} mode="full" card={lead} species={leadSpecies?.species ?? null} level={lead.level}
           reduced={motion.reduced} muted={audio.muted} onToggleMute={audio.toggleMute} playCry={audio.playClip}
-          companions={bench.map((p) => ({ card: p, species: benchSpecies[p.species] ?? null, level: p.level }))}
+          companions={[]}
           onReplay={() => summonCard(lead.key)} onDone={() => setSummon(null)} />
       )}
 

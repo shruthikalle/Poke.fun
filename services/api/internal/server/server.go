@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/base64"
@@ -12,17 +13,27 @@ import (
 	"sync"
 	"time"
 
+	"github.com/shruthikalle/Poke.fun/services/api/internal/arena"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/collectibles"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/livebattle"
 )
 
 type Server struct {
-	mu      sync.Mutex
-	matches map[string]*battle.Match      // one-card duels (/play)
-	battles map[string]*livebattle.Battle // team battles (/battle)
-	queue   map[string]*queueEntry        // matchmaking searches by ticket
-	waiting []*queueEntry                 // unpaired searches, oldest first
-	origin  string
+	mu           sync.Mutex
+	matches      map[string]*battle.Match
+	battles      map[string]*livebattle.Battle
+	queue        map[string]*queueEntry
+	waiting      []*queueEntry
+	arenas       map[string]*arena.Game
+	peers        map[string]map[*arenaPeer]struct{}
+	arenaQueue   map[string]*arenaQueueEntry
+	origin       string
+	collectibles collectibleReader
+}
+
+type collectibleReader interface {
+	Read(context.Context, string, string) (collectibles.Card, error)
 }
 
 type playerRequest struct {
@@ -35,11 +46,19 @@ type attackRequest struct {
 }
 
 func New(origin string) http.Handler {
+	return NewWithCollectibles(origin, nil)
+}
+
+func NewWithCollectibles(origin string, reader collectibleReader) http.Handler {
 	s := &Server{
-		matches: make(map[string]*battle.Match),
-		battles: make(map[string]*livebattle.Battle),
-		queue:   make(map[string]*queueEntry),
-		origin:  origin,
+		matches:      make(map[string]*battle.Match),
+		battles:      make(map[string]*livebattle.Battle),
+		queue:        make(map[string]*queueEntry),
+		arenas:       make(map[string]*arena.Game),
+		peers:        make(map[string]map[*arenaPeer]struct{}),
+		arenaQueue:   make(map[string]*arenaQueueEntry),
+		origin:       origin,
+		collectibles: reader,
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
@@ -64,6 +83,17 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("POST /api/queue", s.enqueue)
 	mux.HandleFunc("GET /api/queue/{ticket}", s.pollQueue)
 	mux.HandleFunc("DELETE /api/queue/{ticket}", s.cancelQueue)
+	mux.HandleFunc("GET /api/arena-cards", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, arena.Cards())
+	})
+	mux.HandleFunc("GET /api/collectibles/{id}", s.getCollectible)
+	mux.HandleFunc("POST /api/arenas", s.createArena)
+	mux.HandleFunc("POST /api/arenas/{id}/join", s.joinArena)
+	mux.HandleFunc("GET /api/arenas/{id}", s.getArena)
+	mux.HandleFunc("GET /api/arenas/{id}/ws", s.arenaSocket)
+	mux.HandleFunc("POST /api/arena-queue", s.enqueueArena)
+	mux.HandleFunc("GET /api/arena-queue/{id}", s.getArenaQueue)
+	mux.HandleFunc("DELETE /api/arena-queue/{id}", s.cancelArenaQueue)
 	return s.withCORS(mux)
 }
 

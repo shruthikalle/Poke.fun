@@ -9,3 +9,6 @@ out/
 .DS_Store
 coverage/
 bin/
+*.tsbuildinfo
+contracts/target/
+contracts/.anchor/

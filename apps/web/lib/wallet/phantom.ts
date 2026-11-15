@@ -9,7 +9,7 @@ export interface PhantomProvider {
   disconnect(): Promise<void>;
   signMessage?(message: Uint8Array, display?: "utf8" | "hex"): Promise<{ signature: Uint8Array }>;
   on?(event: "accountChanged" | "disconnect" | "connect", handler: (arg?: PhantomPublicKey | null) => void): void;
-  removeListener?(event: string, handler: (...args: unknown[]) => void): void;
+  removeListener?(event: string, handler: (arg?: PhantomPublicKey | null) => void): void;
 }
 
 declare global {

@@ -142,4 +142,14 @@ export class MockCollectionService implements CollectionService {
   }
 }
 
-export const collectionService: CollectionService = new MockCollectionService();
+export class DevnetCollectionService implements CollectionService {
+  async getOwnedCollectibles(owner: string): Promise<DasAsset[]> {
+    const response = await fetch(`/api/devnet-cards?owner=${encodeURIComponent(owner)}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not verify devnet card ownership");
+    return response.json() as Promise<DasAsset[]>;
+  }
+}
+
+export const collectionService: CollectionService = process.env.NEXT_PUBLIC_COLLECTION_SOURCE === "devnet"
+  ? new DevnetCollectionService()
+  : new MockCollectionService();
