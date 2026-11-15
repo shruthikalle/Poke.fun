@@ -15,7 +15,8 @@ import { buildTeam, FORMAT_LABEL, RENTAL_POOL, resolveCard, type CardPick, type 
 import { matchmakingService, saveTicket, type MatchSearch, type MatchTicket } from "../../lib/match/MatchmakingService";
 import { speciesService, type SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
-import { ENTRY_PRESETS, formatDollars, MAX_ENTRY, stakeService } from "../../lib/stake/StakeService";
+import { useCurrency } from "../../lib/market/currency";
+import { ENTRY_PRESETS, MAX_ENTRY, stakeService } from "../../lib/stake/StakeService";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "./loadout.module.css";
 
@@ -82,6 +83,7 @@ function RankBadge({ rank }: { rank: { tier: string; rating: number } }) {
 export default function LoadoutPage() {
   const router = useRouter();
   const { ready, playerName, session, status, playAsGuest, signIn } = useWallet();
+  const { formatUsd: formatDollars } = useCurrency();
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);

@@ -13,6 +13,8 @@ interface CurrencyValue {
   /** Formats a SOL amount in the selected display currency. */
   format(priceSol: number, options?: { compact?: boolean }): string;
   /** Converts a display-currency amount (what the person typed) to SOL. */
+  /** Formats a USD-denominated amount (match entries, winnings) in the selected display currency. */
+  formatUsd(amountUsd: number): string;
   toSol(amount: number): number;
   fromSol(priceSol: number): number;
 }
@@ -37,6 +39,11 @@ export function CurrencyProvider({ children }: { children: ReactNode }) {
       if (currency === "SOL") return `${priceSol.toLocaleString("en-US", { maximumFractionDigits: priceSol < 10 ? 3 : 2 })} SOL`;
       const amount = priceSol * usdPerSol;
       return (options?.compact && amount >= 1000 ? usdCompact : usd).format(amount);
+    },
+    formatUsd: (amountUsd) => {
+      if (amountUsd === 0) return "Free";
+      if (currency === "SOL") return `${(amountUsd / usdPerSol).toLocaleString("en-US", { maximumFractionDigits: 3 })} SOL`;
+      return `$${amountUsd % 1 === 0 ? amountUsd : amountUsd.toFixed(2)}`;
     },
     toSol: (amount) => (currency === "SOL" ? amount : amount / usdPerSol),
     fromSol: (priceSol) => (currency === "SOL" ? priceSol : priceSol * usdPerSol),
