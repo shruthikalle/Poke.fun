@@ -17,8 +17,8 @@ Solana wallet          Match state and rules
 
 ## Build order
 
-1. One-card free matches with sample data (implemented, in memory).
-2. Persistent matches, turn deadlines, and reconnect handling.
+1. One-card free matches with sample data (implemented, in memory). Combat now includes type effectiveness, same-type bonus, rules/catalog version locking and 60s turn deadlines — see [battle-spec.md](battle-spec.md).
+2. Persistent matches (turn deadlines done; persistence and reconnect still to do).
 3. Wallet sign-in and ownership checks for supported NFTs.
 4. Matchmaking within compatible formats.
 5. Devnet escrow, result signing, settlement, and refunds.
