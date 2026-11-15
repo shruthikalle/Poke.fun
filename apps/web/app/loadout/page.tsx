@@ -8,12 +8,12 @@ import { Emblem } from "../../components/Emblem";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useMotionPreference } from "../../lib/motion";
-import { arenaApi, ARENA_QUEUE_STORAGE_KEY, ARENA_SESSION_STORAGE_KEY, type ArenaQueueTicket } from "../../lib/arena";
+import { arenaApi, ARENA_QUEUE_STORAGE_KEY, ARENA_SESSION_STORAGE_KEY, type ArenaCard, type ArenaQueueTicket } from "../../lib/arena";
 import { useFocusTrap } from "../../lib/useFocusTrap";
 import { session as tabStorage } from "../../lib/storage";
 import { TYPE_COLORS } from "../../lib/battle/roster";
 import { collectionService, DEVNET_TEST_COLLECTION_ADDRESS, type DasAsset } from "../../lib/cards/collection";
-import { FAUX_ART_WINDOW, resolveCard, type CardPick } from "../../lib/cards/mapping";
+import { FAUX_ART_WINDOW, RENTAL_POOL, resolveCard, type CardPick } from "../../lib/cards/mapping";
 import { speciesService, type SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
 import { useCurrency } from "../../lib/market/currency";
@@ -31,10 +31,16 @@ function devnetExplorerUrl(asset: DasAsset | null): string | null {
   return `https://explorer.solana.com/address/${asset.id}?cluster=devnet`;
 }
 
-const ARENA_RENTALS: CardPick[] = ["pikachu", "charmander"].map((species) => ({
-  key: `arena-rental-${species}`, species, label: species === "pikachu" ? "Pikachu" : "Charmander",
-  image: null, grade: null, level: 50, tier: 1, rental: true, artWindow: FAUX_ART_WINDOW,
-}));
+// Guests borrow these fighters. Only tier-1 ones are offered so any two guests
+// can be paired (matchmaking only pairs fighters of the same tier).
+const ARENA_RENTAL_SPECIES = ["pikachu", "charmander", ...RENTAL_POOL.map((r) => r.species)];
+
+function arenaRentals(fighters: Map<string, ArenaCard>): CardPick[] {
+  return ARENA_RENTAL_SPECIES.flatMap((species) => {
+    const f = fighters.get(species);
+    return f && f.tier === 1 ? [{ key: `arena-rental-${species}`, species, label: f.name, image: null, grade: null, level: f.level, tier: f.tier, rental: true, artWindow: FAUX_ART_WINDOW }] : [];
+  });
+}
 
 function useSpecies(key: string | null) {
   const [data, setData] = useState<{ key: string; species: SpeciesData | null; failed: boolean } | null>(null);
@@ -83,6 +89,11 @@ export default function LoadoutPage() {
   const [entryError, setEntryError] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
   const [queue, setQueue] = useState<QueueState>({ status: "idle" });
+  // Every live-arena fighter, by species, from the Go server's Pokédex.
+  const [fighters, setFighters] = useState<Map<string, ArenaCard> | null>(null);
+  useEffect(() => {
+    arenaApi.cards().then((list) => setFighters(new Map(list.map((c) => [c.id, c])))).catch(() => setFighters(new Map()));
+  }, []);
   const [notice, setNotice] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [summon, setSummon] = useState<{ key: string; n: number } | null>(null);
@@ -148,15 +159,15 @@ export default function LoadoutPage() {
 
 
   const rows = useMemo<CardRow[]>(() => {
-    if (!assets) return [];
-    if (guest) return ARENA_RENTALS.map((pick) => ({ asset: null, pick, label: pick.label, image: null, grade: null, reason: null }));
+    if (!assets || !fighters) return [];
+    if (guest) return arenaRentals(fighters).map((pick) => ({ asset: null, pick, label: pick.label, image: null, grade: null, reason: null }));
     return assets.map((asset) => {
       const r = resolveCard(asset);
       return r.eligible
         ? { asset, pick: r.pick, label: r.pick.label, image: r.pick.image, grade: r.pick.grade, reason: null }
         : { asset, pick: null, label: asset.content.metadata.attributes.find((a) => a.trait_type === "Card Name")?.value ?? asset.content.metadata.name, image: asset.content.links.image, grade: null, reason: r.reason };
     });
-  }, [assets, guest]);
+  }, [assets, guest, fighters]);
 
   const eligible = useMemo(() => rows.flatMap((r) => (r.pick ? [r.pick] : [])), [rows]);
   useEffect(() => {
@@ -165,6 +176,7 @@ export default function LoadoutPage() {
 
   const lead = eligible.find((p) => p.key === selected) ?? null;
   const leadSpecies = useSpecies(lead?.species ?? null);
+  const leadFighter = lead ? fighters?.get(lead.species) ?? null : null;
   const summonCard = (key: string) => { setNotice(null); setSummon({ key, n: Date.now() }); };
 
   useEffect(() => {
@@ -174,7 +186,7 @@ export default function LoadoutPage() {
   }, [leadSpecies?.failed]);
 
   const findMatch = async () => {
-    if (!lead || !rank || !playerName || finding || (lead.species !== "pikachu" && lead.species !== "charmander")) return;
+    if (!lead || !leadFighter || !rank || !playerName || finding) return;
     setFinding(true);
     setNotice(null);
     try {
@@ -291,13 +303,15 @@ export default function LoadoutPage() {
           </div>
           {notice && <p className={styles.warn} role="alert">{notice}</p>}
           {leadSpecies?.failed && !notice && <p className={styles.warn}>Couldn&apos;t load this creature&apos;s moves. Check your connection.</p>}
+          {/* The two moves this card fights with in the live arena, chosen by the server. */}
           <ul className={styles.moves}>
-            {(leadSpecies?.species?.moves ?? [null, null, null, null]).map((m, i) => (
-              <li key={m?.id ?? i} style={m ? ({ "--type": TYPE_COLORS[m.type] } as React.CSSProperties) : undefined}>
-                {m ? <><strong>{m.name}</strong><small>{m.type} · {m.power}</small></> : <span className={styles.moveSkeleton} />}
+            {(leadFighter ? [{ ...leadFighter.basic, role: "Basic · +1 energy" }, { ...leadFighter.special, role: "Special · 2 energy" }] : [null, null]).map((m, i) => (
+              <li key={m?.id ?? i} style={m ? ({ "--type": TYPE_COLORS[m.type as keyof typeof TYPE_COLORS] } as React.CSSProperties) : undefined}>
+                {m ? <><strong>{m.name}</strong><small>{m.role} · {m.type} · ≈{m.damage} dmg</small></> : <span className={styles.moveSkeleton} />}
               </li>
             ))}
           </ul>
+          {leadFighter && <p className={styles.hint}>Tier {leadFighter.tier} fighter · {leadFighter.maxHp} HP · matched only against tier {leadFighter.tier}.</p>}
 
           <p className={styles.label}>Format</p>
           <div className={styles.segment}><button className="pf-chip" data-on>Champion 1v1</button><button className="pf-chip" disabled>Squad of 3 · coming soon</button></div>
@@ -325,8 +339,8 @@ export default function LoadoutPage() {
             </div>
           ) : <span className={styles.moveSkeleton} />}
 
-          {lead && lead.species !== "pikachu" && lead.species !== "charmander" && <p className={styles.warn}>Live matchmaking currently supports Pikachu and Charmander.</p>}
-          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !!entryError || finding || queue.status !== "idle" || (lead.species !== "pikachu" && lead.species !== "charmander")} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
+          {lead && fighters && !leadFighter && <p className={styles.warn}>{fighters.size ? "This card can't fight in the live arena yet." : "Couldn't reach the Go arena server. Start it on port 8080."}</p>}
+          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !leadFighter || !rank || !!entryError || finding || queue.status !== "idle"} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
         </aside>
       </main>
 
