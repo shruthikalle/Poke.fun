@@ -12,9 +12,10 @@ const DEV_SECRET = "pokefun-local-dev-only-wallet-session-secret";
 function secret() {
   const configured = process.env.AUTH_SESSION_SECRET;
   if (configured && configured.length >= 32) return configured;
-  if (process.env.NODE_ENV === "production") throw new Error("AUTH_SESSION_SECRET must be set to at least 32 characters");
-  return DEV_SECRET;
+  return process.env.NODE_ENV === "production" ? null : DEV_SECRET;
 }
+
+const notConfigured = () => error("Phantom sign-in is not available right now", 503);
 
 function error(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -27,10 +28,12 @@ function publicKey(address: string) {
 }
 
 export async function GET(request: NextRequest) {
+  const key = secret();
+  if (!key) return notConfigured();
   const address = request.nextUrl.searchParams.get("address");
   if (!address) {
     const token = request.cookies.get(COOKIE)?.value;
-    const saved = token ? readSession(token, secret()) : null;
+    const saved = token ? readSession(token, key) : null;
     if (!saved) {
       const response = error("Session expired", 401);
       if (token) response.cookies.delete(COOKIE);
@@ -40,21 +43,23 @@ export async function GET(request: NextRequest) {
   }
 
   try { publicKey(address); } catch { return error("Invalid Solana address", 400); }
-  return NextResponse.json(issueChallenge(address, request.nextUrl.host, request.nextUrl.origin, secret()));
+  return NextResponse.json(issueChallenge(address, request.nextUrl.host, request.nextUrl.origin, key));
 }
 
 export async function POST(request: NextRequest) {
+  const key = secret();
+  if (!key) return notConfigured();
   let body: { address?: unknown; challenge?: unknown; signature?: unknown };
   try { body = await request.json(); } catch { return error("Invalid request", 400); }
   const { address, challenge, signature } = body;
   if (typeof address !== "string" || typeof challenge !== "string" || typeof signature !== "string") return error("Missing login fields", 400);
-  const message = readChallenge(challenge, address, secret());
+  const message = readChallenge(challenge, address, key);
   if (!message) return error("Login challenge expired", 401);
   try {
     const bytes = Buffer.from(signature, "base64");
     if (bytes.length !== 64 || !verify(null, Buffer.from(message), publicKey(address), bytes)) return error("Invalid wallet signature", 401);
   } catch { return error("Invalid wallet signature", 401); }
-  const { token, ...saved } = issueSession(address, secret());
+  const { token, ...saved } = issueSession(address, key);
   const response = NextResponse.json(saved);
   response.cookies.set(COOKIE, token, {
     httpOnly: true,
