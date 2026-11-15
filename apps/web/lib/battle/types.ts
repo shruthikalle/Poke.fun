@@ -124,7 +124,9 @@ export type BattleEvent =
   | { type: "leave"; name: string }
   | { type: "start" }
   | { type: "turn"; turn: number }
-  | { type: "request"; phase: "choosing" | "switching" }
+  // "switching" names the side that must replace a fainted creature; in a
+  // two-player battle the other side waits. "choosing" applies to both sides.
+  | { type: "request"; phase: "choosing" | "switching"; side?: Side }
   | { type: "choice-accepted"; choice: BattleChoice }
   | { type: "choice-cancelled" }
   | { type: "resolving" }

@@ -34,6 +34,10 @@ export function applyBattleEvent(state: BattleState | null, event: BattleEvent):
     case "turn":
       return { ...state, turn: event.turn, log: push(entry("turn", `Turn ${event.turn}`)) };
     case "request":
+      // The opponent replacing a fainted creature: we wait rather than choose.
+      if (event.phase === "switching" && event.side && event.side !== state.you) {
+        return { ...state, phase: "waiting", pendingChoice: null };
+      }
       return { ...state, phase: event.phase, pendingChoice: null };
     case "choice-accepted":
       return { ...state, phase: "waiting", pendingChoice: event.choice };

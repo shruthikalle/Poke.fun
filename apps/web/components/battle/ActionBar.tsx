@@ -73,6 +73,18 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary
     );
   }
 
+  // Waiting with no choice of our own: the opponent is sending in a replacement.
+  if (state.phase === "waiting") {
+    return (
+      <div className={styles.actions}>
+        <div className={styles.actionHead}>
+          <p className={styles.waiting}>Your opponent is choosing a replacement…</p>
+          <TimerButton state={state} toggleTimer={toggleTimer} />
+        </div>
+      </div>
+    );
+  }
+
   const forced = state.phase === "switching";
   return (
     <div className={styles.actions}>
