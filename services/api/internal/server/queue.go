@@ -52,6 +52,8 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 		CardID     string `json:"cardId"`
 		Rating     int    `json:"rating"`
 		EntryCents int    `json:"entryCents"`
+		AssetID    string `json:"assetId"`
+		Wallet     string `json:"walletAddress"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -63,6 +65,25 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 	if _, ok := arena.FindCard(req.CardID); !ok {
 		writeError(w, http.StatusBadRequest, "card is not supported in the live arena")
 		return
+	}
+	if (req.AssetID == "") != (req.Wallet == "") {
+		writeError(w, http.StatusBadRequest, "assetId and walletAddress are required together")
+		return
+	}
+	if req.AssetID != "" {
+		if s.collectibles == nil {
+			writeError(w, http.StatusServiceUnavailable, "NFT reader is not configured")
+			return
+		}
+		card, err := s.collectibles.Read(r.Context(), req.AssetID, req.Wallet)
+		if err != nil {
+			writeCollectibleError(w, err)
+			return
+		}
+		if card.Attribute("Category") != "Pokemon" || !strings.EqualFold(card.Attribute("Card Name"), req.CardID) {
+			writeError(w, http.StatusForbidden, "NFT does not match the selected fighter")
+			return
+		}
 	}
 	token, err := randomToken()
 	if err != nil {

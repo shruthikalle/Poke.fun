@@ -24,7 +24,7 @@ async function request<T>(path: string, init?: RequestInit, token?: string): Pro
 
 export const arenaApi = {
   cards: () => request<ArenaCard[]>("/api/arena-cards"),
-  enqueue: (name: string, cardId: string, rating: number, entryCents = 0) => request<ArenaQueueTicket>("/api/arena-queue", { method: "POST", body: JSON.stringify({ name, cardId, rating, entryCents }) }),
+  enqueue: (name: string, cardId: string, rating: number, entryCents = 0, ownedAsset?: { assetId: string; walletAddress: string }) => request<ArenaQueueTicket>("/api/arena-queue", { method: "POST", body: JSON.stringify({ name, cardId, rating, entryCents, ...ownedAsset }) }),
   queueStatus: (ticket: ArenaQueueTicket) => request<ArenaQueueTicket>(`/api/arena-queue/${encodeURIComponent(ticket.id)}`, undefined, ticket.token),
   cancelQueue: async (ticket: ArenaQueueTicket) => {
     const response = await fetch(`${API_URL}/api/arena-queue/${encodeURIComponent(ticket.id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${ticket.token}` } });

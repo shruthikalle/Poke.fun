@@ -171,7 +171,10 @@ export default function LoadoutPage() {
     setFinding(true);
     setNotice(null);
     try {
-      const ticket = await arenaApi.enqueue(playerName, lead.species, rank.rating, Math.round(entry * 100));
+      const ownedAsset = process.env.NEXT_PUBLIC_COLLECTION_SOURCE === "devnet" && session && !lead.rental
+        ? { assetId: lead.key, walletAddress: session.address }
+        : undefined;
+      const ticket = await arenaApi.enqueue(playerName, lead.species, rank.rating, Math.round(entry * 100), ownedAsset);
       tabStorage.remove(ARENA_SESSION_STORAGE_KEY);
       tabStorage.set(ARENA_QUEUE_STORAGE_KEY, JSON.stringify(ticket));
       setQueue(ticket.status === "matched" ? { status: "found", ticket } : { status: "searching", ticket, since: Date.now() });

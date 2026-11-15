@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/base32"
 	"encoding/base64"
@@ -13,15 +14,21 @@ import (
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/arena"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/collectibles"
 )
 
 type Server struct {
-	mu      sync.Mutex
-	matches map[string]*battle.Match
-	arenas  map[string]*arena.Game
-	peers   map[string]map[*arenaPeer]struct{}
-	queue   map[string]*arenaQueueEntry
-	origin  string
+	mu           sync.Mutex
+	matches      map[string]*battle.Match
+	arenas       map[string]*arena.Game
+	peers        map[string]map[*arenaPeer]struct{}
+	queue        map[string]*arenaQueueEntry
+	origin       string
+	collectibles collectibleReader
+}
+
+type collectibleReader interface {
+	Read(context.Context, string, string) (collectibles.Card, error)
 }
 
 type playerRequest struct {
@@ -34,7 +41,11 @@ type attackRequest struct {
 }
 
 func New(origin string) http.Handler {
-	s := &Server{matches: make(map[string]*battle.Match), arenas: make(map[string]*arena.Game), peers: make(map[string]map[*arenaPeer]struct{}), queue: make(map[string]*arenaQueueEntry), origin: origin}
+	return NewWithCollectibles(origin, nil)
+}
+
+func NewWithCollectibles(origin string, reader collectibleReader) http.Handler {
+	s := &Server{matches: make(map[string]*battle.Match), arenas: make(map[string]*arena.Game), peers: make(map[string]map[*arenaPeer]struct{}), queue: make(map[string]*arenaQueueEntry), origin: origin, collectibles: reader}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -49,6 +60,7 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("GET /api/arena-cards", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, arena.Cards())
 	})
+	mux.HandleFunc("GET /api/collectibles/{id}", s.getCollectible)
 	mux.HandleFunc("POST /api/arenas", s.createArena)
 	mux.HandleFunc("POST /api/arenas/{id}/join", s.joinArena)
 	mux.HandleFunc("GET /api/arenas/{id}", s.getArena)
