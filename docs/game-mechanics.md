@@ -251,10 +251,12 @@ matchmaking reports an error.
 The server keeps its own Pokémon database, so no battle depends on what a
 browser sends or on PokéAPI being up mid-match.
 
-- **What's in it.** Every species the card catalog can produce (201 today, one
-  per card in `apps/web/lib/cards/catalog.generated.json`): name, National Dex
-  number, types, base stats, sprite, power tier, and **every damaging move it can
-  learn**. Level-up moves come with the level they're learned at; TM, tutor and
+- **What's in it.** **Every Pokémon**: all 1,025 species' default forms, plus
+  the 189 alternate forms printed on cards (Alolan, Galarian, Hisuian and
+  Paldean forms, Mega, Gigantamax and Primal). Cosmetic and event forms (Pikachu
+  in a cap, Totem Pokémon) are left out. Each has its name, National Dex number,
+  base species, types, base stats, sprite, power tier, and **every damaging move
+  it can learn**. Level-up moves come with the level they're learned at; TM, tutor and
   egg moves are listed separately. Each move (type, physical/special, power,
   accuracy, PP) is stored once in a shared move table. The catalog's card →
   species mapping (set aliases and card numbers) is included too.
@@ -267,10 +269,39 @@ browser sends or on PokéAPI being up mid-match.
   the Go binary and read through the `pokedex` package. It's versioned with the
   card catalog, so every server runs the same reviewed data (PRD N-02).
 - **Updating it.** Run `node scripts/build-pokedex.mjs` from the repo root and
-  commit the new `pokedex.json`. Re-run it after `npm run catalog` adds card sets,
-  so every new card has a fighter. Responses are cached in `scripts/.cache/pokeapi/`
-  (`--refresh` downloads again). A few species, like Ditto, learn no damaging
-  move; the battle engines give them standard Normal-type moves.
+  commit the new `pokedex.json` and `apps/web/lib/cards/species.generated.json`
+  (the browser's name index). Re-run it when PokéAPI adds Pokémon, or after
+  `npm run catalog` changes the card catalog. Responses are cached in `scripts/.cache/pokeapi/`
+  (`--refresh` downloads again). Seven species (Ditto, Smeargle, Wobbuffet,
+  Wynaut, Pyukumuku, Cosmog and Cosmoem) learn no damaging move; the battle
+  engines give them standard Normal-type moves.
+
+### Which Pokémon a card is
+
+Any Pokémon card can battle, not only the five sets in the card catalog.
+
+1. **Catalog cards** are matched by set and number (Base Set #58 → Pikachu),
+   which also gives the exact form and the card's own power tier.
+2. **Any other card** is matched by its **printed name**, on both the loadout
+   (`lib/cards/cardNames.ts`) and the server (`pokedex.SpeciesForCardName`),
+   which follow the same rules:
+   - Parentheticals, "with …" clauses and an owner are dropped: "Pikachu with
+     Grey Felt Hat" and "Team Rocket's Mewtwo ex" name Pikachu and Mewtwo.
+   - The Pokémon is the longest run of up to four words that is a species' name,
+     so surrounding words don't matter: "Dark Charizard", "Radiant Charizard",
+     "Infernape LV.X", "Garchomp C", "Tapu Koko GX", "Mr. Mime", "Type: Null".
+     Accents and ♀/♂ are handled ("Flabebe", "Nidoran ♀").
+   - Form markers pick the variant when the species has it: "Galarian
+     Rapidash V" → Galarian Rapidash, "M Charizard EX" or "Mega Charizard X ex"
+     → Mega Charizard X, "Primal Groudon EX" → Primal Groudon, "Charizard VMAX"
+     → Gigantamax Charizard. Between twin forms the card's other words decide:
+     "Single Strike Urshifu VMAX".
+   - A plain name means the default form ("Deoxys" → `deoxys-normal`). A name
+     shared by two species is never guessed: "Nidoran" alone isn't matched.
+   - Cards that name no Pokémon (Trainer, Energy) can't battle.
+
+   The 45 shared cases in `services/api/internal/pokedex/testdata/card_names.json`
+   are checked against the Go resolver, and both resolvers agree on all of them.
 
 ## Live arena (`/battle/live`)
 
@@ -284,7 +315,7 @@ higher HP percentage wins.
 
 ### Fighters
 
-**Every species in the Pokédex is a fighter.** Its numbers are derived from its
+**Every Pokémon in the Pokédex is a fighter** (1,214 with forms). Its numbers are derived from its
 PokéAPI data by fixed rules, calibrated so the original hand-tuned Pikachu and
 Charmander keep the same feel (Thunderbolt still hits Charmander for 26).
 
@@ -349,11 +380,12 @@ median between 5 and 10 seconds.
 - **Guests** borrow tier-1 fighters (Pikachu, Charmander and the shared rental
   pool), so any two guests can be paired.
 - **Devnet NFTs.** When a player queues with a Solana devnet card, the server
-  reads the NFT and checks it is the selected fighter. It maps the card's set and
-  number through the card catalog (Base Set #58 → Pikachu), falling back to the
-  species' display name ("Mr. Mime" → `mr-mime`) for test NFTs without those
-  attributes. An NFT that isn't the selected fighter is refused.
-- `GET /api/arena-cards` lists every fighter with its derived stats and moves.
+  reads the NFT and checks it is the selected fighter, identifying the card as
+  in [Which Pokémon a card is](#which-pokémon-a-card-is): by set and number for
+  catalog cards, by printed name otherwise ("Dark Charizard" from Team Rocket →
+  Charizard). An NFT that isn't the selected fighter is refused.
+- `GET /api/arena-cards` lists every fighter (1,214, gzipped to about 67 KB);
+  `?ids=pikachu,charizard` returns just those, which is what the loadout uses.
   `/arena` lets anyone pick any fighter (searchable) and enter the same queue.
 
 ---
@@ -373,8 +405,9 @@ live in other services and branches and do not change these rules.
 
 | Concern | File |
 | --- | --- |
-| Pokédex dataset (PokéAPI import) | `scripts/build-pokedex.mjs` → `services/api/internal/pokedex/pokedex.json` |
-| Pokédex lookups and card → species mapping | `services/api/internal/pokedex/{pokedex,cards}.go` |
+| Pokédex dataset (PokéAPI import) | `scripts/build-pokedex.mjs` → `services/api/internal/pokedex/pokedex.json` and `apps/web/lib/cards/species.generated.json` |
+| Pokédex lookups, card → species by set/number or name | `services/api/internal/pokedex/{pokedex,cards}.go` |
+| Card → species in the browser | `apps/web/lib/cards/mapping.ts` (catalog), `cardNames.ts` (any other card) |
 | Live arena — fighters from the Pokédex, damage | `services/api/internal/arena/fighters.go` |
 | Live arena — real-time simulation | `services/api/internal/arena/arena.go` |
 | Live arena HTTP, WebSocket and queue | `services/api/internal/server/{arena,queue}.go` |

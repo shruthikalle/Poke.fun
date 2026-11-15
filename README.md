@@ -20,7 +20,7 @@ docs/                             Product, architecture and game-mechanics docs
 
 The Go server decides battle outcomes. The live arena simulates both players at the same time; the older modes resolve hidden turn choices.
 
-- **Live arena (`/battle/live`).** One level-50 fighter per player: any of the 201 species a card in the catalog can become, with stats and moves derived from PokéAPI data. Players are only paired with the same power tier. Move, aim, dodge, and use basic and special attacks in real time. The server simulates movement and attacks at 20 ticks per second and broadcasts snapshots over WebSocket. Knock out the opponent within 90 seconds; a timeout compares remaining HP percentages.
+- **Live arena (`/battle/live`).** One level-50 fighter per player: any Pokémon (all 1,025 species plus Mega, Gigantamax, Primal and regional forms), with stats and moves derived from PokéAPI data. Any Pokémon card can battle, recognised by set and number or by its printed name. Players are only paired with the same power tier. Move, aim, dodge, and use basic and special attacks in real time. The server simulates movement and attacks at 20 ticks per second and broadcasts snapshots over WebSocket. Knock out the opponent within 90 seconds; a timeout compares remaining HP percentages.
 
 - **Team battle (`/battle`).** One creature (Champion 1v1) or three (Squad of 3). Each turn you pick a move or a switch. Switches happen first, then moves in speed order. Damage uses the creatures' PokéAPI stats with type effectiveness, a same-type bonus, accuracy, crits and limited PP. When a creature faints, only its owner chooses the replacement. The last player with a creature standing wins. Online matches run a 150-second turn clock that the server enforces.
 - **One-card duel (`/play`).** Each card has a quick attack (free, builds one energy) and a heavy attack (costs two energy, carries the card's element). Both attacks land at the same time, so both cards can be knocked out together for a draw. A 60-second turn deadline auto-plays the quick attack.
@@ -47,7 +47,7 @@ npm run dev
 The frontend routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
-- `/loadout`: pick a card, select a demo entry, and queue for the live arena. Every card in the catalog can fight; the panel shows its arena moves and tier.
+- `/loadout`: pick a card, select a demo entry, and queue for the live arena. Every Pokémon card can fight; the panel shows its arena moves and tier.
 - `/battle/live`: the real-time match opened automatically when two compatible players queue.
 - `/arena`: direct arena controls and match view.
 - `/battle`: the earlier turn-based team battle.
@@ -102,4 +102,4 @@ Matches, team battles and the matchmaking queue are in memory and disappear when
 
 ### Pokémon data
 
-The Go server's Pokémon database (`services/api/internal/pokedex/pokedex.json`) holds every species the card catalog can produce, with types, base stats, sprite, power tier and every damaging move it can learn, plus the card → species mapping. Rebuild it from PokéAPI with `node scripts/build-pokedex.mjs` from the repo root, and re-run it after `npm run catalog` adds card sets. See [`docs/game-mechanics.md`](docs/game-mechanics.md#pokédex-data).
+The Go server's Pokémon database (`services/api/internal/pokedex/pokedex.json`) holds every Pokémon (1,214 entries with card forms), with types, base stats, sprite, power tier and every damaging move it can learn, plus the card → species mapping. Rebuild it from PokéAPI with `node scripts/build-pokedex.mjs` from the repo root; it also writes the browser's card-name index, `apps/web/lib/cards/species.generated.json`. See [`docs/game-mechanics.md`](docs/game-mechanics.md#pokédex-data).
