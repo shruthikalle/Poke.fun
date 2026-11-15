@@ -80,8 +80,30 @@ polling demo.
 
 ## Out of scope for v1.0.0
 
-Wallet login, NFT ownership/eligibility, matchmaking, multi-card teams and
-switching, and any staking or escrow. Those live in other services and branches;
-they must not change these authoritative rules. The richer client-side battle
-screen (`/battle`) is a standalone mock and does not use these rules yet —
-unifying it onto this server is future work.
+Wallet login, NFT ownership/eligibility, matchmaking, and any staking or escrow.
+Those live in other services and branches; they must not change these
+authoritative rules.
+
+## Rich team battle (`/battle`)
+
+The `/battle` screen uses a second, richer ruleset served by the
+`internal/livebattle` package — teams of up to three creatures, PP-limited
+moves, accuracy, crits, the physical/special split, speed-ordered turns and
+switching, scored from PokéAPI stats. It is **also server-authoritative**: the
+web client builds the creature teams (species stats and sprites come from
+PokéAPI) and posts them to `POST /api/battles`; the server runs the battle,
+including the AI opponent, and returns the ordered `BattleEvent`s the client
+reducer renders. `ServerBattleStream` replaces the former client-side
+`MockBattleStream`; the mock remains only as an offline fallback
+(`NEXT_PUBLIC_LIVE_BATTLE=0`).
+
+Endpoints: `POST /api/battles` (create + opening events), and, authenticated by
+the returned token, `POST /api/battles/{id}/choice|timer|chat|rematch`. Each
+battle runs from a per-match seed, so a given sequence of choices is
+reproducible. The type chart is shared with the one-card engine
+(`battle.TypeMultiplier`).
+
+The two engines are not yet unified; the one-card simultaneous model above is
+the canonical staking-path ruleset, while the rich model drives the richer
+single-player-vs-AI `/battle` experience. Real-time two-player play and merging
+the models remain future work.

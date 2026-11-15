@@ -40,7 +40,7 @@ The frontend has four routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
 - `/loadout`: pick a card from your collection, a format (Champion 1v1 or Squad of 3) and an entry amount, see your rank, then find a match.
-- `/battle`: battle screen for the matched cards. It runs on its own with mock data, so the Go API is not needed. Opening it without a match sends you to `/loadout`.
+- `/battle`: battle screen for the matched cards. It is now **server-authoritative**: the client sends the matched teams to the Go API, which runs the battle (including the AI opponent) and returns the events to display. Start the Go API for `/battle` to work, or set `NEXT_PUBLIC_LIVE_BATTLE=0` to fall back to the offline client-side simulation. Opening it without a match sends you to `/loadout`.
 - `/play`: the original one-card demo that talks to the Go API.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
@@ -53,7 +53,7 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 | Seam | Interface | Mock | TODO |
 | --- | --- | --- | --- |
-| Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `MockBattleStream` | QuickNode Streams / Go API match feed |
+| Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `ServerBattleStream` → Go API (authoritative); `MockBattleStream` offline | Real-time 2-player feed (QuickNode Streams / WebSocket) |
 | Win odds | `OddsProvider`, `useOdds` (`lib/markets`) | `MockOddsProvider` | Gemini prediction markets |
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
 | Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | `useMockBackend` (any 6-digit code) when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
