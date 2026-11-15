@@ -61,9 +61,10 @@ func TypeMultiplier(attack, defender Element) float64 {
 	}
 }
 
-// Effectiveness labels a multiplier for the turn log, so both clients can show
-// the same "super effective" message the frontend already renders.
-func effectivenessLabel(mult float64) string {
+// EffectivenessLabel labels a type multiplier for the turn log, so both clients
+// show the same "super effective" message the frontend renders. Shared with the
+// livebattle engine so the two rulesets describe effectiveness identically.
+func EffectivenessLabel(mult float64) string {
 	switch {
 	case mult == 0:
 		return "immune"

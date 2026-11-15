@@ -220,7 +220,7 @@ func attackDamage(attacker, defender *Player, atk Attack) (int, string) {
 	if mult > 0 && damage < 1 {
 		damage = 1
 	}
-	return damage, effectivenessLabel(mult)
+	return damage, EffectivenessLabel(mult)
 }
 
 func (m *Match) resolve(auto [2]bool) {
