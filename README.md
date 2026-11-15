@@ -1,6 +1,6 @@
 # Poke.fun
 
-A working one-card, turn-based 1v1 demo. Two players can create and join a room, select fictional sample cards, attack, and see the same server-decided result. Wallet login, NFT verification, matchmaking, and staking are not implemented yet.
+A one-card, real-time 1v1 arena plus an earlier turn-based demo. Two players enter a live queue, get paired automatically, move and attack at the same time, and see the same Go server-decided result. The live arena is free to play; NFT ownership is displayed for reference but is not required or verified by the arena server. A separately tested Solana wager contract exists under `contracts/`, but the web and Go apps have not been wired to it; paid entries shown in the UI are demos.
 
 ## Repository layout
 
@@ -8,14 +8,15 @@ A working one-card, turn-based 1v1 demo. Two players can create and join a room,
 apps/web/                         Next.js frontend and battle screen
 services/api/cmd/server/          Go API entry point
 services/api/internal/battle/     Card catalog and battle rules
+services/api/internal/arena/      Live battle simulation and card rules
 services/api/internal/server/     HTTP match endpoints
-contracts/                        Solana escrow design and future code
+contracts/                        Solana wager escrow program and local validator test
 docs/                             Architecture and rules decisions
 ```
 
 ## Current rules
 
-Each player uses one card. Both submit an attack; the Go server resolves both simultaneously. Quick attacks generate one energy, while stronger attacks cost two energy. The first card at zero HP loses. If both reach zero on the same turn, the match is a draw.
+In `/arena`, each player uses one card at level 50. Pikachu and Charmander have distinct HP, speed, range, damage, and cooldowns chosen for this game, not read from NFT metadata. Basic hits gain one energy (maximum three). Specials cost two energy, show a 0.4-second warning area, and lock the attacker in place until they fire. Pikachu's Thunderbolt strikes opponents within its radius; Charmander's Flamethrower hits a cone that can be aimed with the mouse or auto-aimed. A dodge dashes away or in the movement direction and avoids damage briefly, then goes on cooldown. The Go server simulates movement and attacks 20 times a second and broadcasts snapshots 10 times a second. Knock out the opponent before 90 seconds; at time, the higher HP percentage wins. Simultaneous knockouts and equal percentages are draws. The earlier `/play` route keeps its turn-based energy rules.
 
 ## Run locally
 
@@ -37,9 +38,15 @@ npm run dev
 The frontend has four routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
-- `/loadout`: pick a card from your collection, a format (Champion 1v1 or Squad of 3) and an entry amount, see your rank, then find a match.
+- `/loadout`: pick Pikachu or Charmander from your Devnet collection or guest rentals, select a demo entry, and join the live queue. No funds move.
 - `/battle`: battle screen for the matched cards. It runs on its own with mock data, so the Go API is not needed. Opening it without a match sends you to `/loadout`.
 - `/play`: the original one-card demo that talks to the Go API.
+- `/arena`: live two-player arena with automatic matchmaking, keyboard or touch controls, and reconnect in the same tab.
+- `/battle/live`: the live match opened automatically after matchmaking on `/loadout`.
+
+To test matchmaking, open `http://localhost:3000/loadout` in two separate browsers or tabs and click **Find match** in each. The first player stays on the loadout page while waiting; the second is paired automatically if both selected the same demo entry. The queue selects the waiting player with the closest demo rating and opens `/battle/live` for both. A guest can select a free Pikachu or Charmander rental. The queue ticket and match token are held in each tab's session storage, so a refresh reconnects that player. Use WASD or arrow keys to move, J or Space for the basic attack, K for the special, and Shift to dodge. Touch controls are below the arena.
+
+For a friend on another device, both browsers must reach the same web app and Go API. Run the web app with `npm run dev -- --hostname 0.0.0.0`, set `NEXT_PUBLIC_API_URL=http://YOUR_LAN_IP:8080` in `apps/web/.env.local`, restart Next, and run the Go API with `WEB_ORIGIN=http://YOUR_LAN_IP:3000`. Both players should open `http://YOUR_LAN_IP:3000/loadout` on the same network. For internet play, deploy both services over HTTPS/WSS and set `NEXT_PUBLIC_API_URL` and `WEB_ORIGIN` to the public origins. Queue and matches are held in one Go process, so use one API instance for this demo.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
@@ -60,8 +67,8 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 | Card → creature | `CARD_MAPPING`, `resolveCard` (`lib/cards/mapping.ts`) | Versioned table | Reviewed card list |
 | Creature data | `SpeciesService` (`lib/pokemon`) | Live PokéAPI, cached in memory + localStorage | — |
 | Rank | `RankService` (`lib/rank`) | `MockRankService` (localStorage Elo) | Go API ratings |
-| Entry and winnings | `StakeService` (`lib/stake`) | `MockStakeService` (no money moves) | Devnet USDC escrow, after legal review |
-| Matchmaking | `MatchmakingService` (`lib/match`) | `MockMatchmakingService` | Go API queue |
+| Entry and winnings | `StakeService` (`lib/stake`) | `MockStakeService` (no money moves) | Connect wallet signing and Go matchmaking to the tested `contracts/` escrow; use devnet test tokens first |
+| Matchmaking | `lib/arena.ts` + Go `/api/arena-queue` for live play | `/battle` still uses `MockMatchmakingService` | Server-verified rating and more formats |
 
 Creature stats, moves and sprites come from [PokéAPI](https://pokeapi.co); card art comes from the Pokémon TCG API image CDN. Pokémon is a trademark of Nintendo / The Pokémon Company, so get a rights review before any public launch.
 
@@ -72,10 +79,10 @@ Run backend tests with `cd services/api && go test ./...` and check the frontend
 1. Replace the fictional catalog with a curated, verified battle catalog for supported collectibles.
 2. Add persistent match storage, reconnect, turn deadlines, and forfeit/refund rules.
 3. Add Solana wallet login and verify ownership of supported card NFTs.
-4. Add matchmaking within compatible formats.
-5. Add devnet escrow and settlement after the battle protocol is stable.
+4. Extend matchmaking beyond the free one-card Pikachu/Charmander format with server-verified rating and card eligibility.
+5. Connect the tested devnet escrow to wallet signing, queue tickets, and the Go referee after binding wallet addresses to player sessions.
 
-Matches are in memory and disappear when the API restarts. Player tokens are for this local demo only; do not use this code to hold stakes. Real-money or card staking requires legal review before a public launch. The Go server is currently a trusted referee.
+Matches and queue entries are in memory and disappear when the API restarts. Player tokens are for this free demo only; do not use this code to hold stakes. Real-money or card staking needs wallet signature login, verified card ownership, escrow and settlement, dispute and disconnect rules, and legal review before a public launch. The Go server is currently a trusted referee.
 
 ### Card catalog and summon gallery
 

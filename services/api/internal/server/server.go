@@ -11,12 +11,16 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/shruthikalle/Poke.fun/services/api/internal/arena"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
 )
 
 type Server struct {
 	mu      sync.Mutex
 	matches map[string]*battle.Match
+	arenas  map[string]*arena.Game
+	peers   map[string]map[*arenaPeer]struct{}
+	queue   map[string]*arenaQueueEntry
 	origin  string
 }
 
@@ -30,7 +34,7 @@ type attackRequest struct {
 }
 
 func New(origin string) http.Handler {
-	s := &Server{matches: make(map[string]*battle.Match), origin: origin}
+	s := &Server{matches: make(map[string]*battle.Match), arenas: make(map[string]*arena.Game), peers: make(map[string]map[*arenaPeer]struct{}), queue: make(map[string]*arenaQueueEntry), origin: origin}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -42,6 +46,16 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("POST /api/matches/{id}/join", s.joinMatch)
 	mux.HandleFunc("GET /api/matches/{id}", s.getMatch)
 	mux.HandleFunc("POST /api/matches/{id}/attacks", s.submitAttack)
+	mux.HandleFunc("GET /api/arena-cards", func(w http.ResponseWriter, _ *http.Request) {
+		writeJSON(w, http.StatusOK, arena.Cards())
+	})
+	mux.HandleFunc("POST /api/arenas", s.createArena)
+	mux.HandleFunc("POST /api/arenas/{id}/join", s.joinArena)
+	mux.HandleFunc("GET /api/arenas/{id}", s.getArena)
+	mux.HandleFunc("GET /api/arenas/{id}/ws", s.arenaSocket)
+	mux.HandleFunc("POST /api/arena-queue", s.enqueueArena)
+	mux.HandleFunc("GET /api/arena-queue/{id}", s.getArenaQueue)
+	mux.HandleFunc("DELETE /api/arena-queue/{id}", s.cancelArenaQueue)
 	return s.withCORS(mux)
 }
 
@@ -51,7 +65,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", s.origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

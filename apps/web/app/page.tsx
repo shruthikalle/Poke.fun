@@ -291,7 +291,7 @@ export default function Landing() {
 
         <footer className={styles.footer}>
           <span>© Poke.fun · Creature data and sprites from PokéAPI. Pokémon is a trademark of Nintendo / The Pokémon Company; this demo is not affiliated with them.</span>
-          <Link href="/play">Classic one-card demo →</Link>
+          <Link href="/loadout">Live 1v1 matchmaking →</Link>
         </footer>
       </main>
 
