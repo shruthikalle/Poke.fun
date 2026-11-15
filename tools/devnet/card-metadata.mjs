@@ -2,8 +2,17 @@ import { createGenericFile } from "@metaplex-foundation/umi";
 import sharp from "sharp";
 
 export const cards = [
-  { name: "Pikachu", number: "58/102", id: "base1-58", hue: "#f8ca58", icon: "P" },
-  { name: "Charmander", number: "46/102", id: "base1-46", hue: "#fa9a62", icon: "C" },
+  { name: "Pikachu", number: "58/102", id: "base1-58", hue: "#f8ca58", icon: "P", ownerIndex: 0 },
+  { name: "Charmander", number: "46/102", id: "base1-46", hue: "#fa9a62", icon: "C", ownerIndex: 1 },
+  { name: "Blastoise", number: "2/102", id: "base1-2", image: "https://images.pokemontcg.io/base1/2.png", ownerIndex: 0 },
+  { name: "Raichu", number: "14/102", id: "base1-14", image: "https://images.pokemontcg.io/base1/14.png", ownerIndex: 0 },
+  { name: "Venusaur", number: "15/102", id: "base1-15", image: "https://images.pokemontcg.io/base1/15.png", ownerIndex: 1 },
+  { name: "Gyarados", number: "6/102", id: "base1-6", image: "https://images.pokemontcg.io/base1/6.png", ownerIndex: 1 },
+  { name: "Bulbasaur", number: "44/102", id: "base1-44", image: "https://images.pokemontcg.io/base1/44.png", ownerIndex: 0 },
+  { name: "Charmander", number: "46/102", id: "base1-46", image: "https://images.pokemontcg.io/base1/46.png", ownerIndex: 0 },
+  { name: "Squirtle", number: "63/102", id: "base1-63", image: "https://images.pokemontcg.io/base1/63.png", ownerIndex: 0 },
+  { name: "Charizard", number: "4/102", id: "base1-4", image: "https://images.pokemontcg.io/base1/4.png", ownerIndex: 0 },
+  { name: "Venusaur", number: "15/102", id: "base1-15", image: "https://images.pokemontcg.io/base1/15.png", ownerIndex: 0 },
 ];
 
 function svg(label, icon, color) {

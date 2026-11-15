@@ -72,13 +72,8 @@ async function main() {
     state = { network: "devnet", owners: [firstOwner, secondOwner], collection: null, assets: [] };
   }
 
-  const [collectionImage, firstImage, secondImage] = await umi.uploader.upload([
-    await imageFile("Test Collection", "★", "#83dbc6", "pokefun-test-collection.png"),
-    await imageFile("Pikachu", "P", cards[0].hue, "pokefun-test-pikachu.png"),
-    await imageFile("Charmander", "C", cards[1].hue, "pokefun-test-charmander.png"),
-  ]);
-
   if (!state.collection) {
+    const [collectionImage] = await umi.uploader.upload([await imageFile("Test Collection", "★", "#83dbc6", "pokefun-test-collection.png")]);
     const uri = await umi.uploader.uploadJson(collectionMetadata(collectionImage));
     const collectionSigner = generateSigner(umi);
     console.log("Creating devnet test collection...");
@@ -88,11 +83,11 @@ async function main() {
   }
 
   const collection = await fetchCollection(umi, publicKey(state.collection));
-  for (let i = 0; i < cards.length; i++) {
-    const card = cards[i];
-    const owner = recipients[i];
+  for (const card of cards) {
+    const owner = recipients[card.ownerIndex];
     if (state.assets.some((asset) => asset.id === card.id && asset.owner === owner)) continue;
-    const uri = await umi.uploader.uploadJson(cardMetadata(card, i === 0 ? firstImage : secondImage));
+    const image = card.image ?? (await umi.uploader.upload([await imageFile(card.name, card.icon, card.hue, `pokefun-test-${card.name.toLowerCase()}.png`)]))[0];
+    const uri = await umi.uploader.uploadJson(cardMetadata(card, image));
     const asset = generateSigner(umi);
     console.log(`Minting ${card.name} to ${owner}...`);
     await create(umi, {
