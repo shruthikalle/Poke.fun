@@ -11,7 +11,7 @@
 
 Poke.fun is a browser-based, turn-based 1v1 card battle game. A player selects one collectible card, gets matched with another player, chooses attacks, and tries to knock out the opposing card. The long-term concept lets players stake equal amounts of USDC or mutually agreed tokenized physical cards, with the winner receiving the stakes. The hackathon version must first prove that the battle itself is fun, fair, and reliable.
 
-The current repository contains a playable free-match demo with fictional cards. It does **not** connect wallets, verify NFTs, or hold stakes. This PRD separates that working base from proposed hackathon additions and later production features.
+The current repository contains playable free matches: a one-card duel with fictional cards, and a team battle with creatures built from PokéAPI that two real players can play through matchmaking (or one player against a server AI). Sign-in runs only in the web client; the server does **not** verify wallets or NFTs, and nothing holds stakes. This PRD separates that working base from proposed hackathon additions and later production features.
 
 ## 2. Problem and opportunity
 

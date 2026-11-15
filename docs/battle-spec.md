@@ -3,7 +3,6 @@
 > For a detailed, example-driven walkthrough of both battle engines, see
 > [`game-mechanics.md`](game-mechanics.md). This file is the terse canonical spec.
 
-
 The authoritative battle rules, implemented by the Go server in
 `services/api/internal/battle`. The server is the referee: it owns every HP,
 energy, turn and winner value, and the web client only displays what the server
@@ -48,7 +47,7 @@ A non-immune hit always deals at least 1 damage. Negative HP is clamped to 0.
 ### Type effectiveness
 
 `TypeMultiplier` uses the 18-type chart in `battle/types.go`, which mirrors the
-frontend chart in `apps/web/lib/battle/roster.ts` so the server and the display
+frontend chart in `apps/web/lib/battle/typeChart.ts` so the server and the display
 layer agree. Quick attacks are element **Normal** (neutral chip damage); heavy
 attacks carry the card's element, so they earn STAB and can be super-effective
 or resisted. The turn log records each attack's effectiveness as `super`,
@@ -84,8 +83,9 @@ polling demo.
 
 ## Out of scope for v1.0.0
 
-Wallet login, NFT ownership/eligibility, matchmaking, and any staking or escrow.
-Those live in other services and branches; they must not change these
+The one-card duel pairs players by room code only; matchmaking exists for the
+team battle below. Wallet login, NFT ownership/eligibility and any staking or
+escrow live in other services and branches; they must not change these
 authoritative rules.
 
 ## Team battle (`/battle`)

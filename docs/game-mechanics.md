@@ -22,9 +22,9 @@ different screens and model the game at different depths.
 | Data | Fictional cards in `cards.json` | Creatures built from PokéAPI |
 
 Both are server-authoritative: the Go server owns every HP, energy, PP, faint
-and winner value, and the web client only displays what the server reports. A
-match locks its rules when it starts, so a later balance change cannot alter a
-match in progress.
+and winner value, and the web client only displays what the server reports.
+Each match locks its cards or teams when it starts, and the one-card duel also
+records its rules version, so a later change cannot alter a match in progress.
 
 ### The unified turn model
 
@@ -176,7 +176,11 @@ In a single-player battle the server plays side p2. It chooses **at the same
 moment as the human**, against the creature the human currently has out, so it
 cannot react to a switch. It scores each usable move by
 `power × effectiveness × random(0.7–1.3)`, favouring strong, super-effective
-moves without being perfectly predictable.
+moves without being perfectly predictable. The AI always replaces a fainted
+creature with its next healthy one.
+
+Leaving a battle against the AI and coming back starts a new battle; only
+two-player matches can be rejoined.
 
 ### Two-player matches
 
@@ -247,7 +251,8 @@ matchmaking and battles.
 To keep the implemented mechanics honest about their scope, the engines do **not**
 include: status conditions (sleep/poison/burn/etc.), abilities, held items,
 weather/terrain, stat-stage changes, or multi-hit and priority moves.
-Matchmaking does not yet use rating bands, and there are no spectators.
+Matchmaking does not yet use rating bands or share player records (a real
+opponent shows as 0–0), and there are no spectators.
 Battles live **in server memory**: a server restart ends them (PRD R-01
 persistence is still open). Wallet login, NFT ownership/eligibility and staking
 live in other services and branches and do not change these rules.

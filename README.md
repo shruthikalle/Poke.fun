@@ -1,23 +1,27 @@
 # Poke.fun
 
-A working one-card, turn-based 1v1 demo. Two players can create and join a room, select fictional sample cards, attack, and see the same server-decided result. Wallet login, NFT verification, matchmaking, and staking are not implemented yet.
+A browser card-battle game where the Go server is the referee. Players bring a collectible card (or a team of three), get matched with a real opponent, choose moves in secret each turn, and see the same server-decided result. There are two battle modes: the **team battle** at `/battle` (creatures built from PokéAPI, two-player matchmaking with an AI fallback) and the original **one-card duel** at `/play` (fictional sample cards, room codes). Server-side wallet and NFT verification and staking are not implemented yet.
 
 ## Repository layout
 
 ```text
 apps/web/                         Next.js frontend and battle screen
 services/api/cmd/server/          Go API entry point
-services/api/internal/battle/     Card catalog and battle rules
-services/api/internal/server/     HTTP match endpoints
+services/api/internal/battle/     One-card duel: sample cards, rules, shared type chart
+services/api/internal/livebattle/ Team battle engine (hidden choices, switching, AI)
+services/api/internal/server/     HTTP endpoints and the two-player matchmaking queue
 contracts/                        Solana escrow design and future code
-docs/                             Architecture and rules decisions
+docs/                             Product, architecture and game-mechanics docs
 ```
 
-## Current rules
+## Game mechanics
 
-Each player uses one card. Both submit an attack; the Go server resolves both simultaneously. Quick attacks are neutral and generate one energy, while stronger attacks cost two energy and carry the card's element, so they earn a same-type bonus and can be super-effective or resisted against the opponent's type. Each turn has a 60-second deadline; a player who misses it has their quick attack auto-played. The first card at zero HP loses. If both reach zero on the same turn, the match is a draw.
+Both battle modes share one rule: **each player chooses in secret, and the turn resolves only once both have chosen.** The Go server decides every outcome; the browser only displays it.
 
-The full ruleset is documented in [`docs/battle-spec.md`](docs/battle-spec.md) and implemented authoritatively in `services/api/internal/battle`. For a detailed walkthrough of both battle engines (the one-card duel and the rich `/battle` team battle), see [`docs/game-mechanics.md`](docs/game-mechanics.md).
+- **Team battle (`/battle`).** One creature (Champion 1v1) or three (Squad of 3). Each turn you pick a move or a switch. Switches happen first, then moves in speed order. Damage uses the creatures' PokéAPI stats with type effectiveness, a same-type bonus, accuracy, crits and limited PP. When a creature faints, only its owner chooses the replacement. The last player with a creature standing wins. Online matches run a 150-second turn clock that the server enforces.
+- **One-card duel (`/play`).** Each card has a quick attack (free, builds one energy) and a heavy attack (costs two energy, carries the card's element). Both attacks land at the same time, so both cards can be knocked out together for a draw. A 60-second turn deadline auto-plays the quick attack.
+
+Read [`docs/game-mechanics.md`](docs/game-mechanics.md) for the full rules, formulas, matchmaking and API, and [`docs/battle-spec.md`](docs/battle-spec.md) for the terse canonical spec. The engines live in `services/api/internal/livebattle` and `services/api/internal/battle`.
 
 ## Run locally
 
@@ -36,12 +40,15 @@ npm install
 npm run dev
 ```
 
-The frontend has four routes:
+The frontend routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
 - `/loadout`: pick a card from your collection, a format (Champion 1v1 or Squad of 3) and an entry amount, see your rank, then find a match.
-- `/battle`: the team battle, **server-authoritative** and **two-player**. Find match on `/loadout` pairs you with a real player in the same format, card tier and entry through the Go API queue; if nobody turns up within 20 seconds you battle the server AI instead. To try two-player locally, open `/loadout` in two browsers (or a normal and a private window) and press Find match in both. Without the Go API, single-player battles fall back to the offline client-side simulation; `NEXT_PUBLIC_LIVE_BATTLE=0` forces offline mode. Opening it without a match sends you to `/loadout`.
+- `/battle`: the team battle. Find match on `/loadout` pairs you with a real player through the Go API queue, or with the server AI if nobody compatible turns up within 20 seconds. Opening it without a match sends you to `/loadout`.
+- `/market` and `/collection`: the card marketplace and your card collection (mock data).
 - `/play`: the original one-card demo that talks to the Go API.
+
+To try a **two-player team battle** locally, open `http://localhost:3000/loadout` in two browsers (or a normal and a private window). In both, pick the same format and entry and a lead card with the same power tier (the pips on each card), then press Find match. Players are only paired when all three match. Refreshing `/battle` during a two-player match rejoins it. Without the Go API, single-player battles fall back to an offline simulation in the browser; set `NEXT_PUBLIC_LIVE_BATTLE=0` to force offline mode.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
@@ -49,9 +56,9 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 ### Frontend integration seams
 
-`/loadout`, `/battle`, `/market` and `/collection` read all live data through typed interfaces in `apps/web/lib`, each backed by a mock for now. To swap in a real service, implement the interface; the UI code doesn't change.
+`/loadout`, `/battle`, `/market` and `/collection` read all live data through typed interfaces in `apps/web/lib`. Battles and matchmaking use the Go API; the rest are backed by mocks for now. To swap in a real service, implement the interface; the UI code doesn't change.
 
-| Seam | Interface | Mock | TODO |
+| Seam | Interface | Current implementation | TODO |
 | --- | --- | --- | --- |
 | Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `ServerBattleStream` → Go API shared event log (polling); `MockBattleStream` offline | Push transport (WebSocket / QuickNode Streams) instead of polling |
 | Win odds | `OddsProvider`, `useOdds` (`lib/markets`) | `MockOddsProvider` | Gemini prediction markets |
@@ -69,17 +76,17 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 Creature stats, moves and sprites come from [PokéAPI](https://pokeapi.co); card art comes from the Pokémon TCG API image CDN. Pokémon is a trademark of Nintendo / The Pokémon Company, so get a rights review before any public launch.
 
-Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run build`.
+Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run typecheck && npm run build`.
 
 ## Next implementation steps
 
-1. Replace the fictional catalog with a curated, verified battle catalog for supported collectibles.
-2. Add persistent match storage, reconnect, turn deadlines, and forfeit/refund rules.
-3. Add Solana wallet login and verify ownership of supported card NFTs.
-4. Add matchmaking within compatible formats.
-5. Add devnet escrow and settlement after the battle protocol is stable.
+1. Persist matches and the queue so a server restart doesn't end live battles, and define forfeit/refund rules.
+2. Verify wallet sign-in and ownership of supported card NFTs on the server.
+3. Add rating bands to matchmaking and share player records with opponents.
+4. Replace polling with a push transport (WebSocket) for battle updates.
+5. Add devnet escrow and settlement once the battle protocol is stable.
 
-Matches are in memory and disappear when the API restarts. Player tokens are for this local demo only; do not use this code to hold stakes. Real-money or card staking requires legal review before a public launch. The Go server is currently a trusted referee.
+Matches, team battles and the matchmaking queue are in memory and disappear when the API restarts. Player tokens are for this local demo only; do not use this code to hold stakes. Real-money or card staking requires legal review before a public launch. The Go server is currently a trusted referee.
 
 ### Card catalog and summon gallery
 
