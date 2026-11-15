@@ -1,34 +1,35 @@
 # Game mechanics
 
 This document explains, in detail, the battle mechanics implemented in this
-repo: the two battle engines, their rules and formulas, how a turn flows, how two
-players are matched and kept in sync, and how the authoritative server and the
-web client divide responsibility. It is the companion to
+repo: the three battle modes, their rules and formulas, how a turn flows, how two
+players are matched and kept in sync, where the Pokémon data comes from, and how
+the authoritative server and the web client divide responsibility. It is the companion to
 [`battle-spec.md`](battle-spec.md) (the terse canonical spec) and reflects what
 the code actually does today.
 
-## The two engines
+## The battle modes
 
-There are two battle systems, both authoritative on the Go server. They serve
-different screens and model the game at different depths.
+There are three battle systems, all authoritative on the Go server. They serve
+different screens and model the game at different depths. The live arena is the
+main mode: Find match on `/loadout` leads there.
 
-| | One-card duel (`/play`) | Team battle (`/battle`) |
-| --- | --- | --- |
-| Package | `services/api/internal/battle` | `services/api/internal/livebattle` |
-| Team size | 1 card | 1–3 creatures with switching |
-| Turn model | Simultaneous hidden choice, damage applied together | Simultaneous hidden choice, resolved in speed order |
-| Actions | 2 attacks + an energy economy | PP-limited moves + switches |
-| Opponent | A second human (room code) | A second human (matchmaking), or the server AI |
-| Data | Fictional cards in `cards.json` | Creatures built from PokéAPI |
+| | Live arena (`/battle/live`) | Team battle (`/battle`) | One-card duel (`/play`) |
+| --- | --- | --- | --- |
+| Package | `services/api/internal/arena` | `services/api/internal/livebattle` | `services/api/internal/battle` |
+| Team size | 1 fighter | 1–3 creatures with switching | 1 card |
+| Turn model | Real time, 20 ticks per second | Simultaneous hidden choice, resolved in speed order | Simultaneous hidden choice, damage applied together |
+| Actions | Move, aim, dodge, a basic and a special | PP-limited moves + switches | 2 attacks + an energy economy |
+| Opponent | A second human (matchmaking) | A second human (matchmaking), or the server AI | A second human (room code) |
+| Data | Every species in the Pokédex dataset | Creatures built from PokéAPI in the browser | Fictional cards in `cards.json` |
 
-Both are server-authoritative: the Go server owns every HP, energy, PP, faint
+All three are server-authoritative: the Go server owns every HP, energy, PP, faint
 and winner value, and the web client only displays what the server reports.
 Each match locks its cards or teams when it starts, and the one-card duel also
 records its rules version, so a later change cannot alter a match in progress.
 
 ### The unified turn model
 
-Both engines now share the same core rule from the PRD (requirement B-03):
+The two turn-based engines share the same core rule from the PRD (requirement B-03):
 **each player chooses secretly, and the turn resolves only once both have
 chosen.** Neither player ever sees the other's choice before it plays out. They
 differ only in how a resolved turn is applied:
@@ -245,6 +246,118 @@ matchmaking reports an error.
 
 ---
 
+## Pokédex data
+
+The server keeps its own Pokémon database, so no battle depends on what a
+browser sends or on PokéAPI being up mid-match.
+
+- **What's in it.** Every species the card catalog can produce (201 today, one
+  per card in `apps/web/lib/cards/catalog.generated.json`): name, National Dex
+  number, types, base stats, sprite, power tier, and **every damaging move it can
+  learn**. Level-up moves come with the level they're learned at; TM, tutor and
+  egg moves are listed separately. Each move (type, physical/special, power,
+  accuracy, PP) is stored once in a shared move table. The catalog's card →
+  species mapping (set aliases and card numbers) is included too.
+- **Power tier.** 3 for legendary or mythical Pokémon, Mega and Gigantamax forms,
+  and fully evolved (stage 2) species; 2 for a first evolution; 1 for a basic
+  Pokémon. Baby Pokémon don't count as a stage, as in the card game, so Pikachu,
+  Mr. Mime and Hitmonchan are tier 1. These match the tiers in the devnet test
+  card log.
+- **Where it lives.** `services/api/internal/pokedex/pokedex.json`, built into
+  the Go binary and read through the `pokedex` package. It's versioned with the
+  card catalog, so every server runs the same reviewed data (PRD N-02).
+- **Updating it.** Run `node scripts/build-pokedex.mjs` from the repo root and
+  commit the new `pokedex.json`. Re-run it after `npm run catalog` adds card sets,
+  so every new card has a fighter. Responses are cached in `scripts/.cache/pokeapi/`
+  (`--refresh` downloads again). A few species, like Ditto, learn no damaging
+  move; the battle engines give them standard Normal-type moves.
+
+## Live arena (`/battle/live`)
+
+A real-time 1v1 on a 960 × 540 field, served by `services/api/internal/arena`.
+The server steps the match 20 times a second and broadcasts snapshots over
+WebSocket. Each player moves, aims, dodges (a short dash with brief
+invulnerability) and attacks. Basic attacks that land build energy (up to 3); a
+special costs 2 energy, winds up for 0.4 s with a visible telegraph so it can be
+dodged, then fires. Knock the opponent out within 90 seconds; at the buzzer the
+higher HP percentage wins.
+
+### Fighters
+
+**Every species in the Pokédex is a fighter.** Its numbers are derived from its
+PokéAPI data by fixed rules, calibrated so the original hand-tuned Pikachu and
+Charmander keep the same feel (Thunderbolt still hits Charmander for 26).
+
+| | Rule | Pikachu |
+| --- | --- | --- |
+| Max HP | Level-50 HP from base HP, as in the games | 110 |
+| Movement | 160 + base Speed, clamped to 170–300 units/s | 250 |
+| Basic cooldown | 700 − 2.8 × base Speed ms, rounded to 50, clamped to 400–700 | 450 ms |
+| Special cooldown | 6300 − 20 × base Speed ms, rounded to 100, clamped to 3.5–6 s | 4.5 s |
+| Basic range | 140 for everyone | 140 |
+| Special range | 225 for a radius burst, 205 for a cone (±26°) | 225 (radius) |
+
+**Picking the two moves.** A species "leans" physical or special when its Attack
+or Special Attack is at least 20% higher than the other; otherwise it has no
+lean. Level-up moves are considered first, then TM, tutor and egg moves.
+
+- **Basic:** the weakest 100%-accurate move of 35–60 power, in the species' lean
+  (physical when there is none), learned as early as possible. Pikachu → Quick
+  Attack, Charmander → Scratch, Abra → Confusion.
+- **Special:** the strongest move by power × accuracy, in this order of
+  preference: a same-type move of at least 60 power in the species' lean (special
+  when there is none), any same-type move, any move in that category, any move.
+  Pikachu → Thunderbolt, Charmander → Flamethrower, Geodude → Earthquake.
+- Moves whose effect the arena can't honour are never picked: ones that make the
+  user faint (Explosion, Self-Destruct), ones that need sleep or the first turn
+  (Dream Eater, Snore, Fake Out), and delayed hits (Future Sight).
+- **Shape:** Fire, Water, Ice, Grass, Poison, Dragon and Flying specials spray a
+  **cone** ahead of the attacker. Every other type bursts in a **radius** around
+  it.
+
+### Damage
+
+Each hit uses the games' level-50 damage formula, without random rolls or crits
+so the real-time match stays deterministic:
+
+```
+damage = round(((22 × power × Atk / Def) / 50 + 2) × STAB × effectiveness × 0.42)
+```
+
+- Physical moves use the attacker's Attack against the target's Defense; special
+  moves use Special Attack against Special Defense. Power is capped at 120 so no
+  special one-shots.
+- **Specials** get the 1.5× same-type bonus and the full type chart. An immune
+  target takes 0: Pikachu's Thunderbolt does nothing to Onix, and hits a
+  Water/Flying Gyarados for ×4.
+- **Basics are typeless 40-power jabs:** no bonus and no type matchups. That
+  keeps them as reliable chip damage that builds energy. Otherwise a Normal-type
+  basic could never touch a Ghost, and its user could never earn a special.
+- Any landed, non-immune hit deals at least 1. The damage shown on a move button
+  ("≈26 dmg") is against an average target; real hits depend on the opponent.
+
+Within each tier, knocking out an average opponent with basics alone takes about
+7–8 seconds (median), so tiers are similarly paced. A test keeps every tier's
+median between 5 and 10 seconds.
+
+### Matchmaking and cards
+
+- Find match on `/loadout` queues the selected card's fighter
+  (`POST /api/arena-queue`). Players are paired only with the **same entry and
+  the same power tier**, then by the closest rating, so a Mewtwo never faces a
+  Magikarp. Abandoned searches expire after 20 seconds without a heartbeat.
+- **Guests** borrow tier-1 fighters (Pikachu, Charmander and the shared rental
+  pool), so any two guests can be paired.
+- **Devnet NFTs.** When a player queues with a Solana devnet card, the server
+  reads the NFT and checks it is the selected fighter. It maps the card's set and
+  number through the card catalog (Base Set #58 → Pikachu), falling back to the
+  species' display name ("Mr. Mime" → `mr-mime`) for test NFTs without those
+  attributes. An NFT that isn't the selected fighter is refused.
+- `GET /api/arena-cards` lists every fighter with its derived stats and moves.
+  `/arena` lets anyone pick any fighter (searchable) and enter the same queue.
+
+---
+
 ## What is not modeled yet
 
 To keep the implemented mechanics honest about their scope, the engines do **not**
@@ -260,6 +373,12 @@ live in other services and branches and do not change these rules.
 
 | Concern | File |
 | --- | --- |
+| Pokédex dataset (PokéAPI import) | `scripts/build-pokedex.mjs` → `services/api/internal/pokedex/pokedex.json` |
+| Pokédex lookups and card → species mapping | `services/api/internal/pokedex/{pokedex,cards}.go` |
+| Live arena — fighters from the Pokédex, damage | `services/api/internal/arena/fighters.go` |
+| Live arena — real-time simulation | `services/api/internal/arena/arena.go` |
+| Live arena HTTP, WebSocket and queue | `services/api/internal/server/{arena,queue}.go` |
+| Live arena UI | `apps/web/app/arena/page.tsx` (also `/battle/live`), `apps/web/lib/arena.ts` |
 | One-card engine | `services/api/internal/battle/{match,catalog,types}.go` |
 | Team engine — setup, lifecycle, event log | `services/api/internal/livebattle/engine.go` |
 | Team engine — hidden choices, forced switches, timeouts | `services/api/internal/livebattle/choices.go` |

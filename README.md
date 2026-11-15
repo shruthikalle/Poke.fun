@@ -9,7 +9,8 @@ apps/web/                         Next.js frontend and battle screen
 services/api/cmd/server/          Go API entry point
 services/api/internal/battle/     One-card duel: sample cards, rules, shared type chart
 services/api/internal/livebattle/ Team battle engine (hidden choices, switching, AI)
-services/api/internal/arena/      Real-time battle simulation and card rules
+services/api/internal/arena/      Real-time battle simulation; fighters derived from the Pokédex
+services/api/internal/pokedex/    Pokémon database imported from PokéAPI (species, moves, card mapping)
 services/api/internal/server/     HTTP endpoints and the two-player matchmaking queue
 contracts/                        Solana wager escrow prototype and tests
 docs/                             Product, architecture and game-mechanics docs
@@ -19,12 +20,12 @@ docs/                             Product, architecture and game-mechanics docs
 
 The Go server decides battle outcomes. The live arena simulates both players at the same time; the older modes resolve hidden turn choices.
 
-- **Live arena (`/battle/live`).** One level-50 Pikachu or Charmander per player. Move, aim, dodge, and use basic and special attacks in real time. The server simulates movement and attacks at 20 ticks per second and broadcasts snapshots over WebSocket. Knock out the opponent within 90 seconds; a timeout compares remaining HP percentages.
+- **Live arena (`/battle/live`).** One level-50 fighter per player: any of the 201 species a card in the catalog can become, with stats and moves derived from PokéAPI data. Players are only paired with the same power tier. Move, aim, dodge, and use basic and special attacks in real time. The server simulates movement and attacks at 20 ticks per second and broadcasts snapshots over WebSocket. Knock out the opponent within 90 seconds; a timeout compares remaining HP percentages.
 
 - **Team battle (`/battle`).** One creature (Champion 1v1) or three (Squad of 3). Each turn you pick a move or a switch. Switches happen first, then moves in speed order. Damage uses the creatures' PokéAPI stats with type effectiveness, a same-type bonus, accuracy, crits and limited PP. When a creature faints, only its owner chooses the replacement. The last player with a creature standing wins. Online matches run a 150-second turn clock that the server enforces.
 - **One-card duel (`/play`).** Each card has a quick attack (free, builds one energy) and a heavy attack (costs two energy, carries the card's element). Both attacks land at the same time, so both cards can be knocked out together for a draw. A 60-second turn deadline auto-plays the quick attack.
 
-Read [`docs/game-mechanics.md`](docs/game-mechanics.md) for the full rules, formulas, matchmaking and API, and [`docs/battle-spec.md`](docs/battle-spec.md) for the terse canonical spec. The engines live in `services/api/internal/livebattle` and `services/api/internal/battle`.
+Read [`docs/game-mechanics.md`](docs/game-mechanics.md) for the full rules, formulas, matchmaking, API and where the Pokémon data comes from, and [`docs/battle-spec.md`](docs/battle-spec.md) for the terse canonical spec. The engines live in `services/api/internal/livebattle` and `services/api/internal/battle`.
 
 ## Run locally
 
@@ -46,14 +47,14 @@ npm run dev
 The frontend routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
-- `/loadout`: pick a card, select a demo entry, and queue for the live arena. The arena currently accepts Pikachu and Charmander.
+- `/loadout`: pick a card, select a demo entry, and queue for the live arena. Every card in the catalog can fight; the panel shows its arena moves and tier.
 - `/battle/live`: the real-time match opened automatically when two compatible players queue.
 - `/arena`: direct arena controls and match view.
 - `/battle`: the earlier turn-based team battle.
 - `/market` and `/collection`: the card marketplace and your card collection (mock data).
 - `/play`: the original one-card demo that talks to the Go API.
 
-To try a **two-player live arena**, open `http://localhost:3000/loadout` in two separate browser profiles. Select Pikachu or Charmander and the same demo entry in both, then click Find match. The first player waits until the second joins; each receives a separate seat in the same arena. The Go API must be running. The old team-battle queue remains available to code using `/api/queue`.
+To try a **two-player live arena**, open `http://localhost:3000/loadout` in two separate browser profiles. Pick fighters of the same power tier (guests get tier-1 rentals, so any two guests work) and the same demo entry in both, then click Find match. The first player waits until the second joins; each receives a separate seat in the same arena. The Go API must be running. The old team-battle queue remains available to code using `/api/queue`.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
@@ -98,3 +99,7 @@ Matches, team battles and the matchmaking queue are in memory and disappear when
 - `apps/web/lib/cards/catalog.generated.json` is the versioned card → creature catalog (Base Set, Jungle, Fossil, 151, Crown Zenith Galarian Gallery). Each entry has its species, level, power tier and the `artWindow` the summon lifts out of the card. Regenerate it with `npm run catalog` (from cached API responses in `scripts/.cache/`, or `-- --refresh` to download again), and check every species against PokéAPI with `npm run catalog:check`.
 - `/dev/summons` (dev builds only, or set `NEXT_PUBLIC_DEV_TOOLS=1`) lists every catalog card and plays its full or mini summon. It can also switch the mock collection (default, one card, all ineligible, empty, large).
 - QA findings and their status are in `docs/qa-report.md`.
+
+### Pokémon data
+
+The Go server's Pokémon database (`services/api/internal/pokedex/pokedex.json`) holds every species the card catalog can produce, with types, base stats, sprite, power tier and every damaging move it can learn, plus the card → species mapping. Rebuild it from PokéAPI with `node scripts/build-pokedex.mjs` from the repo root, and re-run it after `npm run catalog` adds card sets. See [`docs/game-mechanics.md`](docs/game-mechanics.md#pokédex-data).
