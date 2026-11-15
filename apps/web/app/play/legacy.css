@@ -1,0 +1,80 @@
+.legacy { min-height: 100vh; color-scheme: dark; font-family: Arial, Helvetica, sans-serif; background: #0b1018; color: #f4f6fa; }
+.legacy, .legacy * { box-sizing: border-box; }
+.legacy { margin: 0; min-height: 100vh; background: radial-gradient(circle at 50% -20%, #19304a 0, #0b1018 55%); }
+.legacy button, .legacy input { font: inherit; }
+.legacy button { cursor: pointer; }
+.legacy button:disabled { cursor: not-allowed; opacity: .45; }
+.legacy main { max-width: 1120px; margin: 0 auto; padding: 24px 24px 60px; }
+.legacy .site-header, .legacy .room-bar, .legacy .stat-line, .legacy .battle-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.legacy .site-header { padding-bottom: 26px; border-bottom: 1px solid #293241; }
+.legacy .brand { font-size: 1.35rem; font-weight: 900; letter-spacing: -.04em; }
+.legacy .brand span { color: #77e6b3; }
+.legacy .badge { border: 1px solid #3b6c5c; border-radius: 99px; padding: 8px 12px; color: #a9f2ca; font-size: .68rem; font-weight: 800; letter-spacing: .1em; }
+.legacy .intro { max-width: 780px; margin: 66px 0 38px; }
+.legacy .eyebrow, .legacy .card-label, .legacy .muted { color: #78ddb1; font-size: .7rem; font-weight: 800; letter-spacing: .16em; }
+.legacy h1 { font-size: clamp(2.6rem, 7vw, 5.5rem); line-height: 1.02; letter-spacing: -.065em; margin: 14px 0 20px; }
+.legacy h2 { font-size: 1.2rem; margin: 0 0 22px; }
+.legacy h3 { margin: 8px 0 4px; font-size: 1.6rem; }
+.legacy p { color: #aeb9c8; line-height: 1.6; }
+.legacy .intro p:last-child { font-size: 1.08rem; max-width: 630px; }
+.legacy .setup-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; }
+.legacy .panel, .legacy .arena { background: #131c29; border: 1px solid #2c3c4e; border-radius: 18px; padding: 28px; }
+.legacy label { display: block; color: #cdd5df; font-size: .85rem; font-weight: 700; margin-bottom: 10px; }
+.legacy input { width: 100%; background: #0b131e; color: #fff; border: 1px solid #394b5f; border-radius: 10px; padding: 13px 14px; outline: none; }
+.legacy input:focus { border-color: #78ddb1; }
+.legacy .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-top: 22px; }
+.legacy .choose-card { background: #1c2939; border: 1px solid #35475a; color: #f4f6fa; border-radius: 12px; padding: 18px 14px; text-align: left; min-height: 142px; }
+.legacy .choose-card.selected { border-color: #78ddb1; box-shadow: 0 0 0 1px #78ddb1; }
+.legacy .choose-card strong, .legacy .choose-card small, .legacy .choose-card .element { display: block; }
+.legacy .choose-card strong { margin: 20px 0 7px; font-size: 1.05rem; }
+.legacy .choose-card small, .legacy .element, .legacy .hint { color: #9aabba; font-size: .78rem; }
+.legacy .element { text-transform: uppercase; letter-spacing: .1em; }
+.legacy .primary, .legacy .secondary { width: 100%; border-radius: 10px; padding: 14px 18px; font-weight: 800; }
+.legacy .primary { border: 0; color: #082419; background: #78ddb1; }
+.legacy .primary:hover:not(:disabled) { background: #9bf3c8; }
+.legacy .secondary { border: 1px solid #667b8f; color: #eaf1f6; background: transparent; margin-top: 12px; }
+.legacy .secondary:hover:not(:disabled) { border-color: #9bf3c8; }
+.legacy .join-panel .primary { margin-top: 4px; }
+.legacy .divider { text-align: center; color: #8192a4; font-size: .78rem; margin: 24px 0; }
+.legacy .hint { margin: 22px 0 0; }
+.legacy .error { background: #4e2229; border: 1px solid #b44d59; padding: 13px 16px; border-radius: 10px; margin-bottom: 18px; }
+.legacy .reset-session { max-width: 230px; margin: 0; }
+.legacy .room-bar { border-bottom: 1px solid #2c3c4e; padding-bottom: 20px; flex-wrap: wrap; }
+.legacy .room-code { display: block; font-size: 1.6rem; letter-spacing: .18em; margin-top: 5px; }
+.legacy .text-button { background: none; border: 0; color: #93dfb7; text-decoration: underline; }
+.legacy .waiting { text-align: center; padding: 80px 20px; }
+.legacy .waiting p { max-width: 540px; margin: auto; }
+.legacy .battle-top { margin: 24px 0; color: #91a6b9; }
+.legacy .battle-top strong { color: #eaf1f6; }
+.legacy .turn-timer { font-variant-numeric: tabular-nums; color: #91a6b9; white-space: nowrap; }
+.legacy .turn-timer.low { color: #ff8f7a; }
+.legacy .fighters { display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center; }
+.legacy .versus { color: #78ddb1; font-size: 1.3rem; font-weight: 900; }
+.legacy .battle-card { min-height: 310px; border: 1px solid #546172; border-radius: 16px; padding: 22px; background: linear-gradient(145deg, #203044, #131e2d); }
+.legacy .battle-card.fire { background: linear-gradient(145deg, #58372f, #1a2330); }
+.legacy .battle-card.water { background: linear-gradient(145deg, #22516a, #152633); }
+.legacy .battle-card.grass { background: linear-gradient(145deg, #2d523f, #162b2e); }
+.legacy .card-symbol { height: 100px; display: grid; place-items: center; font-size: 5rem; opacity: .8; }
+.legacy .player-name { margin: 0 0 26px; font-size: .85rem; }
+.legacy .stat-line { color: #dfe6eb; font-size: .85rem; margin: 10px 0; }
+.legacy .hp-track { height: 9px; background: #263444; border-radius: 99px; overflow: hidden; }
+.legacy .hp-track div { height: 100%; background: #78ddb1; transition: width .3s; }
+.legacy .attacks, .legacy .history, .legacy .result { margin-top: 30px; }
+.legacy .attack-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.legacy .attack-grid button { background: #23354a; border: 1px solid #52708b; color: #fff; border-radius: 10px; padding: 18px; text-align: left; }
+.legacy .attack-grid button:hover:not(:disabled) { border-color: #78ddb1; }
+.legacy .attack-grid strong, .legacy .attack-grid span { display: block; }
+.legacy .attack-grid span { color: #adbfcc; font-size: .8rem; margin-top: 7px; }
+.legacy .history { border-top: 1px solid #2c3c4e; padding-top: 24px; }
+.legacy .history p { border-bottom: 1px solid #263545; padding: 10px 0; margin: 0; font-size: .85rem; }
+.legacy .result { background: #1d3b35; border-radius: 12px; padding: 22px; text-align: center; }
+.legacy .result .primary { max-width: 240px; }
+.legacy footer { color: #73849a; font-size: .75rem; margin-top: 38px; }
+@media (max-width: 760px) { .legacy .setup-grid, .legacy .fighters { grid-template-columns: 1fr; }
+.legacy .versus { text-align: center; }
+.legacy .card-grid { grid-template-columns: 1fr; }
+.legacy .choose-card { min-height: auto; }
+.legacy .choose-card strong { margin: 8px 0; }
+.legacy .attack-grid { grid-template-columns: 1fr; }
+.legacy .intro { margin-top: 45px; }
+.legacy .panel, .legacy .arena { padding: 20px; } }
