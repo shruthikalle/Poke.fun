@@ -130,4 +130,59 @@ assert.equal((await getAccount(connection, aliceToken)).amount, 2_000_000n);
 assert.equal((await getAccount(connection, bobToken)).amount, 4_000_000n);
 assert.equal(await connection.getAccountInfo(third.vault), null);
 
-console.log("Local validator: deposits, opponent restriction, unauthorized settlement, payout, draw refund, and cancellation passed");
+const solStake = 100_000_000;
+async function openSol(nonce) {
+  const wager = wagerAddress(alice.publicKey, nonce);
+  await program.methods.openSolWager(new BN(nonce), new BN(solStake)).accountsStrict({
+    maker: alice.publicKey, wager, systemProgram: SystemProgram.programId,
+  }).signers([alice]).rpc();
+  const rent = await connection.getMinimumBalanceForRentExemption(162);
+  assert.equal((await connection.getAccountInfo(wager)).lamports, rent + solStake);
+  return { wager, rent };
+}
+
+const solFirst = await openSol(4);
+await program.methods.reserveWager(bob.publicKey).accountsStrict({
+  referee: referee.publicKey, config, wager: solFirst.wager,
+}).signers([referee]).rpc();
+await assert.rejects(() => program.methods.joinSolWager().accountsStrict({
+  opponent: stranger.publicKey, wager: solFirst.wager, systemProgram: SystemProgram.programId,
+}).signers([stranger]).rpc());
+await program.methods.joinSolWager().accountsStrict({
+  opponent: bob.publicKey, wager: solFirst.wager, systemProgram: SystemProgram.programId,
+}).signers([bob]).rpc();
+assert.equal((await connection.getAccountInfo(solFirst.wager)).lamports, solFirst.rent + 2 * solStake);
+await assert.rejects(() => program.methods.settleSolWager(bob.publicKey).accountsStrict({
+  referee: stranger.publicKey, config, maker: alice.publicKey, wager: solFirst.wager, winner: bob.publicKey,
+}).signers([stranger]).rpc());
+const bobBeforePayout = await connection.getBalance(bob.publicKey);
+await program.methods.settleSolWager(bob.publicKey).accountsStrict({
+  referee: referee.publicKey, config, maker: alice.publicKey, wager: solFirst.wager, winner: bob.publicKey,
+}).signers([referee]).rpc();
+assert.equal((await connection.getBalance(bob.publicKey)) - bobBeforePayout, 2 * solStake);
+assert.equal(await connection.getAccountInfo(solFirst.wager), null);
+
+const solDraw = await openSol(5);
+await program.methods.reserveWager(bob.publicKey).accountsStrict({
+  referee: referee.publicKey, config, wager: solDraw.wager,
+}).signers([referee]).rpc();
+await program.methods.joinSolWager().accountsStrict({
+  opponent: bob.publicKey, wager: solDraw.wager, systemProgram: SystemProgram.programId,
+}).signers([bob]).rpc();
+const aliceBeforeDraw = await connection.getBalance(alice.publicKey);
+const bobBeforeDraw = await connection.getBalance(bob.publicKey);
+await program.methods.settleSolDraw().accountsStrict({
+  referee: referee.publicKey, config, maker: alice.publicKey, wager: solDraw.wager, opponent: bob.publicKey,
+}).signers([referee]).rpc();
+assert.equal((await connection.getBalance(alice.publicKey)) - aliceBeforeDraw, solStake + solDraw.rent);
+assert.equal((await connection.getBalance(bob.publicKey)) - bobBeforeDraw, solStake);
+assert.equal(await connection.getAccountInfo(solDraw.wager), null);
+
+const solCancel = await openSol(6);
+await assert.rejects(() => program.methods.expireSolWager().accountsStrict({
+  caller: stranger.publicKey, maker: alice.publicKey, wager: solCancel.wager, opponent: bob.publicKey,
+}).signers([stranger]).rpc());
+await program.methods.cancelSolWager().accountsStrict({ maker: alice.publicKey, wager: solCancel.wager }).signers([alice]).rpc();
+assert.equal(await connection.getAccountInfo(solCancel.wager), null);
+
+console.log("Local validator: token and SOL deposits, opponent restriction, unauthorized settlement, payout, draw refund, and cancellation passed");

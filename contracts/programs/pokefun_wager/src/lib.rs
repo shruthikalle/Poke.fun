@@ -57,6 +57,41 @@ pub mod pokefun_wager {
         Ok(())
     }
 
+    // Native SOL uses the wager account itself as escrow. Its rent is returned
+    // to the maker when a terminal instruction closes the account.
+    pub fn open_sol_wager(ctx: Context<OpenSolWager>, nonce: u64, stake: u64) -> Result<()> {
+        require!(stake > 0 && stake <= u64::MAX / 2, WagerError::InvalidStake);
+        let wager = &mut ctx.accounts.wager;
+        wager.maker = ctx.accounts.maker.key();
+        wager.opponent = Pubkey::default();
+        wager.winner = Pubkey::default();
+        wager.mint = Pubkey::default();
+        wager.stake = stake;
+        wager.nonce = nonce;
+        wager.deadline = Clock::get()?
+            .unix_timestamp
+            .checked_add(QUEUE_SECONDS)
+            .ok_or(WagerError::Overflow)?;
+        wager.bump = ctx.bumps.wager;
+        wager.state = WagerState::Waiting;
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.maker.to_account_info(),
+                    to: wager.to_account_info(),
+                },
+            ),
+            stake,
+        )?;
+        emit!(WagerOpened {
+            wager: wager.key(),
+            maker: wager.maker,
+            stake
+        });
+        Ok(())
+    }
+
     // The off-chain skill queue chooses a specific wallet; the program enforces that choice.
     pub fn reserve_wager(ctx: Context<ReserveWager>, opponent: Pubkey) -> Result<()> {
         let wager = &mut ctx.accounts.wager;
@@ -115,6 +150,133 @@ pub mod pokefun_wager {
         emit!(WagerJoined {
             wager: wager.key(),
             opponent: wager.opponent
+        });
+        Ok(())
+    }
+
+    pub fn join_sol_wager(ctx: Context<JoinSolWager>) -> Result<()> {
+        let wager = &mut ctx.accounts.wager;
+        require!(wager.mint == Pubkey::default(), WagerError::WrongMint);
+        require!(wager.state == WagerState::Reserved, WagerError::WrongState);
+        require!(
+            Clock::get()?.unix_timestamp < wager.deadline,
+            WagerError::Expired
+        );
+        require!(
+            ctx.accounts.opponent.key() == wager.opponent,
+            WagerError::WrongOpponent
+        );
+        anchor_lang::system_program::transfer(
+            CpiContext::new(
+                ctx.accounts.system_program.to_account_info(),
+                anchor_lang::system_program::Transfer {
+                    from: ctx.accounts.opponent.to_account_info(),
+                    to: wager.to_account_info(),
+                },
+            ),
+            wager.stake,
+        )?;
+        wager.state = WagerState::Playing;
+        wager.deadline = Clock::get()?
+            .unix_timestamp
+            .checked_add(BATTLE_SECONDS)
+            .ok_or(WagerError::Overflow)?;
+        emit!(WagerJoined {
+            wager: wager.key(),
+            opponent: wager.opponent
+        });
+        Ok(())
+    }
+
+    pub fn cancel_sol_wager(ctx: Context<CancelSolWager>) -> Result<()> {
+        let wager = &mut ctx.accounts.wager;
+        require!(wager.mint == Pubkey::default(), WagerError::WrongMint);
+        require!(
+            wager.state == WagerState::Waiting || wager.state == WagerState::Reserved,
+            WagerError::WrongState
+        );
+        let key = wager.key();
+        wager.state = WagerState::Cancelled;
+        // `close = maker` returns the deposited SOL and account rent.
+        emit!(WagerClosed {
+            wager: key,
+            outcome: WagerState::Cancelled
+        });
+        Ok(())
+    }
+
+    pub fn settle_sol_wager(ctx: Context<SettleSolWager>, winner: Pubkey) -> Result<()> {
+        let wager = &ctx.accounts.wager;
+        require!(wager.mint == Pubkey::default(), WagerError::WrongMint);
+        require!(wager.state == WagerState::Playing, WagerError::WrongState);
+        require!(
+            Clock::get()?.unix_timestamp < wager.deadline,
+            WagerError::Expired
+        );
+        require!(
+            winner == wager.maker || winner == wager.opponent,
+            WagerError::InvalidWinner
+        );
+        require!(
+            ctx.accounts.winner.key() == winner,
+            WagerError::WrongRecipient
+        );
+        let payout = wager.stake.checked_mul(2).ok_or(WagerError::Overflow)?;
+        send_sol_from_wager(wager, &ctx.accounts.winner.to_account_info(), payout)?;
+        let key = wager.key();
+        ctx.accounts.wager.winner = winner;
+        ctx.accounts.wager.state = WagerState::Settled;
+        emit!(WagerClosed {
+            wager: key,
+            outcome: WagerState::Settled
+        });
+        Ok(())
+    }
+
+    pub fn settle_sol_draw(ctx: Context<SettleSolDraw>) -> Result<()> {
+        let wager = &ctx.accounts.wager;
+        require!(wager.mint == Pubkey::default(), WagerError::WrongMint);
+        require!(wager.state == WagerState::Playing, WagerError::WrongState);
+        require!(
+            Clock::get()?.unix_timestamp < wager.deadline,
+            WagerError::Expired
+        );
+        send_sol_from_wager(wager, &ctx.accounts.opponent.to_account_info(), wager.stake)?;
+        let key = wager.key();
+        ctx.accounts.wager.state = WagerState::Drawn;
+        // The remaining stake and rent close to the maker.
+        emit!(WagerClosed {
+            wager: key,
+            outcome: WagerState::Drawn
+        });
+        Ok(())
+    }
+
+    pub fn expire_sol_wager(ctx: Context<ExpireSolWager>) -> Result<()> {
+        let wager = &ctx.accounts.wager;
+        require!(wager.mint == Pubkey::default(), WagerError::WrongMint);
+        require!(
+            wager.state == WagerState::Waiting
+                || wager.state == WagerState::Reserved
+                || wager.state == WagerState::Playing,
+            WagerError::WrongState
+        );
+        require!(
+            Clock::get()?.unix_timestamp >= wager.deadline,
+            WagerError::NotExpired
+        );
+        if wager.state == WagerState::Playing {
+            require!(
+                ctx.accounts.opponent.key() == wager.opponent,
+                WagerError::WrongRecipient
+            );
+            send_sol_from_wager(wager, &ctx.accounts.opponent.to_account_info(), wager.stake)?;
+        }
+        let key = wager.key();
+        ctx.accounts.wager.state = WagerState::Expired;
+        emit!(WagerClosed {
+            wager: key,
+            outcome: WagerState::Expired
         });
         Ok(())
     }
@@ -393,6 +555,26 @@ fn send_from_vault<'info>(
     )
 }
 
+fn send_sol_from_wager(wager: &Account<Wager>, recipient: &AccountInfo, amount: u64) -> Result<()> {
+    let source = wager.to_account_info();
+    let minimum = Rent::get()?.minimum_balance(Wager::SPACE);
+    require!(
+        source.lamports().checked_sub(minimum).unwrap_or(0) >= amount,
+        WagerError::VaultUnderfunded
+    );
+    let source_after = source
+        .lamports()
+        .checked_sub(amount)
+        .ok_or(WagerError::Overflow)?;
+    let recipient_after = recipient
+        .lamports()
+        .checked_add(amount)
+        .ok_or(WagerError::Overflow)?;
+    **source.try_borrow_mut_lamports()? = source_after;
+    **recipient.try_borrow_mut_lamports()? = recipient_after;
+    Ok(())
+}
+
 fn close_vault<'info>(
     token_program: &Program<'info, Token>,
     vault: &Account<'info, TokenAccount>,
@@ -438,6 +620,76 @@ pub struct OpenWager<'info> {
     pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
     pub rent: Sysvar<'info, Rent>,
+}
+
+#[derive(Accounts)]
+#[instruction(nonce: u64)]
+pub struct OpenSolWager<'info> {
+    #[account(mut)]
+    pub maker: Signer<'info>,
+    #[account(init, payer = maker, space = Wager::SPACE, seeds = [b"wager", maker.key().as_ref(), &nonce.to_le_bytes()], bump)]
+    pub wager: Account<'info, Wager>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct JoinSolWager<'info> {
+    #[account(mut)]
+    pub opponent: Signer<'info>,
+    #[account(mut, seeds = [b"wager", wager.maker.as_ref(), &wager.nonce.to_le_bytes()], bump = wager.bump)]
+    pub wager: Account<'info, Wager>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct CancelSolWager<'info> {
+    #[account(mut, address = wager.maker)]
+    pub maker: Signer<'info>,
+    #[account(mut, close = maker, seeds = [b"wager", wager.maker.as_ref(), &wager.nonce.to_le_bytes()], bump = wager.bump)]
+    pub wager: Account<'info, Wager>,
+}
+
+#[derive(Accounts)]
+pub struct SettleSolWager<'info> {
+    pub referee: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump, constraint = config.referee == referee.key() @ WagerError::WrongReferee)]
+    pub config: Account<'info, Config>,
+    /// CHECK: Its address is checked against wager.maker and receives account rent.
+    #[account(mut, address = wager.maker)]
+    pub maker: AccountInfo<'info>,
+    #[account(mut, close = maker, seeds = [b"wager", wager.maker.as_ref(), &wager.nonce.to_le_bytes()], bump = wager.bump)]
+    pub wager: Account<'info, Wager>,
+    /// CHECK: The instruction validates this address is the selected player.
+    #[account(mut)]
+    pub winner: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct SettleSolDraw<'info> {
+    pub referee: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump, constraint = config.referee == referee.key() @ WagerError::WrongReferee)]
+    pub config: Account<'info, Config>,
+    /// CHECK: Its address is checked against wager.maker and receives its stake and rent.
+    #[account(mut, address = wager.maker)]
+    pub maker: AccountInfo<'info>,
+    #[account(mut, close = maker, seeds = [b"wager", wager.maker.as_ref(), &wager.nonce.to_le_bytes()], bump = wager.bump)]
+    pub wager: Account<'info, Wager>,
+    /// CHECK: Its address is checked against wager.opponent before transfer.
+    #[account(mut, address = wager.opponent)]
+    pub opponent: AccountInfo<'info>,
+}
+
+#[derive(Accounts)]
+pub struct ExpireSolWager<'info> {
+    pub caller: Signer<'info>,
+    /// CHECK: Its address is checked against wager.maker and receives stake and rent.
+    #[account(mut, address = wager.maker)]
+    pub maker: AccountInfo<'info>,
+    #[account(mut, close = maker, seeds = [b"wager", wager.maker.as_ref(), &wager.nonce.to_le_bytes()], bump = wager.bump)]
+    pub wager: Account<'info, Wager>,
+    /// CHECK: Checked against wager.opponent if the battle started.
+    #[account(mut)]
+    pub opponent: AccountInfo<'info>,
 }
 
 #[derive(Accounts)]

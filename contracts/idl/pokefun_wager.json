@@ -7,6 +7,55 @@
   },
   "instructions": [
     {
+      "name": "cancel_sol_wager",
+      "discriminator": [
+        35,
+        43,
+        35,
+        60,
+        251,
+        82,
+        254,
+        107
+      ],
+      "accounts": [
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "cancel_wager",
       "discriminator": [
         57,
@@ -87,6 +136,62 @@
         {
           "name": "token_program",
           "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "expire_sol_wager",
+      "discriminator": [
+        107,
+        76,
+        51,
+        138,
+        234,
+        154,
+        48,
+        187
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponent",
+          "writable": true
         }
       ],
       "args": []
@@ -236,6 +341,59 @@
       ]
     },
     {
+      "name": "join_sol_wager",
+      "discriminator": [
+        50,
+        190,
+        215,
+        138,
+        4,
+        124,
+        51,
+        18
+      ],
+      "accounts": [
+        {
+          "name": "opponent",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "join_wager",
       "discriminator": [
         119,
@@ -318,6 +476,66 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "open_sol_wager",
+      "discriminator": [
+        31,
+        94,
+        33,
+        208,
+        123,
+        90,
+        206,
+        116
+      ],
+      "accounts": [
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        }
+      ]
     },
     {
       "name": "open_wager",
@@ -614,6 +832,159 @@
         }
       ],
       "args": []
+    },
+    {
+      "name": "settle_sol_draw",
+      "discriminator": [
+        87,
+        64,
+        31,
+        39,
+        50,
+        189,
+        246,
+        199
+      ],
+      "accounts": [
+        {
+          "name": "referee",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponent",
+          "writable": true
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "settle_sol_wager",
+      "discriminator": [
+        42,
+        246,
+        64,
+        229,
+        46,
+        17,
+        203,
+        27
+      ],
+      "accounts": [
+        {
+          "name": "referee",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner",
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "winner",
+          "type": "pubkey"
+        }
+      ]
     },
     {
       "name": "settle_wager",
