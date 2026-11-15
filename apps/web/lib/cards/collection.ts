@@ -25,6 +25,8 @@ export interface CollectionService {
 }
 
 export const MOCK_COLLECTION_ADDRESS = "MockVau1tedCards11111111111111111111111111";
+export const DEVNET_TEST_COLLECTION_ADDRESS = "9cu8Rf7ryTHPrN24D62Q4xsEHnP8aBHS28mBdy4WRuCv";
+const DEVNET_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 
 /** Mock wallet contents, switchable from /dev/summons to exercise edge cases. */
 export type MockScenario = "default" | "empty" | "ineligible" | "one" | "large";
@@ -110,13 +112,44 @@ function marketCollection(owner: string): DasAsset[] {
   });
 }
 
-/** TODO(collectibles): call `getAssetsByOwner` on a DAS-enabled RPC (QuickNode) and filter by supported collections. */
+/** Reads our test collection from Solana DAS. Marketplace demo cards stay separate. */
+async function devnetCollection(owner: string): Promise<DasAsset[]> {
+  const response = await fetch(DEVNET_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "getAssetsByOwner", params: { ownerAddress: owner, limit: 1000 } }),
+  });
+  if (!response.ok) throw new Error(`Solana RPC returned ${response.status}`);
+  const data = await response.json() as { result?: { items?: (DasAsset & { burnt?: boolean })[]; total?: number }; error?: { message?: string } };
+  if (data.error) throw new Error(data.error.message ?? "Could not read wallet cards");
+  if (!Array.isArray(data.result?.items)) throw new Error("Invalid wallet card response");
+  return data.result.items.filter((a) =>
+    a.interface === "MplCoreAsset" &&
+    a.ownership?.owner === owner &&
+    !a.burnt &&
+    a.grouping?.some((g) => g.group_key === "collection" && g.group_value === DEVNET_TEST_COLLECTION_ADDRESS),
+  );
+}
+
 export class MockCollectionService implements CollectionService {
   async getOwnedCollectibles(owner: string): Promise<DasAsset[]> {
-    await new Promise((r) => setTimeout(r, 350));
     const which = scenario();
-    return which === "default" ? marketCollection(owner) : mockCollection(owner, which);
+    if (which !== "default") return mockCollection(owner, which);
+    const [onChain, demo] = await Promise.all([devnetCollection(owner), Promise.resolve(marketCollection(owner))]);
+    const byId = new Map(demo.map((a) => [a.id, a]));
+    for (const a of onChain) byId.set(a.id, a);
+    return [...byId.values()];
   }
 }
 
-export const collectionService: CollectionService = new MockCollectionService();
+export class DevnetCollectionService implements CollectionService {
+  async getOwnedCollectibles(owner: string): Promise<DasAsset[]> {
+    const response = await fetch(`/api/devnet-cards?owner=${encodeURIComponent(owner)}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not verify devnet card ownership");
+    return response.json() as Promise<DasAsset[]>;
+  }
+}
+
+export const collectionService: CollectionService = process.env.NEXT_PUBLIC_COLLECTION_SOURCE === "devnet"
+  ? new DevnetCollectionService()
+  : new MockCollectionService();

@@ -1,4 +1,4 @@
-import { address, getBase58Decoder, getUtf8Encoder, type Address } from "@solana/kit";
+import { address, type Address } from "@solana/kit";
 
 interface PhantomPublicKey { toString(): string }
 
@@ -9,7 +9,7 @@ export interface PhantomProvider {
   disconnect(): Promise<void>;
   signMessage?(message: Uint8Array, display?: "utf8" | "hex"): Promise<{ signature: Uint8Array }>;
   on?(event: "accountChanged" | "disconnect" | "connect", handler: (arg?: PhantomPublicKey | null) => void): void;
-  removeListener?(event: string, handler: (...args: unknown[]) => void): void;
+  removeListener?(event: string, handler: (arg?: PhantomPublicKey | null) => void): void;
 }
 
 declare global {
@@ -34,13 +34,6 @@ export function isUserRejection(error: unknown): boolean {
 export async function connectPhantom(provider: PhantomProvider, silent = false): Promise<Address> {
   const { publicKey } = await provider.connect(silent ? { onlyIfTrusted: true } : undefined);
   return address(publicKey.toString());
-}
-
-export async function signText(provider: PhantomProvider, text: string): Promise<string | null> {
-  if (!provider.signMessage) return null;
-  const bytes = new Uint8Array(getUtf8Encoder().encode(text));
-  const { signature } = await provider.signMessage(bytes, "utf8");
-  return getBase58Decoder().decode(signature);
 }
 
 export function truncateAddress(value: string, head = 4, tail = 4): string {

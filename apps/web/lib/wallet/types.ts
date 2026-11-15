@@ -18,6 +18,7 @@ export interface AuthBackend {
   user: AuthUser | null;
   sendCode(email: string): Promise<void>;
   verifyCode(code: string): Promise<void>;
+  loginWithPhantom?(): Promise<void>;
   linkPhantom(): Promise<void>;
   signOut(): Promise<void>;
 }

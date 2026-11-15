@@ -3,6 +3,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 export type Attack = {
   id: string;
   name: string;
+  element: string;
   damage: number;
   cost: number;
   gain: number;
@@ -23,10 +24,14 @@ export type Player = {
   energy: number;
 };
 
+export type Effectiveness = "super" | "resisted" | "immune" | "normal";
+
 export type Turn = {
   number: number;
   attacks: [string, string];
   damage: [number, number];
+  effect: [Effectiveness, Effectiveness];
+  auto: [boolean, boolean];
   hp: [number, number];
 };
 
@@ -39,6 +44,9 @@ export type Match = {
   turn: number;
   winner?: "player1" | "player2" | "draw";
   history: Turn[];
+  rulesVersion: string;
+  catalogVersion: string;
+  deadlineUnixMs?: number;
 };
 
 export type Session = { id: string; token: string };

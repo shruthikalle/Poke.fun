@@ -46,6 +46,8 @@
 .legacy .waiting p { max-width: 540px; margin: auto; }
 .legacy .battle-top { margin: 24px 0; color: #91a6b9; }
 .legacy .battle-top strong { color: #eaf1f6; }
+.legacy .turn-timer { font-variant-numeric: tabular-nums; color: #91a6b9; white-space: nowrap; }
+.legacy .turn-timer.low { color: #ff8f7a; }
 .legacy .fighters { display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; align-items: center; }
 .legacy .versus { color: #78ddb1; font-size: 1.3rem; font-weight: 900; }
 .legacy .battle-card { min-height: 310px; border: 1px solid #546172; border-radius: 16px; padding: 22px; background: linear-gradient(145deg, #203044, #131e2d); }

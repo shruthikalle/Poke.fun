@@ -11,6 +11,7 @@ import { Viewport } from "../../components/battle/Viewport";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { MockBattleStream } from "../../lib/battle/MockBattleStream";
+import { ServerBattleStream } from "../../lib/battle/ServerBattleStream";
 import { createCreature, makeFormat } from "../../lib/battle/roster";
 import type { BattleStreamSource, Creature, Side } from "../../lib/battle/types";
 import { FORMAT_LABEL, type CardPick } from "../../lib/cards/mapping";
@@ -66,6 +67,7 @@ export default function BattlePage() {
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
   const [result, setResult] = useState<MatchResult | null>(null);
+  const [connectNote, setConnectNote] = useState<string | null>(null);
 
   useEffect(() => {
     const ticket = loadTicket();
@@ -75,7 +77,10 @@ export default function BattlePage() {
     }
     let live = true;
     setLoad({ status: "loading" });
-    Promise.all([toCreatures(ticket.you.team, "p1"), toCreatures(ticket.opponent.team, "p2")])
+    // In a two-player match we may be side p2; creature ids carry the real side.
+    const mySide = ticket.live?.side ?? "p1";
+    const theirSide = mySide === "p1" ? "p2" : "p1";
+    Promise.all([toCreatures(ticket.you.team, mySide), toCreatures(ticket.opponent.team, theirSide)])
       .then(([p1, p2]) => live && setLoad({ status: "ready", ticket, teams: { p1, p2 } }))
       .catch((e: unknown) => live && setLoad({ status: "error", fatal: /→ 404/.test(String(e)) }));
     return () => { live = false; };
@@ -83,7 +88,6 @@ export default function BattlePage() {
 
   const ticket = load.status === "ready" ? load.ticket : null;
 
-  // TODO(realtime): construct the QuickNode Streams / Go API source here instead.
   const source = useMemo<BattleStreamSource | null>(() => {
     if (!ready || load.status !== "ready") return null;
     const t = load.ticket;
@@ -94,7 +98,16 @@ export default function BattlePage() {
       { name: "Entry", description: t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
       { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
     ]);
-    return new MockBattleStream({ you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format });
+    // `teams.p1` is always our own team here, whichever side we play.
+    const config = { you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format };
+    // The Go server is the referee: a matched human rival (t.live) or the
+    // server AI. NEXT_PUBLIC_LIVE_BATTLE=0 forces the offline simulation.
+    if (process.env.NEXT_PUBLIC_LIVE_BATTLE === "0") return new MockBattleStream(config);
+    if (t.live) {
+      const { battleId, token, side } = t.live;
+      return new ServerBattleStream({ mode: "pvp", battleId, token, side, team: load.teams.p1, format, onStatus: setConnectNote });
+    }
+    return new ServerBattleStream({ mode: "ai", ...config, onStatus: setConnectNote });
   }, [ready, load, playerName]);
 
   const battle = useBattleStream(source);
@@ -176,7 +189,7 @@ export default function BattlePage() {
                     ? <button className={styles.button} onClick={() => router.push("/loadout")}>Back to loadout</button>
                     : <button className={styles.button} onClick={() => setAttempt((n) => n + 1)}>Try again</button>}
                 </div>
-              ) : <div className={styles.connecting}>Connecting…</div>}
+              ) : <div className={styles.connecting}>{connectNote ?? "Connecting…"}</div>}
             </div>
           )}
         </div>

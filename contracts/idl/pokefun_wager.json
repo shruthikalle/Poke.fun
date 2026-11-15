@@ -1,0 +1,946 @@
+{
+  "address": "Fg6PaFpoGXkYsidMpWxqSWY4ZbWvMaJf1c4SSbM9VTx",
+  "metadata": {
+    "name": "pokefun_wager",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "cancel_wager",
+      "discriminator": [
+        57,
+        92,
+        124,
+        123,
+        216,
+        16,
+        37,
+        148
+      ],
+      "accounts": [
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "wager"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "expire_wager",
+      "discriminator": [
+        87,
+        39,
+        60,
+        122,
+        12,
+        118,
+        126,
+        75
+      ],
+      "accounts": [
+        {
+          "name": "caller",
+          "signer": true
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "wager"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker_token",
+          "writable": true
+        },
+        {
+          "name": "opponent_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "initialize",
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "admin",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "referee",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "join_wager",
+      "discriminator": [
+        119,
+        81,
+        120,
+        160,
+        80,
+        8,
+        75,
+        239
+      ],
+      "accounts": [
+        {
+          "name": "opponent",
+          "signer": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "wager"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "opponent_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "open_wager",
+      "discriminator": [
+        162,
+        239,
+        162,
+        130,
+        22,
+        133,
+        143,
+        161
+      ],
+      "accounts": [
+        {
+          "name": "maker",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint"
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "maker"
+              },
+              {
+                "kind": "arg",
+                "path": "nonce"
+              }
+            ]
+          }
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "rent",
+          "address": "SysvarRent111111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "nonce",
+          "type": "u64"
+        },
+        {
+          "name": "stake",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "name": "reserve_wager",
+      "discriminator": [
+        217,
+        236,
+        86,
+        52,
+        128,
+        196,
+        106,
+        48
+      ],
+      "accounts": [
+        {
+          "name": "referee",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "opponent",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "settle_wager",
+      "discriminator": [
+        161,
+        242,
+        169,
+        152,
+        172,
+        163,
+        161,
+        104
+      ],
+      "accounts": [
+        {
+          "name": "referee",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "wager"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "winner_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": [
+        {
+          "name": "winner",
+          "type": "pubkey"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "Config",
+      "discriminator": [
+        155,
+        12,
+        170,
+        224,
+        30,
+        250,
+        204,
+        130
+      ]
+    },
+    {
+      "name": "Wager",
+      "discriminator": [
+        3,
+        110,
+        53,
+        190,
+        113,
+        31,
+        230,
+        40
+      ]
+    }
+  ],
+  "events": [
+    {
+      "name": "WagerClosed",
+      "discriminator": [
+        157,
+        212,
+        28,
+        112,
+        6,
+        143,
+        187,
+        185
+      ]
+    },
+    {
+      "name": "WagerJoined",
+      "discriminator": [
+        74,
+        213,
+        37,
+        114,
+        201,
+        144,
+        6,
+        12
+      ]
+    },
+    {
+      "name": "WagerOpened",
+      "discriminator": [
+        69,
+        93,
+        14,
+        232,
+        77,
+        79,
+        50,
+        130
+      ]
+    },
+    {
+      "name": "WagerReserved",
+      "discriminator": [
+        58,
+        114,
+        176,
+        60,
+        202,
+        165,
+        189,
+        161
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidStake",
+      "msg": "Stake must be positive and fit in a two-player pot"
+    },
+    {
+      "code": 6001,
+      "name": "InvalidReferee",
+      "msg": "Referee cannot be the default address"
+    },
+    {
+      "code": 6002,
+      "name": "WrongMint",
+      "msg": "Wrong token mint"
+    },
+    {
+      "code": 6003,
+      "name": "WrongDecimals",
+      "msg": "Only six-decimal tokens are supported"
+    },
+    {
+      "code": 6004,
+      "name": "VaultUnderfunded",
+      "msg": "Escrow vault is missing its expected balance"
+    },
+    {
+      "code": 6005,
+      "name": "WrongState",
+      "msg": "Wager is in the wrong state"
+    },
+    {
+      "code": 6006,
+      "name": "Expired",
+      "msg": "Wager deadline has passed"
+    },
+    {
+      "code": 6007,
+      "name": "NotExpired",
+      "msg": "Wager deadline has not passed"
+    },
+    {
+      "code": 6008,
+      "name": "SamePlayer",
+      "msg": "Maker cannot join their own wager"
+    },
+    {
+      "code": 6009,
+      "name": "WrongOpponent",
+      "msg": "Only the reserved opponent can join"
+    },
+    {
+      "code": 6010,
+      "name": "InvalidWinner",
+      "msg": "Winner must be one of the two players"
+    },
+    {
+      "code": 6011,
+      "name": "WrongRecipient",
+      "msg": "Token account does not belong to the intended recipient"
+    },
+    {
+      "code": 6012,
+      "name": "WrongReferee",
+      "msg": "Only the configured referee can settle"
+    },
+    {
+      "code": 6013,
+      "name": "Overflow",
+      "msg": "Arithmetic overflow"
+    }
+  ],
+  "types": [
+    {
+      "name": "Config",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "admin",
+            "type": "pubkey"
+          },
+          {
+            "name": "referee",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          }
+        ]
+      }
+    },
+    {
+      "name": "Wager",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "opponent",
+            "type": "pubkey"
+          },
+          {
+            "name": "winner",
+            "type": "pubkey"
+          },
+          {
+            "name": "mint",
+            "type": "pubkey"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          },
+          {
+            "name": "nonce",
+            "type": "u64"
+          },
+          {
+            "name": "deadline",
+            "type": "i64"
+          },
+          {
+            "name": "bump",
+            "type": "u8"
+          },
+          {
+            "name": "state",
+            "type": {
+              "defined": {
+                "name": "WagerState"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WagerClosed",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wager",
+            "type": "pubkey"
+          },
+          {
+            "name": "outcome",
+            "type": {
+              "defined": {
+                "name": "WagerState"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "WagerJoined",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wager",
+            "type": "pubkey"
+          },
+          {
+            "name": "opponent",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WagerOpened",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wager",
+            "type": "pubkey"
+          },
+          {
+            "name": "maker",
+            "type": "pubkey"
+          },
+          {
+            "name": "stake",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WagerReserved",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "wager",
+            "type": "pubkey"
+          },
+          {
+            "name": "opponent",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "WagerState",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "Waiting"
+          },
+          {
+            "name": "Reserved"
+          },
+          {
+            "name": "Playing"
+          },
+          {
+            "name": "Settled"
+          },
+          {
+            "name": "Cancelled"
+          },
+          {
+            "name": "Expired"
+          }
+        ]
+      }
+    }
+  ]
+}

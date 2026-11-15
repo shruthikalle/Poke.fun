@@ -128,6 +128,7 @@ No blockers or majors remain. Pass 2 had no page errors. The only console messag
 - **Steps:** during a battle, go to `/`, then back to `/battle`.
 - **Actual:** turn 1 again. The mock also takes the entry a second time.
 - **Why deferred:** resuming needs the real BattleStreamSource, which owns battle state on the server. The mock has nothing to resume from.
+- **Update (gaming-mechanics branch):** two-player matches now rejoin from the server's event log after leaving or refreshing. Leaving a battle against the AI still starts a new one.
 
 ### QA-13 · Polish · Deferred · A second tab sends you to the Loadout
 - **Steps:** open `/battle` in a second tab.

@@ -3,7 +3,14 @@
 import { session as tabStorage } from "../../lib/storage";
 
 import { useCallback, useEffect, useState } from "react";
-import { api, type Card, type Match, type Session } from "../../lib/api";
+import { api, type Card, type Effectiveness, type Match, type Session } from "../../lib/api";
+
+const EFFECT_TEXT: Record<Effectiveness, string> = {
+  super: " It's super effective!",
+  resisted: " It's not very effective.",
+  immune: " It had no effect.",
+  normal: "",
+};
 import "./legacy.css";
 
 const SESSION_KEY = "pokefun-session";
@@ -105,6 +112,9 @@ export default function Home() {
 
   const you = match?.players[match.you];
   const opponent = match?.players[1 - match.you];
+  const secondsLeft = match?.status === "playing" && match.deadlineUnixMs
+    ? Math.max(0, Math.ceil((match.deadlineUnixMs - Date.now()) / 1000))
+    : null;
   const winnerText = match?.winner === "draw" ? "Draw — both cards were knocked out."
     : match?.winner ? (match.winner === `player${match.you + 1}` ? "You won!" : "You lost.") : "";
 
@@ -132,11 +142,11 @@ export default function Home() {
       {session && match && <section className="arena">
         <div className="room-bar"><div><span className="muted">ROOM CODE</span><strong className="room-code">{match.id}</strong></div><button className="text-button" onClick={() => void navigator.clipboard.writeText(match.id)}>Copy code</button><button className="text-button" onClick={leave}>Leave view</button></div>
         {match.status === "waiting" ? <div className="waiting"><h2>Waiting for opponent</h2><p>Share room code <strong>{match.id}</strong>. Have your friend open this app in another browser or a private window and join with the code.</p></div> : <>
-          <div className="battle-top"><span>TURN {match.turn}</span><strong>{winnerText || (match.submitted[match.you] ? "Attack locked in · waiting for opponent" : "Choose an attack")}</strong></div>
+          <div className="battle-top"><span>TURN {match.turn}</span><strong>{winnerText || (match.submitted[match.you] ? "Attack locked in · waiting for opponent" : "Choose an attack")}</strong>{secondsLeft !== null && <span className={`turn-timer${secondsLeft <= 10 ? " low" : ""}`}>⏱ {secondsLeft}s</span>}</div>
           <div className="fighters">{opponent && <BattleCard player={opponent} label="OPPONENT" />}<div className="versus">VS</div>{you && <BattleCard player={you} label="YOU" />}</div>
-          {match.status === "playing" && you && <div className="attacks"><h2>Your attacks</h2><div className="attack-grid">{you.card.attacks.map((move) => <button key={move.id} disabled={busy || match.submitted[match.you] || you.energy < move.cost} onClick={() => void attack(move.id)}><strong>{move.name}</strong><span>{move.damage} damage · {move.cost ? `costs ${move.cost} energy` : `gains ${move.gain} energy`}</span></button>)}</div></div>}
+          {match.status === "playing" && you && <div className="attacks"><h2>Your attacks</h2><div className="attack-grid">{you.card.attacks.map((move) => <button key={move.id} disabled={busy || match.submitted[match.you] || you.energy < move.cost} onClick={() => void attack(move.id)}><strong>{move.name}</strong><span>{move.element} · {move.damage} damage · {move.cost ? `costs ${move.cost} energy` : `gains ${move.gain} energy`}</span></button>)}</div></div>}
           {match.status === "finished" && <div className="result"><h2>{winnerText}</h2><button className="primary" onClick={leave}>Play another match</button></div>}
-          <div className="history"><h2>Battle log</h2>{match.history.length ? [...match.history].reverse().map((turn) => <p key={turn.number}>Turn {turn.number}: {match.players[0]?.name} used {turn.attacks[0]} for {turn.damage[0]} damage. {match.players[1]?.name} used {turn.attacks[1]} for {turn.damage[1]} damage.</p>) : <p>First turn is waiting for attacks.</p>}</div>
+          <div className="history"><h2>Battle log</h2>{match.history.length ? [...match.history].reverse().map((turn) => <p key={turn.number}>Turn {turn.number}: {match.players[0]?.name} used {turn.attacks[0]}{turn.auto[0] ? " (timed out)" : ""} for {turn.damage[0]} damage.{EFFECT_TEXT[turn.effect[0]]} {match.players[1]?.name} used {turn.attacks[1]}{turn.auto[1] ? " (timed out)" : ""} for {turn.damage[1]} damage.{EFFECT_TEXT[turn.effect[1]]}</p>) : <p>First turn is waiting for attacks.</p>}</div>
         </>}
       </section>}
       <footer>Fictional sample cards. Bringing your own cards and paid entries are coming soon.</footer>

@@ -1,8 +1,9 @@
 import { session } from "../storage";
-import type { Trainer } from "../battle/types";
+import type { Side, Trainer } from "../battle/types";
 import { opponentAssets } from "../cards/collection";
 import { buildTeam, resolveCard, type CardPick, type MatchFormat, type PowerTier } from "../cards/mapping";
 import { tierFor, type RankTier } from "../rank/RankService";
+import { ServerMatchmakingService } from "./ServerMatchmakingService";
 
 export interface MatchRequest {
   player: string;
@@ -22,12 +23,22 @@ export interface MatchOpponent {
   team: CardPick[];
 }
 
+/** Handle to a two-player battle created by the server's matchmaking queue. */
+export interface LiveMatch {
+  battleId: string;
+  /** Authenticates our side; never shared with the opponent. */
+  token: string;
+  side: Side;
+}
+
 export interface MatchTicket {
   matchId: string;
   format: MatchFormat;
   entry: number;
   you: { name: string; rating: number; team: CardPick[] };
   opponent: MatchOpponent;
+  /** Present for a real two-player match; absent when battling the AI. */
+  live?: LiveMatch;
 }
 
 export interface MatchSearch {
@@ -46,7 +57,10 @@ const TRAINERS: Trainer[] = [
   { id: "pyrefly", name: "pyrefly", avatar: "rook" },
 ];
 
-/** TODO(matchmaking): replace with the Go API queue over WebSocket. */
+/**
+ * Offline stand-in: invents an opponent from the sample collections. Used when
+ * NEXT_PUBLIC_LIVE_BATTLE=0 for explicit offline demos.
+ */
 export class MockMatchmakingService implements MatchmakingService {
   find(request: MatchRequest): MatchSearch {
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -80,7 +94,11 @@ export class MockMatchmakingService implements MatchmakingService {
   }
 }
 
-export const matchmakingService: MatchmakingService = new MockMatchmakingService();
+// Real two-player matchmaking through the Go API. Offline demos require an
+// explicit NEXT_PUBLIC_LIVE_BATTLE=0 setting.
+export const matchmakingService: MatchmakingService = process.env.NEXT_PUBLIC_LIVE_BATTLE === "0"
+  ? new MockMatchmakingService()
+  : new ServerMatchmakingService();
 
 const TICKET_KEY = "pf:match:v1";
 
@@ -91,11 +109,17 @@ export function saveTicket(ticket: MatchTicket) {
 const isPick = (p: unknown): p is CardPick => !!p && typeof p === "object" && typeof (p as CardPick).species === "string" && typeof (p as CardPick).key === "string" && typeof (p as CardPick).level === "number";
 const isTeam = (t: unknown) => Array.isArray(t) && t.length >= 1 && t.length <= 3 && t.every(isPick);
 
+const isLive = (l: unknown) => {
+  const x = l as LiveMatch;
+  return !!x && typeof x.battleId === "string" && typeof x.token === "string" && (x.side === "p1" || x.side === "p2");
+};
+
 /** Rejects stale or hand-edited tickets so /battle never renders half a match. */
 export function isTicket(t: unknown): t is MatchTicket {
   const x = t as MatchTicket;
   return !!x && typeof x.matchId === "string" && (x.format === "champion" || x.format === "squad") && typeof x.entry === "number" && x.entry >= 0
-    && !!x.you && isTeam(x.you.team) && typeof x.you.rating === "number" && !!x.opponent && isTeam(x.opponent.team) && !!x.opponent.trainer?.name && typeof x.opponent.rating === "number";
+    && !!x.you && isTeam(x.you.team) && typeof x.you.rating === "number" && !!x.opponent && isTeam(x.opponent.team) && !!x.opponent.trainer?.name && typeof x.opponent.rating === "number"
+    && (x.live === undefined || isLive(x.live));
 }
 
 export function loadTicket(): MatchTicket | null {
