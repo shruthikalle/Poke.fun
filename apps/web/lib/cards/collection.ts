@@ -17,6 +17,7 @@ export interface DasAsset {
   ownership: { owner: string; frozen: boolean };
 }
 
+import { marketplaceService } from "../market/mockMarketplace";
 import { CARD_CATALOG, type CatalogEntry } from "./mapping";
 
 export interface CollectionService {
@@ -95,11 +96,26 @@ export const opponentAssets = (owner: string, count = 8) => {
   return pool.map((e, i) => fromCatalog(owner, e, i));
 };
 
+/** Cards the person owns in the marketplace demo (bought, traded or imported), as DAS assets. */
+function marketCollection(owner: string): DasAsset[] {
+  marketplaceService.restore();
+  marketplaceService.ensureAccount(owner, "You");
+  const { cards, owners } = marketplaceService.snapshot();
+  return Object.values(cards).filter((c) => owners[c.mint] === owner).map((c) => {
+    const [company, grade] = c.grade.split(" ");
+    const a = asset(owner, { id: c.mint, name: c.name, set: c.set, number: c.number, image: c.imageUri, grade });
+    a.content.metadata.name = `${c.name} – ${c.set} ${c.grade}`;
+    a.content.metadata.attributes = a.content.metadata.attributes.map((x) => (x.trait_type === "Grading Company" ? { ...x, value: company } : x));
+    return a;
+  });
+}
+
 /** TODO(collectibles): call `getAssetsByOwner` on a DAS-enabled RPC (QuickNode) and filter by supported collections. */
 export class MockCollectionService implements CollectionService {
   async getOwnedCollectibles(owner: string): Promise<DasAsset[]> {
     await new Promise((r) => setTimeout(r, 350));
-    return mockCollection(owner, scenario());
+    const which = scenario();
+    return which === "default" ? marketCollection(owner) : mockCollection(owner, which);
   }
 }
 

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
-import { SignInDialog } from "../../components/SignInDialog";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useMotionPreference } from "../../lib/motion";
@@ -16,7 +15,8 @@ import { buildTeam, FORMAT_LABEL, RENTAL_POOL, resolveCard, type CardPick, type 
 import { matchmakingService, saveTicket, type MatchSearch, type MatchTicket } from "../../lib/match/MatchmakingService";
 import { speciesService, type SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
-import { ENTRY_PRESETS, formatDollars, MAX_ENTRY, stakeService } from "../../lib/stake/StakeService";
+import { useCurrency } from "../../lib/market/currency";
+import { ENTRY_PRESETS, MAX_ENTRY, stakeService } from "../../lib/stake/StakeService";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "./loadout.module.css";
 
@@ -82,8 +82,8 @@ function RankBadge({ rank }: { rank: { tier: string; rating: number } }) {
 
 export default function LoadoutPage() {
   const router = useRouter();
-  const { ready, playerName, session, status, playAsGuest } = useWallet();
-  const [signInOpen, setSignInOpen] = useState(false);
+  const { ready, playerName, session, status, playAsGuest, signIn } = useWallet();
+  const { formatUsd: formatDollars } = useCurrency();
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
@@ -101,8 +101,8 @@ export default function LoadoutPage() {
   const guest = status === "guest" || !session;
 
   useEffect(() => {
-    if (ready && !playerName) setSignInOpen(true);
-  }, [ready, playerName]);
+    if (ready && !playerName) signIn({ onCancel: () => router.push("/") });
+  }, [ready, playerName, signIn, router]);
 
   useEffect(() => {
     if (!playerName) return;
@@ -177,11 +177,6 @@ export default function LoadoutPage() {
 
   useEffect(() => () => search.current?.cancel(), []);
 
-  const closeSignIn = useCallback(() => {
-    setSignInOpen(false);
-    if (!playerName) router.push("/");
-  }, [playerName, router]);
-  const onSignedIn = useCallback(() => setSignInOpen(false), []);
 
   const [entryError, setEntryError] = useState<string | null>(null);
   const setCustomEntry = (raw: string) => {
@@ -202,7 +197,11 @@ export default function LoadoutPage() {
       <div className={styles.backdrop} aria-hidden="true" />
       <header className={styles.top}>
         <Link href="/" className={styles.brand}><Emblem size={22} /><span>Poke.fun</span></Link>
-        <span className="pf-eyebrow">Loadout</span>
+        <nav className={styles.nav} aria-label="Main">
+          <Link href="/market">Marketplace</Link>
+          <Link href="/collection">My Cards</Link>
+          <Link href="/loadout" aria-current="page">Battle</Link>
+        </nav>
         <div className={styles.account}>
           {playerName ? <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }} /> : null}
         </div>
@@ -364,7 +363,6 @@ export default function LoadoutPage() {
           onReplay={() => summonCard(lead.key)} onDone={() => setSummon(null)} />
       )}
 
-      <SignInDialog open={signInOpen} onClose={closeSignIn} onSignedIn={onSignedIn} />
     </div>
   );
 }

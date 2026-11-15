@@ -12,9 +12,19 @@ export interface ChatRoom {
   subrooms?: string[];
 }
 
+export interface LiveTrainer { name: string; avatar: string }
+
+export interface LiveBattle {
+  id: string;
+  format: string;
+  turn: number;
+  trainers: [LiveTrainer, LiveTrainer];
+}
+
 export interface LobbySnapshot {
   usersOnline: number;
   activeBattles: number;
+  liveBattles: LiveBattle[];
   rooms: ChatRoom[];
 }
 
@@ -31,15 +41,22 @@ const ROOMS: ChatRoom[] = [
   { id: "random", name: "Random Battles", users: 132, description: "Random creatures, one winner.", section: "community" },
 ];
 
+const LIVE: LiveBattle[] = [
+  { id: "b1", format: "Champion 1v1", turn: 4, trainers: [{ name: "thar07", avatar: "kai" }, { name: "lunaria", avatar: "maya" }] },
+  { id: "b2", format: "Squad of 3", turn: 9, trainers: [{ name: "pyrefly", avatar: "rook" }, { name: "mossy_mo", avatar: "theo" }] },
+  { id: "b3", format: "Champion 1v1", turn: 2, trainers: [{ name: "gemhunter", avatar: "maya" }, { name: "rook_w", avatar: "rook" }] },
+];
+
 export class MockLobbyService implements LobbyService {
   subscribe(onUpdate: (snapshot: LobbySnapshot) => void): Unsubscribe {
-    let snapshot: LobbySnapshot = { usersOnline: 8576, activeBattles: 962, rooms: ROOMS };
+    let snapshot: LobbySnapshot = { usersOnline: 8576, activeBattles: 962, liveBattles: LIVE, rooms: ROOMS };
     onUpdate(snapshot);
     const id = setInterval(() => {
       const jitter = (n: number, spread: number) => Math.max(0, n + Math.round((Math.random() - 0.5) * spread));
       snapshot = {
         usersOnline: jitter(snapshot.usersOnline, 24),
         activeBattles: jitter(snapshot.activeBattles, 8),
+        liveBattles: snapshot.liveBattles.map((b) => ({ ...b, turn: b.turn + 1 })),
         rooms: snapshot.rooms.map((r) => ({ ...r, users: jitter(r.users, 4) })),
       };
       onUpdate(snapshot);

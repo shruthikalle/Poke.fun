@@ -95,7 +95,7 @@ export class MockBattleStream implements BattleStreamSource {
     this.timerEnabled = enabled;
     this.secondsLeft = 150;
     this.emit({ type: "timer", enabled, secondsLeft: enabled ? this.secondsLeft : null });
-    if (enabled) this.emit({ type: "chat", user: "", text: `Battle timer is ON: inactive players will automatically lose when time's up. (requested by ${this.you.name})` });
+    if (enabled) this.emit({ type: "chat", user: "", text: `Battle timer is ON: if time runs out, a move is picked for you. (requested by ${this.you.name})` });
     else this.emit({ type: "chat", user: "", text: "Battle timer is now OFF." });
   }
 

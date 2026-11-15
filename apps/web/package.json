@@ -10,6 +10,10 @@
     "catalog:check": "node scripts/check-species.mjs"
   },
   "dependencies": {
+    "@privy-io/react-auth": "^3.51.0",
+    "@solana-program/memo": "^0.16.0",
+    "@solana-program/system": "^0.16.0",
+    "@solana-program/token": "^0.18.0",
     "@solana/kit": "^8.5.0",
     "next": "16.4.6",
     "react": "19.3.1",

@@ -8,6 +8,7 @@ import { useWallet } from "../../lib/wallet/WalletProvider";
 import type { ChatRoom } from "../../lib/lobby/useLobby";
 import styles from "./battle.module.css";
 import { PixelIcon } from "../PixelIcon";
+import { CurrencyToggle } from "../market/CurrencyToggle";
 
 export type TabId = "battle" | string;
 
@@ -39,19 +40,20 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
     <header className={styles.topbar}>
       <div className={styles.topLeft}>
       <Link href="/" className={styles.logo} aria-label="Poke.fun home">
-        <Emblem size={22} /><span>Poke<em>.fun</em></span><small>beta</small>
+        <Emblem size={22} /><span>Poke.fun</span>
       </Link>
+      <nav className={styles.mainNav} aria-label="Main">
+        <Link href="/market">Marketplace</Link>
+        <Link href="/collection">My Cards</Link>
+        <Link href="/loadout" aria-current="page">Battle</Link>
+      </nav>
       <nav className={styles.tabs} aria-label="Open tabs">
-        <Link href="/" className={styles.tab}>
-          <span className={styles.homeIcon} aria-hidden="true" />
-          <span>Home</span>
-        </Link>
         <div className={styles.tab} data-active={activeTab === "battle" || undefined} role="tab" aria-selected={activeTab === "battle"}>
           <button className={styles.tabMain} onClick={() => onSelect("battle")}>
             <strong>{title}</strong>
             <span>{subtitle}</span>
           </button>
-          <Link href="/" className={styles.tabClose} aria-label="Leave battle"><PixelIcon name="close" size={9} /></Link>
+          <Link href="/loadout" className={styles.tabClose} aria-label="Leave battle" title="Leave battle"><PixelIcon name="close" size={9} /></Link>
         </div>
         {rooms.map((r) => (
           <div key={r.id} className={styles.tab} data-active={activeTab === r.id || undefined} role="tab" aria-selected={activeTab === r.id}>
@@ -63,10 +65,11 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
           </div>
         ))}
       </nav>
+      <button className={styles.plus} onClick={onNewBattle} title="Find a new battle" aria-label="New battle">+</button>
       </div>
       <div className={styles.topRight}>
-      <button className={styles.plus} onClick={onNewBattle} title="Find a new battle" aria-label="New battle">+</button>
       <div className={styles.userArea}>
+        <CurrencyToggle />
         {playerName ? (
           <AccountChip classes={{ chip: styles.userChip, avatar: styles.userAvatar, menu: styles.menu, menuItem: styles.menuItem }} />
         ) : (

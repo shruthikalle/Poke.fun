@@ -1,14 +1,13 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { ActionBar } from "../../components/battle/ActionBar";
 import { LogPanel, type BattleOptions } from "../../components/battle/LogPanel";
 import { RoomPanel } from "../../components/battle/RoomPanel";
 import { Sidebar } from "../../components/battle/Sidebar";
 import { TopBar, type TabId } from "../../components/battle/TopBar";
 import { Viewport } from "../../components/battle/Viewport";
-import { SignInDialog } from "../../components/SignInDialog";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { MockBattleStream } from "../../lib/battle/MockBattleStream";
@@ -20,7 +19,8 @@ import { useOdds } from "../../lib/markets/useOdds";
 import { loadTicket, type MatchTicket } from "../../lib/match/MatchmakingService";
 import { speciesService } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
-import { formatDollars, stakeService } from "../../lib/stake/StakeService";
+import { stakeService } from "../../lib/stake/StakeService";
+import { useCurrency } from "../../lib/market/currency";
 import { useMotionPreference } from "../../lib/motion";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "../../components/battle/battle.module.css";
@@ -38,6 +38,7 @@ async function toCreatures(picks: CardPick[], side: Side): Promise<Creature[]> {
 }
 
 function ResultSummary({ result, entry }: { result: MatchResult; entry: number }) {
+  const { formatUsd: formatDollars } = useCurrency();
   const money = result.outcome === "win" ? `+${formatDollars(result.payout)}` : result.outcome === "draw" ? `${formatDollars(result.payout)} back` : entry ? `−${formatDollars(entry)}` : "$0";
   return (
     <div className={styles.result}>
@@ -57,7 +58,10 @@ function ResultSummary({ result, entry }: { result: MatchResult; entry: number }
 
 export default function BattlePage() {
   const router = useRouter();
-  const { ready, playerName: signedInName } = useWallet();
+  const { ready, playerName: signedInName, signIn } = useWallet();
+  const { formatUsd: formatDollars } = useCurrency();
+  const formatRef = useRef(formatDollars);
+  formatRef.current = formatDollars;
   const playerName = signedInName ?? "Guest";
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -84,7 +88,9 @@ export default function BattlePage() {
     if (!ready || load.status !== "ready") return null;
     const t = load.ticket;
     const { winnerTakes } = stakeService.quote(t.entry);
-    const format = makeFormat(FORMAT_LABEL[t.format], [
+    const formatDollars = formatRef.current;
+    const format = makeFormat("[Gen 9] Random Battle", [
+      { name: "Match", description: FORMAT_LABEL[t.format] },
       { name: "Entry", description: t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
       { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
     ]);
@@ -102,7 +108,6 @@ export default function BattlePage() {
   const [sidebar, setSidebar] = useState(true);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [tab, setTab] = useState<TabId>("battle");
-  const [signIn, setSignIn] = useState(false);
 
   useEffect(() => {
     if (window.innerWidth < 1180) setSidebar(false);
@@ -134,7 +139,6 @@ export default function BattlePage() {
     setRooms((rs) => rs.filter((r) => r.id !== id));
     setTab((t) => (t === id ? "battle" : t));
   }, []);
-  const closeSignIn = useCallback(() => setSignIn(false), []);
 
   const setOptions = (o: BattleOptions) => {
     if (o.sound === audio.muted) audio.toggleMute();
@@ -150,8 +154,9 @@ export default function BattlePage() {
 
   return (
     <div className={styles.app} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
+      <div className={styles.backdrop} aria-hidden="true" />
       <TopBar title={title} subtitle={subtitle} rooms={rooms} activeTab={tab} onSelect={setTab} onCloseRoom={closeRoom}
-        onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => setSignIn(true)} />
+        onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => signIn()} />
 
       <div className={styles.body}>
         <div className={styles.left}>
@@ -191,7 +196,6 @@ export default function BattlePage() {
         )}
       </div>
 
-      <SignInDialog open={signIn} onClose={closeSignIn} onSignedIn={closeSignIn} />
     </div>
   );
 }

@@ -49,7 +49,8 @@ export function ChatInput({ name, onSend, placeholder }: { name: string; onSend:
   return (
     <form className={styles.chatForm} onSubmit={submit}>
       <label htmlFor="chat-input" className={styles.chatName} style={{ color: nameColor(name) }}>{name}:</label>
-      <input id="chat-input" className={`pf-input ${styles.chatInput}`} value={text} onChange={(e) => setText(e.target.value)} maxLength={300} autoComplete="off" placeholder={placeholder} />
+      <input id="chat-input" className={`pf-input ${styles.chatInput}`} value={text} onChange={(e) => setText(e.target.value)} maxLength={300} autoComplete="off" placeholder={placeholder ?? "Say something to the room"} />
+      <button className="pf-btn" data-size="sm" type="submit" disabled={!text.trim()}>Send</button>
     </form>
   );
 }
@@ -104,7 +105,7 @@ export function LogPanel({ state, playerName, sendChat, options, setOptions }: P
 
       <div ref={ref} className={styles.log} onScroll={onScroll} role="log" aria-live="polite">
         <div className={styles.formatBlock}>
-          <div>Format:</div>
+          <div>Format</div>
           <strong className={styles.formatName}>{state.format.name}</strong>
           {state.format.rated && <div><span className={styles.rated}>Rated battle</span></div>}
           {state.format.rules.map((r) => <div key={r.name} className={styles.rule}><em>{r.name}:</em> {r.description}</div>)}
