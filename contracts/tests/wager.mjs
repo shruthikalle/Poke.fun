@@ -113,4 +113,21 @@ await program.methods.cancelWager().accountsStrict({
 assert.equal((await getAccount(connection, aliceToken)).amount, 2_000_000n);
 assert.equal(await connection.getAccountInfo(second.vault), null);
 
-console.log("Local validator: deposits, opponent restriction, unauthorized settlement, payout, and cancellation passed");
+const third = await open(3);
+await program.methods.reserveWager(bob.publicKey).accountsStrict({
+  referee: referee.publicKey, config, wager: third.wager,
+}).signers([referee]).rpc();
+await program.methods.joinWager().accountsStrict({
+  opponent: bob.publicKey, wager: third.wager, mint, vault: third.vault,
+  opponentToken: bobToken, tokenProgram: TOKEN_PROGRAM_ID,
+}).signers([bob]).rpc();
+await program.methods.settleDraw().accountsStrict({
+  referee: referee.publicKey, config, maker: alice.publicKey, wager: third.wager,
+  mint, vault: third.vault, makerToken: aliceToken, opponentToken: bobToken,
+  tokenProgram: TOKEN_PROGRAM_ID,
+}).signers([referee]).rpc();
+assert.equal((await getAccount(connection, aliceToken)).amount, 2_000_000n);
+assert.equal((await getAccount(connection, bobToken)).amount, 4_000_000n);
+assert.equal(await connection.getAccountInfo(third.vault), null);
+
+console.log("Local validator: deposits, opponent restriction, unauthorized settlement, payout, draw refund, and cancellation passed");

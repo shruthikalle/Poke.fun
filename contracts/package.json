@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test:local": "node tests/wager.mjs"
+    "test:local": "node tests/wager.mjs",
+    "setup:devnet": "node scripts/setup-devnet.mjs",
+    "test:devnet": "node scripts/smoke-devnet.mjs"
   },
   "devDependencies": {
     "@coral-xyz/anchor": "0.31.1",

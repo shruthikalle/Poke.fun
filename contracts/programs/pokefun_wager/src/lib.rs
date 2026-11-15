@@ -1,8 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_spl::token::{self, CloseAccount, Mint, Token, TokenAccount, TransferChecked};
 
-// Replace with the deployed program ID before deploying. This example ID is not a deployed escrow.
-declare_id!("Fg6PaFpoGXkYsidMpWxqSWY4ZbWvMaJf1c4SSbM9VTx");
+declare_id!("FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J");
 
 const QUEUE_SECONDS: i64 = 300;
 const JOIN_SECONDS: i64 = 120;
@@ -203,6 +202,74 @@ pub mod pokefun_wager {
         emit!(WagerClosed {
             wager: wager_key,
             outcome: WagerState::Settled
+        });
+        Ok(())
+    }
+
+    // A completed battle can end in a draw before its timeout. The referee
+    // returns each exact stake to its original depositor.
+    pub fn settle_draw(ctx: Context<SettleDraw>) -> Result<()> {
+        let wager = &ctx.accounts.wager;
+        require!(wager.state == WagerState::Playing, WagerError::WrongState);
+        require!(
+            Clock::get()?.unix_timestamp < wager.deadline,
+            WagerError::Expired
+        );
+        let nonce = wager.nonce.to_le_bytes();
+        let bump = [wager.bump];
+        let seeds: &[&[u8]] = &[b"wager", wager.maker.as_ref(), &nonce, &bump];
+        let signer = &[seeds];
+        require!(
+            ctx.accounts.vault.amount >= wager.stake.checked_mul(2).ok_or(WagerError::Overflow)?,
+            WagerError::VaultUnderfunded
+        );
+        send_from_vault(
+            &ctx.accounts.token_program,
+            &ctx.accounts.vault,
+            &ctx.accounts.mint,
+            &ctx.accounts.maker_token,
+            &ctx.accounts.wager,
+            wager.stake,
+            signer,
+        )?;
+        send_from_vault(
+            &ctx.accounts.token_program,
+            &ctx.accounts.vault,
+            &ctx.accounts.mint,
+            &ctx.accounts.opponent_token,
+            &ctx.accounts.wager,
+            wager.stake,
+            signer,
+        )?;
+        let extra = ctx
+            .accounts
+            .vault
+            .amount
+            .checked_sub(wager.stake.checked_mul(2).ok_or(WagerError::Overflow)?)
+            .ok_or(WagerError::VaultUnderfunded)?;
+        if extra > 0 {
+            send_from_vault(
+                &ctx.accounts.token_program,
+                &ctx.accounts.vault,
+                &ctx.accounts.mint,
+                &ctx.accounts.maker_token,
+                &ctx.accounts.wager,
+                extra,
+                signer,
+            )?;
+        }
+        close_vault(
+            &ctx.accounts.token_program,
+            &ctx.accounts.vault,
+            &ctx.accounts.maker,
+            &ctx.accounts.wager,
+            signer,
+        )?;
+        let wager_key = wager.key();
+        ctx.accounts.wager.state = WagerState::Drawn;
+        emit!(WagerClosed {
+            wager: wager_key,
+            outcome: WagerState::Drawn
         });
         Ok(())
     }
@@ -428,6 +495,26 @@ pub struct SettleWager<'info> {
 }
 
 #[derive(Accounts)]
+pub struct SettleDraw<'info> {
+    pub referee: Signer<'info>,
+    #[account(seeds = [b"config"], bump = config.bump, constraint = config.referee == referee.key() @ WagerError::WrongReferee)]
+    pub config: Account<'info, Config>,
+    /// CHECK: Validated against wager.maker and only receives vault rent.
+    #[account(mut, address = wager.maker)]
+    pub maker: AccountInfo<'info>,
+    #[account(mut, seeds = [b"wager", wager.maker.as_ref(), &wager.nonce.to_le_bytes()], bump = wager.bump, has_one = mint)]
+    pub wager: Account<'info, Wager>,
+    pub mint: Account<'info, Mint>,
+    #[account(mut, seeds = [b"vault", wager.key().as_ref()], bump, token::mint = mint, token::authority = wager)]
+    pub vault: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint, token::authority = maker)]
+    pub maker_token: Account<'info, TokenAccount>,
+    #[account(mut, token::mint = mint, constraint = opponent_token.owner == wager.opponent @ WagerError::WrongRecipient)]
+    pub opponent_token: Account<'info, TokenAccount>,
+    pub token_program: Program<'info, Token>,
+}
+
+#[derive(Accounts)]
 pub struct ExpireWager<'info> {
     pub caller: Signer<'info>,
     /// CHECK: Validated against wager.maker and only receives vault rent.
@@ -480,6 +567,7 @@ pub enum WagerState {
     Reserved,
     Playing,
     Settled,
+    Drawn,
     Cancelled,
     Expired,
 }

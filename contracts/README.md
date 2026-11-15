@@ -1,38 +1,36 @@
-# Poke.fun wager escrow (prototype)
+# Poke.fun Devnet wager escrow
 
-This Anchor program holds **one SPL token mint** selected at initialization. It accepts six-decimal tokens, so a $1 entry for a genuine USDC mint is `1_000_000` base units. The program does not verify that a six-decimal token is genuine USDC: the deployed mint address must be checked before anyone deposits.
+The Anchor program is deployed on **Solana Devnet** at [`FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J`](https://explorer.solana.com/address/FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J?cluster=devnet). Its immutable config account is [`8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S`](https://explorer.solana.com/address/8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S?cluster=devnet). The configured mint is [`e8aEdsUNqX96cnptqfH1ddGdYvKspSEzLGHrpgH8Zhp`](https://explorer.solana.com/address/e8aEdsUNqX96cnptqfH1ddGdYvKspSEzLGHrpgH8Zhp?cluster=devnet), a **six-decimal demo token, not Circle USDC or a dollar claim**. The trusted referee address is `4JEbjdy2WGKASayP2LuiMvA8TVo1uQ9z7mjgZLxgbHvL`. The two test wallets `Dxx5…Q8p6z` and `7Aug…793k` each received ten demo tokens. The second wallet also received 0.03 Devnet SOL for transaction fees.
 
-## Flow
+## Match flow
 
-1. Deploy the program with its actual program ID. Call `initialize` once with the chosen devnet test-token mint and the trusted referee wallet. The config is immutable in this prototype.
-2. Player A calls `open_wager(nonce, 1_000_000)` and signs a transfer of 1 test USDC into a program-owned vault. The on-chain wager is `Waiting` for five minutes. `nonce` must be unique per maker.
-3. The Go matchmaking server indexes waiting wagers, matches on stake and rating, then its referee wallet calls `reserve_wager(wager, player_b_wallet)`. Only that wallet can join. The reservation lasts two minutes.
-4. Player B calls `join_wager` and transfers exactly the same amount to the same vault. The wager becomes `Playing` for 15 minutes. The vault then holds 2 test USDC.
-5. After the authoritative game server records a winner, the referee calls `settle_wager(winner)`. The contract checks that winner is A or B and sends the pot to that player's token account. It then closes the vault and records `Settled`.
-6. Before B joins, A may call `cancel_wager` for a refund. When a deadline passes, anyone may call `expire_wager`; an unmatched offer refunds A, and a timed-out game refunds each player their own stake. These paths close the vault and leave the wager account as an audit record.
+1. Player A signs `open_wager(nonce, stake)` and deposits the selected mint into a program-owned vault. The wager is `Waiting` for five minutes. For this six-decimal mint, `1_000_000` units is one **demo token**.
+2. An off-chain skill queue pairs A with B at the same stake. The configured referee signs `reserve_wager(B)`, restricting the wager to B's wallet for two minutes.
+3. B signs `join_wager` and deposits the same amount. The match becomes `Playing` for fifteen minutes only after both deposits are confirmed.
+4. The authoritative game server decides the result. The referee signs `settle_wager(winner)`, transferring both deposits to that player. It can sign `settle_draw` to return each stake for a tie.
+5. Before B joins, A can sign `cancel_wager` to recover the deposit. After any deadline, anyone can sign `expire_wager`; it returns A's deposit if no one joined, or both original deposits if the match timed out.
 
-The queue ordering and skill rating are **off-chain**. The program enforces the reserved opponent, token mint, equal stake, winner recipient, and deadlines. It **trusts the referee to report the game result correctly**; it cannot independently verify real-time combat. The current web and Go apps still use demo entry amounts. They do not yet sign these instructions, link wallet addresses to queue tickets, index wager events, or call settlement. The contract alone does not make the UI's `$1` button charge a wallet.
+The program enforces the mint, stake, reserved opponent, payout recipient, state transitions, and timeouts. **It trusts the referee to report the winner honestly.** A referee compromise or bad game result can misdirect the pot before the battle deadline. This is a Devnet prototype, not an audited real-funds contract.
 
-## Build
+## Current app integration
+
+The existing web loadout still labels nonzero entries as **demo entries**. It does not yet sign `open_wager` or `join_wager`; the Go queue does not verify on-chain deposits, reserve opponents, or settle battle results. Its match creation is therefore separate from the deployed escrow. Do not describe the current `$1` button as an on-chain bet. A full integration must bind the authenticated wallet and NFT to an on-chain wager, start the game only after the `Playing` state is confirmed, persist the game-to-wager mapping, have the server referee sign the result, and show transaction signatures and refund actions in the UI. Never put the referee key in browser code.
+
+## Build and verify
+
+From `contracts/`:
 
 ```sh
-cd contracts
+cargo fmt --check
 cargo check
-cargo test
-anchor build
-```
-
-Anchor program dependencies are pinned to 0.31.1. If your Solana CLI installation is read-only, `anchor build` may fail while installing platform tools beside the CLI. Copy its `platform-tools-sdk/sbf` directory to a writable location and run `SBF_SDK_PATH=/path/to/writable/sbf anchor build`. On this machine, the SBF build and IDL generation passed with that setting. The generated IDL is copied to `idl/pokefun_wager.json` for client work.
-
-To exercise real token transfers against a local validator after building:
-
-```sh
-solana-test-validator --reset --bpf-program Fg6PaFpoGXkYsidMpWxqSWY4ZbWvMaJf1c4SSbM9VTx target/deploy/pokefun_wager.so
-# In another terminal, from contracts/:
-npm install
+SBF_SDK_PATH=/path/to/writable/sbf anchor build
+solana-test-validator --reset --bpf-program FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J target/deploy/pokefun_wager.so
+npm ci
 npm run test:local
 ```
 
-The test creates a six-decimal local token, funds two wallets, rejects an unreserved opponent and unauthorized settlement, pays the winner, and refunds a cancelled offer. It does not wait through the five-minute and fifteen-minute expiry windows.
+The local test covers deposits, opponent restrictions, unauthorized settlement rejection, payout, draw refund, and pre-match cancellation. The on-chain [Devnet smoke wager](https://explorer.solana.com/address/6DiKVH7fsxduAArn1c3HuxzmPyWgwNmCYHbyfVmW1V1e?cluster=devnet) demonstrates an actual one-token deposit from each side and a two-token payout.
 
-Replace the example program ID in `Anchor.toml` and `declare_id!` with the deployed keypair's public address before deployment. Do not use this program with real funds: it has no independent audit, dispute process, or production game-result proof. Keep the demo on localnet or devnet test tokens until those pieces exist.
+To create a **fresh** Devnet deployment, generate a program keypair, update `declare_id!` and `Anchor.toml`, then deploy with `solana program deploy target/deploy/pokefun_wager.so --program-id /path/to/program.json --keypair /path/to/payer.json --url devnet`. Run `POKEFUN_PAYER_KEYPAIR=/path/to/payer.json POKEFUN_REFEREE_KEYPAIR=/path/to/referee.json npm run setup:devnet -- <wallet-one> <wallet-two>` once. The setup script creates the referee key, test mint, immutable config, and ten test tokens per listed wallet. Run `POKEFUN_PAYER_KEYPAIR=/path/to/payer.json POKEFUN_REFEREE_KEYPAIR=/path/to/referee.json npm run test:devnet` to exercise the deposited and settled path. Keep all keypair files outside git. The referee key must be kept for the game server; losing it prevents prompt settlement, though anyone can trigger a timeout refund.
+
+This deployment's payer, program upgrade, and referee keypairs are backed up as SOPS-encrypted binary files in the local, git-ignored `secrets/devnet-wager-*.sops.json` directory. Back up that encrypted directory and your age identity separately; a fresh clone will not contain it. To recover a keypair locally, set `SOPS_AGE_KEY_FILE` to your age identity file and run `sops decrypt --output-type binary --output /private/tmp/pokefun-referee.json secrets/devnet-wager-referee.sops.json` from the repo root. Substitute `payer` or `program` in both filenames for the other keys. Decrypted files are secrets; use a private temporary directory and delete them when finished.

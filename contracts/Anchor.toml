@@ -3,7 +3,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-pokefun_wager = "Fg6PaFpoGXkYsidMpWxqSWY4ZbWvMaJf1c4SSbM9VTx"
+pokefun_wager = "FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J"
+
+[programs.devnet]
+pokefun_wager = "FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J"
 
 [provider]
 cluster = "Localnet"

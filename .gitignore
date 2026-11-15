@@ -12,3 +12,4 @@ bin/
 *.tsbuildinfo
 contracts/target/
 contracts/.anchor/
+secrets/

@@ -1,5 +1,5 @@
 {
-  "address": "Fg6PaFpoGXkYsidMpWxqSWY4ZbWvMaJf1c4SSbM9VTx",
+  "address": "FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J",
   "metadata": {
     "name": "pokefun_wager",
     "version": "0.1.0",
@@ -506,6 +506,116 @@
       ]
     },
     {
+      "name": "settle_draw",
+      "discriminator": [
+        175,
+        154,
+        75,
+        30,
+        118,
+        117,
+        107,
+        194
+      ],
+      "accounts": [
+        {
+          "name": "referee",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker",
+          "writable": true
+        },
+        {
+          "name": "wager",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  119,
+                  97,
+                  103,
+                  101,
+                  114
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager.maker",
+                "account": "Wager"
+              },
+              {
+                "kind": "account",
+                "path": "wager.nonce",
+                "account": "Wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "mint",
+          "relations": [
+            "wager"
+          ]
+        },
+        {
+          "name": "vault",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  118,
+                  97,
+                  117,
+                  108,
+                  116
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "wager"
+              }
+            ]
+          }
+        },
+        {
+          "name": "maker_token",
+          "writable": true
+        },
+        {
+          "name": "opponent_token",
+          "writable": true
+        },
+        {
+          "name": "token_program",
+          "address": "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        }
+      ],
+      "args": []
+    },
+    {
       "name": "settle_wager",
       "discriminator": [
         161,
@@ -932,6 +1042,9 @@
           },
           {
             "name": "Settled"
+          },
+          {
+            "name": "Drawn"
           },
           {
             "name": "Cancelled"
