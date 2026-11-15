@@ -1,8 +1,10 @@
+import { EventPacer } from "./eventPacer";
 import type {
   BattleChoice, BattleEvent, BattleFormat, BattleStreamSource, Creature, Side, Trainer, Unsubscribe,
 } from "./types";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+const TURN_SECONDS = 150;
 
 export interface ServerBattleOptions {
   you: Trainer;
@@ -15,38 +17,29 @@ export interface ServerBattleOptions {
   seed?: number;
 }
 
-// Per-event animation pacing (ms), so the server's instant resolution still
-// plays out like a battle. The reducer is unchanged; only timing lives here.
-const DELAY: Record<string, number> = {
-  init: 0, join: 150, start: 250, switch: 650, turn: 350, request: 50,
-  resolving: 220, move: 900, damage: 500, miss: 500, faint: 600,
-  "choice-accepted": 0, "choice-cancelled": 0, chat: 150, timer: 0, win: 700, leave: 150,
-};
-
-const TURN_SECONDS = 150;
-
 /**
  * Authoritative battle transport. The Go server decides every outcome; this
  * client posts the player's choices, receives the resulting event batch and
- * replays it with animation pacing. Replaces MockBattleStream.
+ * replays it (via EventPacer) with animation pacing. Replaces MockBattleStream;
+ * the reducer and UI are unchanged.
  */
 export class ServerBattleStream implements BattleStreamSource {
   private listener: ((event: BattleEvent) => void) | null = null;
   private id = "";
   private token = "";
   private readonly opts: ServerBattleOptions;
+  private readonly pacer: EventPacer;
   private readonly speed: number;
 
-  private queue: BattleEvent[] = [];
-  private pumping = false;
-  private timers = new Set<ReturnType<typeof setTimeout>>();
-  private commitTimer: ReturnType<typeof setTimeout> | null = null;
-  private tick: ReturnType<typeof setInterval> | null = null;
-
+  // Turn state, tracked only well enough to gate input and run the timer; the
+  // reducer owns the authoritative view.
   private awaiting = false;
   private needsSwitch = false;
   private over = false;
   private pendingChoice: BattleChoice | null = null;
+
+  private commitTimer: ReturnType<typeof setTimeout> | null = null;
+  private tick: ReturnType<typeof setInterval> | null = null;
   private timerEnabled = false;
   private secondsLeft = TURN_SECONDS;
   private lastChat = 0;
@@ -54,6 +47,7 @@ export class ServerBattleStream implements BattleStreamSource {
   constructor(opts: ServerBattleOptions) {
     this.opts = opts;
     this.speed = opts.speed ?? 1;
+    this.pacer = new EventPacer((event) => this.apply(event), this.speed);
   }
 
   connect(listener: (event: BattleEvent) => void): Unsubscribe {
@@ -74,13 +68,13 @@ export class ServerBattleStream implements BattleStreamSource {
         format: this.opts.format,
         seed: this.opts.seed ?? 0,
       });
-      if (!this.listener) return; // disconnected while awaiting
+      if (!this.listener) return; // disconnected while awaiting the response
       this.id = r.id;
       this.token = r.token;
-      this.enqueue(r.events);
+      this.pacer.enqueue(r.events);
       this.startTicker();
     } catch {
-      this.emitNow({ type: "chat", user: "", text: "Couldn't reach the battle server. Start the Go API on :8080 and reopen the match." });
+      this.emit({ type: "chat", user: "", text: "Couldn't reach the battle server. Start the Go API on :8080 and reopen the match." });
     }
   }
 
@@ -88,24 +82,25 @@ export class ServerBattleStream implements BattleStreamSource {
     if (this.over || this.pendingChoice || !this.awaiting) return;
     this.pendingChoice = choice;
     this.awaiting = false;
-    this.emitNow({ type: "choice-accepted", choice });
+    // A forced switch resolves immediately with no cancel window (and the
+    // server returns no choice-accepted for it, so we emit none here either).
     if (this.needsSwitch) {
       void this.commit();
       return;
     }
-    // Brief commit window so Cancel can still take the choice back before the
-    // server resolves (the server advances atomically on commit).
-    this.commitTimer = this.schedule(900 + Math.random() * 800, () => void this.commit());
+    // Normal choice: lock it in optimistically, but leave a brief window so
+    // Cancel can take it back before the server resolves the turn atomically.
+    this.emit({ type: "choice-accepted", choice });
+    this.commitTimer = setTimeout(() => void this.commit(), (900 + Math.random() * 800) * this.speed);
   }
 
   cancel(): void {
-    if (!this.pendingChoice || this.over) return;
-    if (this.commitTimer === null) return; // already sent to the server
+    if (!this.pendingChoice || this.over || this.commitTimer === null) return; // already committed
     clearTimeout(this.commitTimer);
     this.commitTimer = null;
     this.pendingChoice = null;
     this.awaiting = true;
-    this.emitNow({ type: "choice-cancelled" });
+    this.emit({ type: "choice-cancelled" });
   }
 
   private async commit() {
@@ -115,13 +110,14 @@ export class ServerBattleStream implements BattleStreamSource {
     try {
       const r = await this.post(`/api/battles/${this.id}/choice`, choice, this.token);
       this.pendingChoice = null;
-      // The server echoes choice-accepted first; we already emitted it.
+      // The server echoes choice-accepted first for a normal choice; we already
+      // emitted that optimistically, so drop a leading one to avoid duplicates.
       const events = (r.events as BattleEvent[]).filter((e, i) => !(i === 0 && e.type === "choice-accepted"));
-      this.enqueue(events);
+      this.pacer.enqueue(events);
     } catch {
       this.pendingChoice = null;
-      this.emitNow({ type: "chat", user: "", text: "That move didn't go through. Try again." });
       this.awaiting = true;
+      this.emit({ type: "chat", user: "", text: "That move didn't go through. Try again." });
     }
   }
 
@@ -129,7 +125,7 @@ export class ServerBattleStream implements BattleStreamSource {
     this.timerEnabled = enabled;
     this.secondsLeft = TURN_SECONDS;
     if (this.id) void this.send(`/api/battles/${this.id}/timer`, { enabled });
-    else this.emitNow({ type: "timer", enabled, secondsLeft: enabled ? TURN_SECONDS : null });
+    else this.emit({ type: "timer", enabled, secondsLeft: enabled ? TURN_SECONDS : null });
   }
 
   sendChat(text: string): void {
@@ -137,26 +133,28 @@ export class ServerBattleStream implements BattleStreamSource {
     if (!trimmed) return;
     const now = Date.now();
     if (now - this.lastChat < 600) {
-      this.emitNow({ type: "chat", user: "", text: "You're sending messages too fast. Wait a moment." });
+      this.emit({ type: "chat", user: "", text: "You're sending messages too fast. Wait a moment." });
       return;
     }
     this.lastChat = now;
     if (this.id) void this.send(`/api/battles/${this.id}/chat`, { text: trimmed });
-    else this.emitNow({ type: "chat", user: this.opts.you.name, text: trimmed });
+    else this.emit({ type: "chat", user: this.opts.you.name, text: trimmed });
   }
 
   rematch(): void {
-    this.clearTimeouts();
-    this.queue = [];
-    this.pumping = false;
+    this.clearAll();
     this.over = false;
     this.awaiting = false;
     this.needsSwitch = false;
     this.pendingChoice = null;
-    if (this.id) void this.send(`/api/battles/${this.id}/rematch`, {}).then((r) => r && this.enqueue(r.events));
+    this.secondsLeft = TURN_SECONDS;
+    if (this.id) {
+      void this.send(`/api/battles/${this.id}/rematch`, {});
+      this.startTicker();
+    }
   }
 
-  /** POST that returns parsed JSON (create/choice). */
+  /** POST returning parsed JSON (create/choice). Throws on a non-2xx response. */
   private async post(path: string, body: unknown, token?: string): Promise<any> {
     const res = await fetch(`${API_URL}${path}`, {
       method: "POST",
@@ -168,35 +166,17 @@ export class ServerBattleStream implements BattleStreamSource {
     return json;
   }
 
-  /** POST whose event batch is enqueued (timer/chat/rematch). */
-  private async send(path: string, body: unknown): Promise<{ events: BattleEvent[] } | null> {
+  /** POST whose returned event batch is paced out (timer/chat/rematch). */
+  private async send(path: string, body: unknown): Promise<void> {
     try {
       const r = await this.post(path, body, this.token);
-      this.enqueue(r.events);
-      return r;
+      this.pacer.enqueue(r.events);
     } catch {
-      return null;
+      /* non-critical side channel; ignore */
     }
   }
 
-  private enqueue(events: BattleEvent[]) {
-    this.queue.push(...events);
-    this.pump();
-  }
-
-  private pump() {
-    if (this.pumping) return;
-    const next = this.queue.shift();
-    if (!next) return;
-    this.pumping = true;
-    const delay = DELAY[next.type] ?? 0;
-    this.schedule(delay, () => {
-      this.pumping = false;
-      this.apply(next);
-      this.pump();
-    });
-  }
-
+  /** Pacer callback: fold turn state, then forward the event to the listener. */
   private apply(event: BattleEvent) {
     switch (event.type) {
       case "request":
@@ -212,7 +192,7 @@ export class ServerBattleStream implements BattleStreamSource {
         this.stopTicker();
         break;
     }
-    this.emitNow(event);
+    this.emit(event);
   }
 
   private startTicker() {
@@ -220,10 +200,10 @@ export class ServerBattleStream implements BattleStreamSource {
     this.tick = setInterval(() => {
       if (!this.timerEnabled || this.over) return;
       this.secondsLeft = Math.max(0, this.secondsLeft - 1);
-      this.emitNow({ type: "timer", enabled: true, secondsLeft: this.secondsLeft });
+      this.emit({ type: "timer", enabled: true, secondsLeft: this.secondsLeft });
       if (this.secondsLeft === 0 && this.awaiting && !this.needsSwitch && !this.pendingChoice) {
         // Best-effort auto-move; the server validates it authoritatively.
-        this.emitNow({ type: "chat", user: "", text: `${this.opts.you.name} ran out of time; a move was picked automatically.` });
+        this.emit({ type: "chat", user: "", text: `${this.opts.you.name} ran out of time; a move was picked automatically.` });
         this.choose({ kind: "move", moveIndex: 0 });
       }
     }, 1000);
@@ -234,30 +214,17 @@ export class ServerBattleStream implements BattleStreamSource {
     this.tick = null;
   }
 
-  private schedule(ms: number, fn: () => void): ReturnType<typeof setTimeout> {
-    const id = setTimeout(() => {
-      this.timers.delete(id);
-      fn();
-    }, ms * this.speed);
-    this.timers.add(id);
-    return id;
-  }
-
-  private clearTimeouts() {
-    this.timers.forEach(clearTimeout);
-    this.timers.clear();
+  private clearAll() {
+    this.pacer.clear();
     if (this.commitTimer) {
       clearTimeout(this.commitTimer);
       this.commitTimer = null;
     }
-  }
-
-  private clearAll() {
-    this.clearTimeouts();
     this.stopTicker();
   }
 
-  private emitNow(event: BattleEvent) {
+  /** Emit immediately, outside the pacer (optimistic feedback and the timer). */
+  private emit(event: BattleEvent) {
     this.listener?.(event);
   }
 }
