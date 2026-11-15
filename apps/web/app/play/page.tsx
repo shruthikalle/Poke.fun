@@ -136,7 +136,7 @@ export default function Home() {
             <span className="element">{card.element}</span><strong>{card.name}</strong><small>{card.maxHp} HP · 2 attacks</small>
           </button>)}</div>
         </section>
-        <section className="panel join-panel"><h2>Start playing</h2><button className="primary" disabled={busy || !cards.length} onClick={() => void enter("create")}>Create match</button><div className="divider">or join a friend</div><label htmlFor="room-code">Room code</label><input id="room-code" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="8-character code" maxLength={8} /><button className="secondary" disabled={busy || !cards.length} onClick={() => void enter("join")}>Join match</button><p className="hint">Free demo match. No wallet or stakes yet.</p></section>
+        <section className="panel join-panel"><h2>Start playing</h2><button className="primary" disabled={busy || !cards.length} onClick={() => void enter("create")}>Create match</button><div className="divider">or join a friend</div><label htmlFor="room-code">Room code</label><input id="room-code" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="8-character code" maxLength={8} /><button className="secondary" disabled={busy || !cards.length} onClick={() => void enter("join")}>Join match</button><p className="hint">Free demo match. Entry fees come later.</p></section>
       </div>}
 
       {session && match && <section className="arena">
@@ -149,7 +149,7 @@ export default function Home() {
           <div className="history"><h2>Battle log</h2>{match.history.length ? [...match.history].reverse().map((turn) => <p key={turn.number}>Turn {turn.number}: {match.players[0]?.name} used {turn.attacks[0]}{turn.auto[0] ? " (timed out)" : ""} for {turn.damage[0]} damage.{EFFECT_TEXT[turn.effect[0]]} {match.players[1]?.name} used {turn.attacks[1]}{turn.auto[1] ? " (timed out)" : ""} for {turn.damage[1]} damage.{EFFECT_TEXT[turn.effect[1]]}</p>) : <p>First turn is waiting for attacks.</p>}</div>
         </>}
       </section>}
-      <footer>Fictional sample cards. Wallet verification and onchain stakes are future milestones.</footer>
+      <footer>Fictional sample cards. Bringing your own cards and paid entries are coming soon.</footer>
     </main>
     </div>
   );

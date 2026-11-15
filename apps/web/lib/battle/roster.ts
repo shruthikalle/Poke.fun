@@ -27,6 +27,9 @@ export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFo
     name,
     rated: true,
     rules: [
+      { name: "Species Clause", description: "Limit one of each creature" },
+      { name: "HP Percentage Mod", description: "HP is shown in percentages" },
+      { name: "Sleep Clause Mod", description: "Limit one foe put to sleep" },
       ...rules,
     ],
   };

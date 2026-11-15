@@ -49,14 +49,16 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 ### Frontend integration seams
 
-`/loadout` and `/battle` read all live data through typed interfaces in `apps/web/lib`, each backed by a mock for now. To swap in a real service, implement the interface; the UI code doesn't change.
+`/loadout`, `/battle`, `/market` and `/collection` read all live data through typed interfaces in `apps/web/lib`, each backed by a mock for now. To swap in a real service, implement the interface; the UI code doesn't change.
 
 | Seam | Interface | Mock | TODO |
 | --- | --- | --- | --- |
 | Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `MockBattleStream` | QuickNode Streams / Go API match feed |
 | Win odds | `OddsProvider`, `useOdds` (`lib/markets`) | `MockOddsProvider` | Gemini prediction markets |
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
-| Sign-in | `AuthService` (`lib/wallet`) | `mockAuthService` | Go API nonce + signature check |
+| Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | `useMockBackend` (any 6-digit code) when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
+| Marketplace | `MarketplaceService`, `useMarketplace` (`lib/market`) | `MockMarketplaceService` (seeded catalog, localStorage) | Marketplace program on devnet |
+| SOL price | `SolPriceSource`, `useSolPrice` (`lib/market`) | `MockSolPriceSource` | Real price feed |
 | Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | `MockLobbyService`, `MockRoomChatService` | Presence and chat API |
 | Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | `MockCollectionService` | DAS RPC (QuickNode) |
 | Card → creature | `CARD_MAPPING`, `resolveCard` (`lib/cards/mapping.ts`) | Versioned table | Reviewed card list |

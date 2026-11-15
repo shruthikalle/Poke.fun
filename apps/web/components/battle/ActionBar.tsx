@@ -38,9 +38,9 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary
         <p className={styles.prompt}><strong>{state.winner === "draw" ? "The battle ended in a draw." : state.winner === state.you ? "You won the battle!" : `${state.sides[state.winner === "p1" ? "p1" : "p2"].trainer.name} won the battle.`}</strong></p>
         {summary}
         <div className={styles.endRow}>
-          <button className={styles.button} onClick={rematch}>Rematch</button>
-          <Link className={styles.button} href="/loadout">Change loadout</Link>
-          <Link className={styles.button} href="/">Main menu</Link>
+          <button className="pf-btn" data-variant="primary" data-size="sm" onClick={rematch}>Battle again</button>
+          <Link className="pf-btn" data-size="sm" href="/loadout">Change loadout</Link>
+          <Link className="pf-btn" data-size="sm" data-variant="ghost" href="/collection">View My Cards</Link>
         </div>
       </div>
     );
@@ -50,7 +50,7 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary
     return (
       <div className={styles.actions}>
         <div className={styles.actionHead}>
-          <p className={styles.waiting}>{state.phase === "connecting" ? "Starting battle..." : "Turn in progress..."}</p>
+          <p className={styles.waiting}>{state.phase === "connecting" ? "Starting battle…" : "Turn in progress…"}</p>
           <TimerButton state={state} toggleTimer={toggleTimer} />
         </div>
       </div>
@@ -65,7 +65,7 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary
         <div className={styles.actionHead}>
           <div>
             <p className={styles.prompt}>{what}</p>
-            <p className={styles.waiting}>Waiting for opponent... <button className={styles.button} onClick={cancel}>Cancel</button></p>
+            <p className={styles.waiting}>Waiting for opponent… <button className="pf-btn" data-size="sm" data-variant="ghost" onClick={cancel}>Cancel</button></p>
           </div>
           <TimerButton state={state} toggleTimer={toggleTimer} />
         </div>

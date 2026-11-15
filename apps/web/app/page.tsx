@@ -7,7 +7,6 @@ import { preload } from "react-dom";
 import { AccountChip } from "../components/AccountChip";
 import { Emblem } from "../components/Emblem";
 import { PixelAvatar } from "../components/PixelAvatar";
-import { SignInDialog } from "../components/SignInDialog";
 import { FORMAT_LABEL } from "../lib/cards/mapping";
 import { useMotionPreference } from "../lib/motion";
 import { speciesService } from "../lib/pokemon/SpeciesService";
@@ -169,17 +168,11 @@ function SocialIcon({ name }: { name: string }) {
 
 export default function Landing() {
   const router = useRouter();
-  const { playerName } = useWallet();
-  const [signInOpen, setSignInOpen] = useState(false);
+  const { playerName, signIn } = useWallet();
   const motion = useMotionPreference();
   const paused = motion.reduced;
 
-  const enter = () => (playerName ? router.push("/loadout") : setSignInOpen(true));
-  const close = useCallback(() => setSignInOpen(false), []);
-  const onSignedIn = useCallback(() => {
-    setSignInOpen(false);
-    router.push("/loadout");
-  }, [router]);
+  const enter = () => (playerName ? router.push("/loadout") : signIn({ onSignedIn: () => router.push("/loadout") }));
 
   return (
     <div className={styles.page} data-paused={paused || undefined}>
@@ -194,16 +187,18 @@ export default function Landing() {
         <header className={styles.top}>
           <Link href="/" className={styles.brand} aria-label="Poke.fun home">
             <Emblem size={26} />
-            <span>Poke.fun</span>
+            <span className={styles.brandText}><b>Poke.fun</b><small>Real cards. Real battles.</small></span>
           </Link>
           <nav className={styles.nav} aria-label="Main">
             {NAV.map((n) => <a key={n.href} href={n.href}>{n.label}</a>)}
+            <Link href="/market">Marketplace</Link>
+            <Link href="/collection">My Cards</Link>
             <Link href="/loadout">Play</Link>
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
                 extra={<Link className={styles.menuItem} href="/loadout">Play a match</Link>} />
             ) : (
-              <button className={styles.signIn} onClick={() => setSignInOpen(true)}>Sign in</button>
+              <button className={styles.signIn} onClick={() => signIn()}>Sign in</button>
             )}
           </nav>
         </header>
@@ -218,18 +213,19 @@ export default function Landing() {
           <p className={styles.fine}>{playerName ? <>Playing as <strong>{playerName}</strong></> : null}</p>
         </div>
 
-        <ul className={styles.rail} aria-label="Social links">
-          {SOCIALS.map((s) => (
-            <li key={s.label}><a href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label}><SocialIcon name={s.label} /></a></li>
-          ))}
-        </ul>
+        <div className={styles.corner}>
+          <ul className={styles.rail} aria-label="Social links">
+            {SOCIALS.map((s) => (
+              <li key={s.label}><a href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label}><SocialIcon name={s.label} />{s.label.length > 1 && <span>{s.label}</span>}</a></li>
+            ))}
+          </ul>
+          <button className={styles.pause} onClick={() => motion.setPaused(!paused)} aria-pressed={paused}>
+            <span className={styles.pauseIcon} data-paused={paused || undefined} aria-hidden="true" />
+            {paused ? "Play motion" : "Pause motion"}
+          </button>
+        </div>
 
-        <button className={styles.pause} onClick={() => motion.setPaused(!paused)} aria-pressed={paused}>
-          <span className={styles.pauseIcon} data-paused={paused || undefined} aria-hidden="true" />
-          {paused ? "Play motion" : "Pause motion"}
-        </button>
-
-        <a href="#about" className={styles.scroll}><span>Scroll</span><i aria-hidden="true" /></a>
+        <a href="#about" className={styles.scroll}><span>How it works</span><i aria-hidden="true" /></a>
       </section>
 
       <main className={styles.below}>
@@ -238,7 +234,7 @@ export default function Landing() {
           <ol className={styles.steps}>
             <li>
               <div className={styles.art}><PixelAvatar seed="trainer" size={36} /><span className={styles.or}>or</span><img src={SPRITE(133)} alt="" width={56} height={56} /></div>
-              <span>01</span><h3>Sign in</h3><p>Connect Phantom, or play free as a guest with rental Pokémon.</p>
+              <span>01</span><h3>Sign in</h3><p>Create a free account with your email, or play as a guest with rental Pokémon.</p>
             </li>
             <li>
               <div className={styles.art}><img className={styles.thumb} src="https://images.pokemontcg.io/base3/5.png" alt="" width={40} height={56} loading="lazy" /><i className={styles.arrow} /><img src={SPRITE(94)} alt="" width={56} height={56} /></div>
@@ -295,7 +291,6 @@ export default function Landing() {
         </footer>
       </main>
 
-      <SignInDialog open={signInOpen} onClose={close} onSignedIn={onSignedIn} />
     </div>
   );
 }
