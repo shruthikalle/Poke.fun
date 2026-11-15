@@ -29,7 +29,10 @@ async function request<T>(path: string, init?: RequestInit, token?: string): Pro
 }
 
 export const arenaApi = {
+  /** Every fighter: over 1,200, so prefer cardsByIds when only a few are needed. */
   cards: () => request<ArenaCard[]>("/api/arena-cards"),
+  /** Just these fighters, by species key; unknown keys are left out. */
+  cardsByIds: (ids: string[]) => request<ArenaCard[]>(`/api/arena-cards?ids=${ids.map(encodeURIComponent).join(",")}`),
   enqueue: (name: string, cardId: string, rating: number, entryCents = 0, ownedAsset?: { assetId: string; walletAddress: string }) => request<ArenaQueueTicket>("/api/arena-queue", { method: "POST", body: JSON.stringify({ name, cardId, rating, entryCents, ...ownedAsset }) }),
   queueStatus: (ticket: ArenaQueueTicket) => request<ArenaQueueTicket>(`/api/arena-queue/${encodeURIComponent(ticket.id)}`, undefined, ticket.token),
   cancelQueue: async (ticket: ArenaQueueTicket) => {

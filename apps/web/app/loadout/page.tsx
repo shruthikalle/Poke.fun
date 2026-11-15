@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
 import { CardSummon } from "../../components/summon/CardSummon";
@@ -35,7 +35,7 @@ function devnetExplorerUrl(asset: DasAsset | null): string | null {
 // can be paired (matchmaking only pairs fighters of the same tier).
 const ARENA_RENTAL_SPECIES = ["pikachu", "charmander", ...RENTAL_POOL.map((r) => r.species)];
 
-function arenaRentals(fighters: Map<string, ArenaCard>): CardPick[] {
+function arenaRentals(fighters: Map<string, ArenaCard | null>): CardPick[] {
   return ARENA_RENTAL_SPECIES.flatMap((species) => {
     const f = fighters.get(species);
     return f && f.tier === 1 ? [{ key: `arena-rental-${species}`, species, label: f.name, image: null, grade: null, level: f.level, tier: f.tier, rental: true, artWindow: FAUX_ART_WINDOW }] : [];
@@ -89,11 +89,24 @@ export default function LoadoutPage() {
   const [entryError, setEntryError] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
   const [queue, setQueue] = useState<QueueState>({ status: "idle" });
-  // Every live-arena fighter, by species, from the Go server's Pokédex.
-  const [fighters, setFighters] = useState<Map<string, ArenaCard> | null>(null);
-  useEffect(() => {
-    arenaApi.cards().then((list) => setFighters(new Map(list.map((c) => [c.id, c])))).catch(() => setFighters(new Map()));
+  // Live-arena fighters by species, fetched from the Go server only for the cards
+  // on screen (the full roster is over 1,200). null = the server has no fighter.
+  const [fighters, setFighters] = useState<Map<string, ArenaCard | null> | null>(null);
+  const [arenaDown, setArenaDown] = useState(false);
+  const requested = useRef(new Set<string>());
+  const fetchFighters = useCallback((ids: string[]) => {
+    const fresh = ids.filter((id) => !requested.current.has(id));
+    if (!fresh.length) return;
+    fresh.forEach((id) => requested.current.add(id));
+    arenaApi.cardsByIds(fresh)
+      .then((list) => setFighters((prev) => {
+        const next = new Map(prev ?? []);
+        for (const id of fresh) next.set(id, list.find((c) => c.id === id) ?? null);
+        return next;
+      }))
+      .catch(() => { setArenaDown(true); setFighters((prev) => prev ?? new Map()); });
   }, []);
+  useEffect(() => fetchFighters(ARENA_RENTAL_SPECIES), [fetchFighters]);
   const [notice, setNotice] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [summon, setSummon] = useState<{ key: string; n: number } | null>(null);
@@ -170,6 +183,7 @@ export default function LoadoutPage() {
   }, [assets, guest, fighters]);
 
   const eligible = useMemo(() => rows.flatMap((r) => (r.pick ? [r.pick] : [])), [rows]);
+  useEffect(() => fetchFighters(eligible.map((p) => p.species)), [eligible, fetchFighters]);
   useEffect(() => {
     if (eligible.length && !eligible.some((p) => p.key === selected)) setSelected(eligible[0].key);
   }, [eligible, selected]);
@@ -177,6 +191,7 @@ export default function LoadoutPage() {
   const lead = eligible.find((p) => p.key === selected) ?? null;
   const leadSpecies = useSpecies(lead?.species ?? null);
   const leadFighter = lead ? fighters?.get(lead.species) ?? null : null;
+  const leadUnsupported = !!lead && fighters?.get(lead.species) === null;
   const summonCard = (key: string) => { setNotice(null); setSummon({ key, n: Date.now() }); };
 
   useEffect(() => {
@@ -339,7 +354,8 @@ export default function LoadoutPage() {
             </div>
           ) : <span className={styles.moveSkeleton} />}
 
-          {lead && fighters && !leadFighter && <p className={styles.warn}>{fighters.size ? "This card can't fight in the live arena yet." : "Couldn't reach the Go arena server. Start it on port 8080."}</p>}
+          {arenaDown ? <p className={styles.warn}>Couldn&apos;t reach the Go arena server. Start it on port 8080.</p>
+            : leadUnsupported && <p className={styles.warn}>This card can&apos;t fight in the live arena yet.</p>}
           <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !leadFighter || !rank || !!entryError || finding || queue.status !== "idle"} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
         </aside>
       </main>

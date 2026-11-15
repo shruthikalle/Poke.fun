@@ -83,9 +83,7 @@ func NewWithCollectibles(origin string, reader collectibleReader) http.Handler {
 	mux.HandleFunc("POST /api/queue", s.enqueue)
 	mux.HandleFunc("GET /api/queue/{ticket}", s.pollQueue)
 	mux.HandleFunc("DELETE /api/queue/{ticket}", s.cancelQueue)
-	mux.HandleFunc("GET /api/arena-cards", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSON(w, http.StatusOK, arena.Cards())
-	})
+	mux.HandleFunc("GET /api/arena-cards", arenaCards)
 	mux.HandleFunc("GET /api/collectibles/{id}", s.getCollectible)
 	mux.HandleFunc("POST /api/arenas", s.createArena)
 	mux.HandleFunc("POST /api/arenas/{id}/join", s.joinArena)
