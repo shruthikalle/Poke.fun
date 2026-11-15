@@ -13,11 +13,13 @@ import (
 	"time"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/livebattle"
 )
 
 type Server struct {
 	mu      sync.Mutex
 	matches map[string]*battle.Match
+	battles map[string]*livebattle.Battle
 	origin  string
 }
 
@@ -31,7 +33,11 @@ type attackRequest struct {
 }
 
 func New(origin string) http.Handler {
-	s := &Server{matches: make(map[string]*battle.Match), origin: origin}
+	s := &Server{
+		matches: make(map[string]*battle.Match),
+		battles: make(map[string]*livebattle.Battle),
+		origin:  origin,
+	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -43,6 +49,12 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("POST /api/matches/{id}/join", s.joinMatch)
 	mux.HandleFunc("GET /api/matches/{id}", s.getMatch)
 	mux.HandleFunc("POST /api/matches/{id}/attacks", s.submitAttack)
+	// Live (rich team) battle, authoritative replacement for MockBattleStream.
+	mux.HandleFunc("POST /api/battles", s.createBattle)
+	mux.HandleFunc("POST /api/battles/{id}/choice", s.battleChoice)
+	mux.HandleFunc("POST /api/battles/{id}/timer", s.battleTimer)
+	mux.HandleFunc("POST /api/battles/{id}/chat", s.battleChat)
+	mux.HandleFunc("POST /api/battles/{id}/rematch", s.battleRematch)
 	return s.withCORS(mux)
 }
 
