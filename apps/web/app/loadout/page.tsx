@@ -154,14 +154,25 @@ export default function LoadoutPage() {
 
   const findMatch = () => {
     if (!lead || !rank || !playerName) return;
+    setNotice(null);
     setQueue({ status: "searching", since: Date.now() });
     const s = matchmakingService.find({ player: playerName, rating: rank.rating, format, tier: lead.tier, entry, team });
     search.current = s;
-    s.result.then((ticket) => setQueue({ status: "found", ticket, countdown: 3 })).catch(() => setQueue({ status: "idle" }));
+    s.result.then((ticket) => {
+      if (search.current !== s) return;
+      search.current = null;
+      setQueue({ status: "found", ticket, countdown: 3 });
+    }).catch((error: unknown) => {
+      if (search.current !== s) return;
+      search.current = null;
+      setQueue({ status: "idle" });
+      setNotice(error instanceof Error ? error.message : "Could not join matchmaking. Try again.");
+    });
   };
   const cancelSearch = () => {
     search.current?.cancel();
     search.current = null;
+    setQueue({ status: "idle" });
   };
 
   useEffect(() => {
@@ -330,7 +341,7 @@ export default function LoadoutPage() {
                 <div className={styles.radar}><Emblem size={56} /></div>
                 <p className="pf-eyebrow">Finding a match</p>
                 <h2>Searching… {Math.max(0, Math.floor((now - queue.since) / 1000))}s</h2>
-                <p className={styles.hint}>{FORMAT_LABEL[format]} · {rank?.tier} rank · tier {lead?.tier} cards · {formatDollars(entry)} entry</p>
+                <p className={styles.hint}>{FORMAT_LABEL[format]} · tier {lead?.tier} cards · {formatDollars(entry)} entry. Your friend must select the same format, tier, and entry.</p>
                 <button className="pf-btn" data-variant="ghost" onClick={cancelSearch}>Cancel</button>
               </>
             ) : (

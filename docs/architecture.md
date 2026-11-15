@@ -18,7 +18,7 @@ Solana wallet          Match state and rules
 ## Build order
 
 1. Free matches, in memory (implemented): the one-card duel and the server-authoritative team battle, with hidden simultaneous choices, type effectiveness, server-enforced turn deadlines and version locking. See [game-mechanics.md](game-mechanics.md).
-2. Matchmaking within compatible formats (implemented for the team battle: format, card power tier and entry, with an AI fallback). Rating bands are still to do.
+2. Matchmaking within compatible formats (implemented for the team battle: format, card power tier and entry). Rating bands are still to do.
 3. Persistent matches (still to do). A refresh already rejoins a live two-player match from the server's event log, but a server restart ends all battles.
 4. Wallet sign-in and ownership checks for supported NFTs.
 5. Devnet escrow, result signing, settlement, and refunds.

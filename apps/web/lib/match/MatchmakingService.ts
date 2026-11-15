@@ -59,8 +59,7 @@ const TRAINERS: Trainer[] = [
 
 /**
  * Offline stand-in: invents an opponent from the sample collections. Used when
- * NEXT_PUBLIC_LIVE_BATTLE=0, and as the fallback when no human rival turns up
- * (the battle is then played against the server AI).
+ * NEXT_PUBLIC_LIVE_BATTLE=0 for explicit offline demos.
  */
 export class MockMatchmakingService implements MatchmakingService {
   find(request: MatchRequest): MatchSearch {
@@ -95,11 +94,11 @@ export class MockMatchmakingService implements MatchmakingService {
   }
 }
 
-// Real two-player matchmaking through the Go API, falling back to an AI
-// opponent if no rival appears. NEXT_PUBLIC_LIVE_BATTLE=0 keeps everything offline.
+// Real two-player matchmaking through the Go API. Offline demos require an
+// explicit NEXT_PUBLIC_LIVE_BATTLE=0 setting.
 export const matchmakingService: MatchmakingService = process.env.NEXT_PUBLIC_LIVE_BATTLE === "0"
   ? new MockMatchmakingService()
-  : new ServerMatchmakingService(new MockMatchmakingService());
+  : new ServerMatchmakingService();
 
 const TICKET_KEY = "pf:match:v1";
 

@@ -187,8 +187,8 @@ two-player matches can be rejoined.
 1. **Matchmaking** (`POST /api/queue`). Players are paired only with someone in
    the **same format, card power tier and entry amount** (PRD: compare format and
    power tier first, never pair different stakes); the longest-waiting
-   compatible player is chosen. If no rival appears within **20 seconds**, the
-   client withdraws from the queue and battles the AI instead. It checks once
+   compatible player is chosen. If no rival appears within **90 seconds**, the
+   client withdraws from the queue and reports that no player was found. It checks once
    more after withdrawing, so a rival who matched at the last moment is never
    left stranded. Searches expire after 2 minutes.
 2. **Each side gets its own token.** Pairing creates the battle and returns a
@@ -239,10 +239,9 @@ All battle endpoints after creation require `Authorization: Bearer <token>`.
 
 ### Offline fallback
 
-If the Go API can't be reached, a single-player battle runs on the client-side
-`MockBattleStream` instead (same rules via `rules.ts`), so `/battle` still works
-without the server. `NEXT_PUBLIC_LIVE_BATTLE=0` forces offline mode for
-matchmaking and battles.
+`NEXT_PUBLIC_LIVE_BATTLE=0` explicitly selects the client-side
+`MockBattleStream` for offline demo matches. Without the Go API, normal
+matchmaking reports an error.
 
 ---
 
@@ -270,6 +269,6 @@ live in other services and branches and do not change these rules.
 | Two-player matchmaking queue | `services/api/internal/server/matchmaking.go` |
 | Shared type chart / rich rules (client) | `apps/web/lib/battle/typeChart.ts`, `rules.ts` |
 | Battle transport | `apps/web/lib/battle/ServerBattleStream.ts`, `battleFeed.ts`, `eventPacer.ts`, `battleApi.ts` |
-| Matchmaking client | `apps/web/lib/match/ServerMatchmakingService.ts` (falls back to `MockMatchmakingService`) |
+| Matchmaking client | `apps/web/lib/match/ServerMatchmakingService.ts` (`MockMatchmakingService` only in offline mode) |
 | Offline simulator | `apps/web/lib/battle/MockBattleStream.ts` |
 | Reducer + UI hook | `apps/web/lib/battle/BattleEngine.ts` |

@@ -98,8 +98,8 @@ the turn resolves only once both have chosen** — but applies the resolved turn
 in order: switches first, then moves by speed.
 
 - **Opponents.** A second human found through matchmaking (`POST /api/queue`,
-  paired by format, card power tier and entry), or the server AI when no rival
-  appears within 20 seconds.
+  paired by format, card power tier and entry). Offline bot play is an explicit
+  demo setting.
 - **Shared log.** Every outcome is appended to one event log per battle; both
   clients poll `GET /api/battles/{id}/events?since=N`, so both screens show the
   identical battle. Each side has its own bearer token and can only act for

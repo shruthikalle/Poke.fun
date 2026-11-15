@@ -1,6 +1,6 @@
 # Poke.fun
 
-A browser card-battle game where the Go server is the referee. Players bring a collectible card (or a team of three), get matched with a real opponent, choose moves in secret each turn, and see the same server-decided result. There are two battle modes: the **team battle** at `/battle` (creatures built from PokéAPI, two-player matchmaking with an AI fallback) and the original **one-card duel** at `/play` (fictional sample cards, room codes). Server-side wallet and NFT verification and staking are not implemented yet.
+A browser card-battle game where the Go server is the referee. Players bring a collectible card (or a team of three), get matched with a real opponent, choose moves in secret each turn, and see the same server-decided result. There are two battle modes: the **team battle** at `/battle` (creatures built from PokéAPI, two-player matchmaking) and the original **one-card duel** at `/play` (fictional sample cards, room codes). Server-side wallet and NFT verification and staking are not implemented yet.
 
 ## Repository layout
 
@@ -44,11 +44,11 @@ The frontend routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
 - `/loadout`: pick a card from your collection, a format (Champion 1v1 or Squad of 3) and an entry amount, see your rank, then find a match.
-- `/battle`: the team battle. Find match on `/loadout` pairs you with a real player through the Go API queue, or with the server AI if nobody compatible turns up within 20 seconds. Opening it without a match sends you to `/loadout`.
+- `/battle`: the team battle. Find match on `/loadout` pairs you with a real player through the Go API queue. A search ends after 90 seconds if no compatible player joins. Opening it without a match sends you to `/loadout`.
 - `/market` and `/collection`: the card marketplace and your card collection (mock data).
 - `/play`: the original one-card demo that talks to the Go API.
 
-To try a **two-player team battle** locally, open `http://localhost:3000/loadout` in two browsers (or a normal and a private window). In both, pick the same format and entry and a lead card with the same power tier (the pips on each card), then press Find match. Players are only paired when all three match. Refreshing `/battle` during a two-player match rejoins it. Without the Go API, single-player battles fall back to an offline simulation in the browser; set `NEXT_PUBLIC_LIVE_BATTLE=0` to force offline mode.
+To try a **two-player team battle** locally, open `http://localhost:3000/loadout` in two browsers (or separate browser profiles). In both, pick the same format and entry and a lead card with the same power tier (the pips on each card), then press Find match within 90 seconds. Players are only paired when all three match. For example, Pikachu and Charmander are both tier 1, while Blastoise and Venusaur are both tier 3. Refreshing `/battle` during a two-player match rejoins it. The Go API must be running; set `NEXT_PUBLIC_LIVE_BATTLE=0` only for an offline bot demo.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
@@ -72,7 +72,7 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 | Creature data | `SpeciesService` (`lib/pokemon`) | Live PokéAPI, cached in memory + localStorage | — |
 | Rank | `RankService` (`lib/rank`) | `MockRankService` (localStorage Elo) | Go API ratings |
 | Entry and winnings | `StakeService` (`lib/stake`) | `MockStakeService` (no money moves) | Devnet USDC escrow, after legal review |
-| Matchmaking | `MatchmakingService` (`lib/match`) | `ServerMatchmakingService` → Go API queue; `MockMatchmakingService` AI fallback | Rating bands, persistent queue |
+| Matchmaking | `MatchmakingService` (`lib/match`) | `ServerMatchmakingService` → Go API queue; `MockMatchmakingService` only in explicit offline mode | Rating bands, persistent queue |
 
 Creature stats, moves and sprites come from [PokéAPI](https://pokeapi.co); card art comes from the Pokémon TCG API image CDN. Pokémon is a trademark of Nintendo / The Pokémon Company, so get a rights review before any public launch.
 

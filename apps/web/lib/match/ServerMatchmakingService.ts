@@ -5,8 +5,8 @@ import { tierFor } from "../rank/RankService";
 import type { MatchmakingService, MatchRequest, MatchSearch, MatchTicket } from "./MatchmakingService";
 
 const POLL_MS = 1000;
-/** How long to look for a human rival before battling the AI instead. */
-const HUMAN_SEARCH_MS = 20_000;
+/** Maximum time to look for a human rival. */
+const HUMAN_SEARCH_MS = 90_000;
 
 interface QueueMatched {
   status: "matched";
@@ -22,16 +22,12 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Real two-player matchmaking through the Go API queue, which pairs players by
  * format, card power tier and entry. If nobody compatible turns up within
- * HUMAN_SEARCH_MS (or the API is unreachable) it falls back to `fallback`, an
- * AI opponent, so a lone player is never left waiting.
+ * HUMAN_SEARCH_MS, the search ends without inventing an opponent.
  */
 export class ServerMatchmakingService implements MatchmakingService {
-  constructor(private readonly fallback: MatchmakingService) {}
-
   find(request: MatchRequest): MatchSearch {
     let cancelled = false;
     let ticket: string | null = null;
-    let fallbackSearch: MatchSearch | null = null;
     const withdraw = () => (ticket ? apiRequest("DELETE", `/api/queue/${ticket}`).catch(() => {}) : Promise.resolve());
 
     const result = (async (): Promise<MatchTicket> => {
@@ -54,13 +50,11 @@ export class ServerMatchmakingService implements MatchmakingService {
           reply = await apiRequest<QueueReply>("GET", `/api/queue/${ticket}`).catch(() => reply);
         }
         if (reply.status === "matched") return toTicket(reply, request);
+        throw new Error("No player with the same format, card tier, and entry joined within 90 seconds. Try again together.");
       } catch (e) {
-        if (cancelled) throw e;
-        // API unreachable or the search expired: fall through to the AI.
+        await withdraw();
+        throw e;
       }
-      if (cancelled) throw new Error("cancelled");
-      fallbackSearch = this.fallback.find(request);
-      return fallbackSearch.result;
     })();
 
     return {
@@ -68,7 +62,6 @@ export class ServerMatchmakingService implements MatchmakingService {
       cancel: () => {
         cancelled = true;
         void withdraw();
-        fallbackSearch?.cancel();
       },
     };
   }
