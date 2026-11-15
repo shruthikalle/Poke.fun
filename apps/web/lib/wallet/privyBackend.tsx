@@ -5,19 +5,17 @@ import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { connectPhantom, getPhantomProvider } from "./phantom";
-import { session } from "../storage";
 import type { AuthBackend, AuthUser } from "./types";
 
 const DEVNET_HTTP = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 const DEVNET_WS = DEVNET_HTTP.replace(/^http/, "ws");
-const WALLET_SESSION_KEY = "pf:devnet-wallet-session";
+type SignedWalletSession = { address: string; expiresAt: number };
 
-type SignedWalletSession = { address: string; token: string; expiresAt: number };
-
-async function authRequest<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown, token?: string): Promise<T> {
+async function authRequest<T>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api/auth${path}`, {
     method,
-    headers: { ...(body ? { "Content-Type": "application/json" } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    credentials: "same-origin",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
   });
   const result = await response.json();
@@ -46,13 +44,9 @@ function usePrivyBackend(): AuthBackend {
   const linkWaiter = useRef<{ resolve: () => void; reject: (e: unknown) => void } | null>(null);
 
   useEffect(() => {
-    const raw = session.get(WALLET_SESSION_KEY);
-    if (!raw) { setWalletReady(true); return; }
-    let saved: SignedWalletSession;
-    try { saved = JSON.parse(raw) as SignedWalletSession; } catch { session.remove(WALLET_SESSION_KEY); setWalletReady(true); return; }
-    authRequest<{ address: string; expiresAt: number }>("GET", "", undefined, saved.token)
-      .then((verified) => setWalletSession({ ...verified, token: saved.token }))
-      .catch(() => session.remove(WALLET_SESSION_KEY))
+    authRequest<SignedWalletSession>("GET", "")
+      .then(setWalletSession)
+      .catch(() => setWalletSession(null))
       .finally(() => setWalletReady(true));
   }, []);
   const { linkWallet } = useLinkAccount({
@@ -79,19 +73,16 @@ function usePrivyBackend(): AuthBackend {
       const signMessage = provider.signMessage.bind(provider);
       return (async () => {
         const address = await connectPhantom(provider);
-        const { nonce, message } = await authRequest<{ nonce: string; message: string }>("GET", `?address=${encodeURIComponent(address)}`);
+        const { challenge, message } = await authRequest<{ challenge: string; message: string }>("GET", `?address=${encodeURIComponent(address)}`);
         const { signature: rawSignature } = await signMessage(new TextEncoder().encode(message), "utf8");
         const signature = btoa(String.fromCharCode(...rawSignature));
-        const signed = await authRequest<SignedWalletSession>("POST", "", { address, nonce, signature });
-        session.set(WALLET_SESSION_KEY, JSON.stringify(signed));
-        setWalletSession(signed);
+        setWalletSession(await authRequest<SignedWalletSession>("POST", "", { address, challenge, signature }));
       })();
     },
     linkPhantom: walletSession ? async () => {} : linkPhantom,
     signOut: async () => {
       if (walletSession) {
-        await authRequest("DELETE", "", undefined, walletSession.token).catch(() => {});
-        session.remove(WALLET_SESSION_KEY);
+        await authRequest("DELETE", "").catch(() => {});
         setWalletSession(null);
       } else await logout();
     },

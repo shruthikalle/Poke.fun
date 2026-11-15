@@ -1,16 +1,20 @@
-import { createPublicKey, randomBytes, verify } from "node:crypto";
+import { createPublicKey, verify } from "node:crypto";
 import { getBase58Encoder } from "@solana/kit";
 import { NextRequest, NextResponse } from "next/server";
+import { issueChallenge, issueSession, readChallenge, readSession, SESSION_TTL_MS } from "../../../lib/auth/walletSession";
 
 export const runtime = "nodejs";
 
-const CHALLENGE_TTL_MS = 5 * 60_000;
-const SESSION_TTL_MS = 24 * 60 * 60_000;
+const COOKIE = "pf_wallet_session";
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
-type Challenge = { address: string; message: string; expiresAt: number };
-type WalletSession = { address: string; expiresAt: number };
-const challenges = new Map<string, Challenge>();
-const sessions = new Map<string, WalletSession>();
+const DEV_SECRET = "pokefun-local-dev-only-wallet-session-secret";
+
+function secret() {
+  const configured = process.env.AUTH_SESSION_SECRET;
+  if (configured && configured.length >= 32) return configured;
+  if (process.env.NODE_ENV === "production") throw new Error("AUTH_SESSION_SECRET must be set to at least 32 characters");
+  return DEV_SECRET;
+}
 
 function error(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -22,51 +26,48 @@ function publicKey(address: string) {
   return createPublicKey({ key: Buffer.concat([ED25519_SPKI_PREFIX, Buffer.from(bytes)]), format: "der", type: "spki" });
 }
 
-function bearer(request: NextRequest) {
-  const value = request.headers.get("authorization");
-  return value?.startsWith("Bearer ") ? value.slice(7) : null;
-}
-
 export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
   if (!address) {
-    const token = bearer(request);
-    const saved = token ? sessions.get(token) : null;
-    if (!saved || saved.expiresAt <= Date.now()) {
-      if (token) sessions.delete(token);
-      return error("Session expired", 401);
+    const token = request.cookies.get(COOKIE)?.value;
+    const saved = token ? readSession(token, secret()) : null;
+    if (!saved) {
+      const response = error("Session expired", 401);
+      if (token) response.cookies.delete(COOKIE);
+      return response;
     }
     return NextResponse.json(saved);
   }
 
   try { publicKey(address); } catch { return error("Invalid Solana address", 400); }
-  const nonce = randomBytes(16).toString("hex");
-  const issuedAt = new Date().toISOString();
-  const message = `${request.nextUrl.host} wants you to sign in with your Solana account:\n${address}\n\nSign in to Poke.fun on Devnet. This does not send a transaction.\n\nURI: ${request.nextUrl.origin}\nVersion: 1\nChain ID: devnet\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
-  challenges.set(nonce, { address, message, expiresAt: Date.now() + CHALLENGE_TTL_MS });
-  return NextResponse.json({ nonce, message });
+  return NextResponse.json(issueChallenge(address, request.nextUrl.host, request.nextUrl.origin, secret()));
 }
 
 export async function POST(request: NextRequest) {
-  let body: { address?: unknown; nonce?: unknown; signature?: unknown };
+  let body: { address?: unknown; challenge?: unknown; signature?: unknown };
   try { body = await request.json(); } catch { return error("Invalid request", 400); }
-  const { address, nonce, signature } = body;
-  if (typeof address !== "string" || typeof nonce !== "string" || typeof signature !== "string") return error("Missing login fields", 400);
-  const challenge = challenges.get(nonce);
-  challenges.delete(nonce);
-  if (!challenge || challenge.address !== address || challenge.expiresAt <= Date.now()) return error("Login challenge expired", 401);
+  const { address, challenge, signature } = body;
+  if (typeof address !== "string" || typeof challenge !== "string" || typeof signature !== "string") return error("Missing login fields", 400);
+  const message = readChallenge(challenge, address, secret());
+  if (!message) return error("Login challenge expired", 401);
   try {
     const bytes = Buffer.from(signature, "base64");
-    if (bytes.length !== 64 || !verify(null, Buffer.from(challenge.message), publicKey(address), bytes)) return error("Invalid wallet signature", 401);
+    if (bytes.length !== 64 || !verify(null, Buffer.from(message), publicKey(address), bytes)) return error("Invalid wallet signature", 401);
   } catch { return error("Invalid wallet signature", 401); }
-  const token = randomBytes(32).toString("base64url");
-  const saved = { address, expiresAt: Date.now() + SESSION_TTL_MS };
-  sessions.set(token, saved);
-  return NextResponse.json({ ...saved, token });
+  const { token, ...saved } = issueSession(address, secret());
+  const response = NextResponse.json(saved);
+  response.cookies.set(COOKIE, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: SESSION_TTL_MS / 1000,
+  });
+  return response;
 }
 
-export async function DELETE(request: NextRequest) {
-  const token = bearer(request);
-  if (token) sessions.delete(token);
-  return NextResponse.json({ ok: true });
+export async function DELETE() {
+  const response = NextResponse.json({ ok: true });
+  response.cookies.delete(COOKIE);
+  return response;
 }
