@@ -1,6 +1,10 @@
 package pokedex
 
-import "testing"
+import (
+	"encoding/json"
+	"os"
+	"testing"
+)
 
 func TestEveryCatalogCardResolvesToAKnownSpecies(t *testing.T) {
 	if len(db.Cards.Entries) == 0 || len(All()) == 0 {
@@ -70,10 +74,48 @@ func TestSpeciesForCard(t *testing.T) {
 			t.Errorf("SpeciesForCard(%q, %q) = %q, want %q", c.set, c.number, got, c.want)
 		}
 	}
-	if got, ok := SpeciesForName("MR. MIME"); !ok || got != "mr-mime" {
-		t.Errorf("SpeciesForName(MR. MIME) = %q", got)
+}
+
+func TestEveryPokemonIsIncluded(t *testing.T) {
+	defaults := map[string]int{}
+	dex := map[int]bool{}
+	for _, s := range All() {
+		dex[s.Dex] = true
+		if s.Default {
+			defaults[s.Species]++
+		}
 	}
-	if _, ok := SpeciesForName("Nidoran"); ok {
-		t.Error("an ambiguous name must not resolve")
+	for n := 1; n <= 1025; n++ {
+		if !dex[n] {
+			t.Errorf("National Dex #%d is missing", n)
+		}
+	}
+	for species, count := range defaults {
+		if count != 1 {
+			t.Errorf("%s has %d default forms", species, count)
+		}
+	}
+	for _, key := range []string{"charizard-mega-x", "charizard-gmax", "vulpix-alola", "zoroark-hisui", "groudon-primal"} {
+		if _, ok := Lookup(key); !ok {
+			t.Errorf("card form %s is missing", key)
+		}
+	}
+}
+
+// The shared cases are also the spec for the browser's copy of the resolver
+// (apps/web/lib/cards/cardNames.ts).
+func TestSpeciesForCardName(t *testing.T) {
+	raw, err := os.ReadFile("testdata/card_names.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cases []struct{ Name, Species string }
+	if err := json.Unmarshal(raw, &cases); err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cases {
+		if got, _ := SpeciesForCardName(c.Name); got != c.Species {
+			t.Errorf("SpeciesForCardName(%q) = %q, want %q", c.Name, got, c.Species)
+		}
 	}
 }

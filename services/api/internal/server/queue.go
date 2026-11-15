@@ -226,12 +226,13 @@ func (s *Server) authorizedQueue(r *http.Request) *arenaQueueEntry {
 }
 
 // nftSpecies is the fighter an NFT battles as: its set and card number looked
-// up in the card catalog, or, for test NFTs that only carry a name, the species
-// with that display name ("Mr. Mime" → mr-mime). "" if neither matches.
+// up in the card catalog, or, for any other card, the Pokémon its printed name
+// identifies ("Dark Charizard" → charizard, "Galarian Rapidash V" →
+// rapidash-galar). "" if neither matches.
 func nftSpecies(card collectibles.Card) string {
 	if key, ok := pokedex.SpeciesForCard(card.Attribute("Set"), card.Attribute("Card Number")); ok {
 		return key
 	}
-	key, _ := pokedex.SpeciesForName(card.Attribute("Card Name"))
+	key, _ := pokedex.SpeciesForCardName(card.Attribute("Card Name"))
 	return key
 }
