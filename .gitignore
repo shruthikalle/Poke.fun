@@ -12,3 +12,6 @@ bin/
 *.tsbuildinfo
 contracts/target/
 contracts/.anchor/
+
+# PokéAPI responses cached by scripts/build-pokedex.mjs
+scripts/.cache/
