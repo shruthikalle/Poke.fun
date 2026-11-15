@@ -9,7 +9,7 @@ export function CurrencyToggle() {
   return (
     <div className={styles.currency} role="radiogroup" aria-label="Show prices in">
       {(["USD", "SOL"] as Currency[]).map((c) => (
-        <button key={c} role="radio" aria-checked={currency === c} data-on={currency === c || undefined} onClick={() => setCurrency(c)}>{c}</button>
+        <button key={c} className="pf-chip" role="radio" aria-checked={currency === c} onClick={() => setCurrency(c)}>{c}</button>
       ))}
     </div>
   );

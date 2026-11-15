@@ -14,8 +14,8 @@ export function Modal({ title, onClose, wide, children }: { title: string; onClo
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
   return (
-    <div className={styles.backdrop} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} className={styles.modal} data-wide={wide || undefined} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
+    <div className={styles.scrim} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} className={`pf-panel ${styles.modal}`} data-wide={wide || undefined} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}>
         <div className={styles.modalHead}><strong>{title}</strong><button onClick={onClose} aria-label="Close">×</button></div>
         <div className={styles.modalBody}>{children}</div>
       </div>

@@ -22,7 +22,7 @@ export function useMarketModals(market: Marketplace) {
     trade: (opts: { want?: string; give?: string }) => needAccount({ kind: "trade", ...opts }),
   };
 
-  const node = open?.kind === "detail" ? <CardDetailModal mint={open.mint} market={market} onClose={close} onTrade={(want) => api.trade({ want })} onList={api.list} />
+  const node = open?.kind === "detail" ? <CardDetailModal mint={open.mint} market={market} onClose={close} onTrade={(want) => api.trade({ want })} onTradeAway={(give) => api.trade({ give })} onList={api.list} />
     : open?.kind === "list" ? <ListCardModal mint={open.mint} market={market} onClose={close} />
     : open?.kind === "trade" ? <TradeModal market={market} wantMint={open.want} giveMint={open.give} onClose={close} />
     : null;

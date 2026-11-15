@@ -31,9 +31,13 @@ export interface Listing {
   priceSol: number;
   status: ListingStatus;
   listedAt: number;
+  /** Set once sold. */
+  soldPriceSol?: number;
+  buyer?: string;
+  soldAt?: number;
 }
 
-export type OfferStatus = "pending" | "accepted" | "declined";
+export type OfferStatus = "pending" | "countered" | "accepted" | "declined";
 
 export interface Offer {
   id: string;
@@ -41,6 +45,8 @@ export interface Offer {
   from: string;
   priceSol: number;
   status: OfferStatus;
+  /** Seller's counter price, when countered. */
+  counterSol?: number;
   createdAt: number;
 }
 
@@ -60,6 +66,11 @@ export interface Trade {
   createdAt: number;
 }
 
+/** Where an imported card came from. */
+export type ImportSource = "collectors-crypt" | "phantom";
+
+export interface ImportRecord { source: ImportSource; at: number }
+
 export interface PricePoint { t: number; priceSol: number }
 
 export interface MarketState {
@@ -70,7 +81,14 @@ export interface MarketState {
   trades: Trade[];
   sellers: Record<string, Seller>;
   balances: Record<string, number>;
+  /** Cards people brought in from outside accounts, by item id. */
+  imports: Record<string, ImportRecord>;
 }
+
+/** Share of the sale price the marketplace keeps. */
+export const MARKET_FEE = 0.025;
+
+export type OfferAnswer = { action: "accept" } | { action: "decline" } | { action: "counter"; priceSol: number };
 
 export type MarketResult<T> = { ok: true; value: T } | { ok: false; error: string };
 
@@ -90,7 +108,14 @@ export interface MarketplaceService {
   addFunds(address: string, priceSol: number): Promise<MarketResult<number>>;
   buy(listingId: string, buyer: string): Promise<MarketResult<Listing>>;
   list(mint: string, seller: string, priceSol: number): Promise<MarketResult<Listing>>;
+  updatePrice(listingId: string, by: string, priceSol: number): Promise<MarketResult<Listing>>;
   cancelListing(listingId: string, by: string): Promise<MarketResult<void>>;
   makeOffer(listingId: string, from: string, priceSol: number): Promise<MarketResult<Offer>>;
+  /** Seller's answer to an offer on their listing. */
+  respondOffer(offerId: string, by: string, answer: OfferAnswer): Promise<MarketResult<Offer>>;
   proposeTrade(input: Omit<Trade, "id" | "status" | "createdAt">): Promise<MarketResult<Trade>>;
+  /** Answer to a trade someone proposed to you. */
+  respondTrade(tradeId: string, by: string, accept: boolean): Promise<MarketResult<Trade>>;
+  /** Adds cards found by a `CardImportService` to the owner's collection. */
+  importCards(owner: string, cards: Card[], source: ImportSource): Promise<MarketResult<Card[]>>;
 }

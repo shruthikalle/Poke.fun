@@ -55,7 +55,14 @@ export default function MarketplacePage() {
 
   return (
     <MarketShell section="market" market={market}>
-      <aside className={styles.filters} aria-label="Filters">
+      <div className={styles.hero}>
+        <div>
+          <span className="pf-eyebrow">Marketplace</span>
+          <h1>Find your next champion</h1>
+          <p>Real graded cards from collectors, each one secured to physical storage. Buy one and it can battle for you today.</p>
+        </div>
+      </div>
+      <aside className={`pf-panel ${styles.filters}`} aria-label="Filters">
         <div className={styles.filterHead}><strong>Filters</strong>{filtered && <button className={styles.linkButton} onClick={clear}>Clear all</button>}</div>
         <Facet title="Set" options={facets.set} value={sets} onChange={setSets} />
         <Facet title="Rarity" options={facets.rarity} value={rarities} onChange={setRarities} />
@@ -69,7 +76,8 @@ export default function MarketplacePage() {
           </div>
         </fieldset>
         <div className={styles.sideNote}>
-          <b>Every card is real.</b> Each one is a graded card held in insured physical storage, listed by collectors who bought it on verified platforms like Collector&apos;s Crypt.
+          <span className={styles.lock} aria-hidden="true" />
+          <span><b>Every card is real.</b> Each one is graded and held in insured storage, listed by collectors who bought it on verified platforms like Collector&apos;s Crypt.</span>
         </div>
       </aside>
 
@@ -93,11 +101,17 @@ export default function MarketplacePage() {
         {results.length ? (
           <div className={styles.grid}>
             {results.map((l) => (
-              <CardTile key={l.id} card={l.card} priceSol={l.priceSol} onOpen={() => modals.detail(l.card.mint)} />
+              <CardTile key={l.id} card={l.card} priceSol={l.priceSol} onOpen={() => modals.detail(l.card.mint)}
+                badges={l.seller.address === market.me ? [{ text: "Your listing", tone: "good" }] : l.card.grade === "PSA 10" ? [{ text: "Top grade" }] : undefined} />
             ))}
           </div>
         ) : (
-          <div className={styles.empty}><b>No cards match those filters.</b><button className="pf-btn" onClick={clear}>Clear filters</button></div>
+          <div className={`pf-panel ${styles.empty}`}>
+            <div className={styles.emptyArt} aria-hidden="true"><i style={{ ["--r" as string]: "-8deg" }} /><i /><i style={{ ["--r" as string]: "8deg" }} /></div>
+            <b>No cards match</b>
+            <p>Try fewer filters or a different search.</p>
+            <button className="pf-btn" data-variant="primary" onClick={clear}>Clear filters</button>
+          </div>
         )}
       </main>
       {modals.node}
@@ -106,16 +120,21 @@ export default function MarketplacePage() {
 }
 
 function Facet({ title, options, value, onChange, order }: { title: string; options: Map<string, number>; value: string[]; onChange: (v: string[]) => void; order?: string[] }) {
-  const entries = [...options.entries()].sort((a, b) => (order ? order.indexOf(a[0]) - order.indexOf(b[0]) : b[1] - a[1] || a[0].localeCompare(b[0])));
+  const [all, setAll] = useState(false);
+  const sorted = [...options.entries()].sort((a, b) => (order ? order.indexOf(a[0]) - order.indexOf(b[0]) : b[1] - a[1] || a[0].localeCompare(b[0])));
+  const entries = all ? sorted : sorted.filter(([name], i) => i < 8 || value.includes(name));
   return (
     <fieldset className={styles.facet}>
       <legend>{title}</legend>
-      {entries.map(([name, n]) => (
-        <label key={name} className={styles.check}>
-          <input type="checkbox" checked={value.includes(name)} onChange={() => onChange(value.includes(name) ? value.filter((v) => v !== name) : [...value, name])} />
-          <span>{name}</span><small>{n}</small>
-        </label>
-      ))}
+      {entries.map(([name, n]) => {
+        const on = value.includes(name);
+        return (
+          <button key={name} type="button" className="pf-chip" data-on={on || undefined} aria-pressed={on} onClick={() => onChange(on ? value.filter((v) => v !== name) : [...value, name])}>
+            {name}<small>{n}</small>
+          </button>
+        );
+      })}
+      {sorted.length > 8 && <button type="button" className={styles.linkButton} onClick={() => setAll((a) => !a)}>{all ? "Show fewer" : `Show all ${sorted.length}`}</button>}
     </fieldset>
   );
 }

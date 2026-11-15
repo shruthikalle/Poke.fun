@@ -3,7 +3,6 @@
 import { useMemo, useState } from "react";
 import { useCurrency } from "../../lib/market/currency";
 import type { Marketplace } from "../../lib/market/useMarketplace";
-import { truncateAddress } from "../../lib/wallet/phantom";
 import { PixelAvatar } from "../PixelAvatar";
 import { CardArt } from "./CardArt";
 import { Modal } from "./Modal";
@@ -14,14 +13,15 @@ type Pane = "idle" | "confirm-buy" | "offer";
 
 const suggest = (amount: number, currency: string) => (currency === "SOL" ? amount.toFixed(2) : String(Math.round(amount)));
 
-export function CardDetailModal({ mint, market, onClose, onTrade, onList }: {
-  mint: string; market: Marketplace; onClose: () => void; onTrade: (wantMint: string) => void; onList: (mint: string) => void;
+export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, onList }: {
+  mint: string; market: Marketplace; onClose: () => void; onTrade: (wantMint: string) => void; onTradeAway: (giveMint: string) => void; onList: (mint: string) => void;
 }) {
   const { format, toSol, fromSol, currency } = useCurrency();
   const card = market.state.cards[mint];
   const listing = market.listingFor(mint);
   const owner = market.ownerOf(mint);
   const mine = !!market.me && owner?.address === market.me;
+  const imported = market.importOf(mint);
   const history = useMemo(() => market.priceHistory(mint), [market, mint]);
   const [pane, setPane] = useState<Pane>("idle");
   const [busy, setBusy] = useState(false);
@@ -71,9 +71,9 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onList }: {
             <h2>{card.name}</h2>
             <span>{card.set} · #{card.number}</span>
           </div>
-          <div className={styles.tags}><span className={styles.gradeTag}>{card.grade}</span><span className={styles.rarityTag}>{card.rarity}</span></div>
+          <div className={styles.tags}><span className={styles.gradeTag}>{card.grade}</span><span className={styles.rarityTag}>{card.rarity}</span>{imported && <span className={styles.badge} data-tone="violet">Imported</span>}</div>
 
-          <div className={styles.priceBox}>
+          <div className={`pf-frame ${styles.priceBox}`}>
             <span>{listing ? "Price" : "Estimated value"}</span>
             <strong>{format(value)}</strong>
             {!listing && <small>Not listed for sale right now</small>}
@@ -83,10 +83,18 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onList }: {
 
           {mine ? (
             <div className={styles.actionsRow}>
-              {listing
-                ? <button className="pf-btn" disabled={busy} onClick={async () => { setBusy(true); const r = await market.cancelListing(listing.id); setBusy(false); setMessage(r.ok ? { tone: "good", text: "Listing removed." } : { tone: "bad", text: r.error }); }}>Remove listing</button>
-                : <button className="pf-btn" data-variant="primary" onClick={() => onList(mint)}>List for sale</button>}
-              <span className={styles.mutedNote}>This card is in your collection.</span>
+              {listing ? (
+                <>
+                  <button className="pf-btn" data-variant="primary" onClick={() => onList(mint)}>Edit price</button>
+                  <button className="pf-btn" disabled={busy} onClick={async () => { setBusy(true); const r = await market.cancelListing(listing.id); setBusy(false); setMessage(r.ok ? { tone: "good", text: "Listing removed. It's back in your collection." } : { tone: "bad", text: r.error }); }}>Remove listing</button>
+                </>
+              ) : (
+                <>
+                  <button className="pf-btn" data-variant="primary" onClick={() => onList(mint)}>List for sale</button>
+                  <button className="pf-btn" onClick={() => onTradeAway(mint)}>Trade</button>
+                </>
+              )}
+              <span className={styles.mutedNote}>{listing ? "Your listing is live in the Marketplace." : "This card is in your collection."}</span>
             </div>
           ) : pane === "confirm-buy" && listing ? (
             <div className={styles.confirm}>
@@ -128,7 +136,6 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onList }: {
               <div>
                 <b>{mine ? "You" : owner.name}</b>
                 <span>★ {owner.rating.toFixed(1)} · {owner.sales} sales · member since {owner.memberSince}</span>
-                <small>Account {truncateAddress(owner.address)}</small>
               </div>
             </div>
           )}
@@ -139,7 +146,7 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onList }: {
             <dt>Rarity</dt><dd>{card.rarity}</dd>
             <dt>Grade</dt><dd>{card.grade}</dd>
             <dt>Originally from</dt><dd>{card.origin} (verified)</dd>
-            <dt>Item ID</dt><dd>{truncateAddress(card.mint, 6, 6)}</dd>
+            {imported && <><dt>Added from</dt><dd>{imported.source === "phantom" ? "Phantom" : "Collector's Crypt"}, imported by you</dd></>}
           </dl>
         </div>
       </div>
