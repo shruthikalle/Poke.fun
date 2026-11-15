@@ -8,6 +8,7 @@ import { useWallet } from "../../lib/wallet/WalletProvider";
 import type { ChatRoom } from "../../lib/lobby/useLobby";
 import styles from "./battle.module.css";
 import { PixelIcon } from "../PixelIcon";
+import { CurrencyToggle } from "../market/CurrencyToggle";
 
 export type TabId = "battle" | string;
 
@@ -68,6 +69,7 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
       </div>
       <div className={styles.topRight}>
       <div className={styles.userArea}>
+        <CurrencyToggle />
         {playerName ? (
           <AccountChip classes={{ chip: styles.userChip, avatar: styles.userAvatar, menu: styles.menu, menuItem: styles.menuItem }} />
         ) : (

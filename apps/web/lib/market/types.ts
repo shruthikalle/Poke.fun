@@ -69,7 +69,7 @@ export interface Trade {
 /** Where an imported card came from. */
 export type ImportSource = "collectors-crypt" | "phantom";
 
-export interface ImportRecord { source: ImportSource; at: number }
+export interface ImportRecord { source: ImportSource; at: number; by?: string }
 
 export interface PricePoint { t: number; priceSol: number }
 

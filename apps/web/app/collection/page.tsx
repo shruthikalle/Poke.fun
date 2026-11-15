@@ -256,7 +256,7 @@ function ActivityFeed({ market, now }: { market: Marketplace; now: number }) {
   market.myListings.forEach((l) => items.push({ id: `list-${l.id}`, at: l.listedAt, status: "listed", text: <>Listed {l.card.name} for <b>{format(l.priceSol)}</b></> }));
   const batches = new Map<string, { at: number; source: keyof typeof SOURCE_NAME; n: number }>();
   Object.entries(market.state.imports).forEach(([mint, rec]) => {
-    const mine = market.state.owners[mint] === me || market.sales.some((l) => l.card.mint === mint);
+    const mine = rec.by ? rec.by === me : market.state.owners[mint] === me || market.sales.some((l) => l.card.mint === mint);
     if (!mine) return;
     const key = `${rec.source}-${rec.at}`;
     batches.set(key, { at: rec.at, source: rec.source, n: (batches.get(key)?.n ?? 0) + 1 });

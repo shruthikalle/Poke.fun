@@ -319,7 +319,7 @@ export class MockMarketplaceService implements MarketplaceService {
     if (!fresh.length) return { ok: false, error: "These cards are already in your collection." };
     const next = { ...this.state, cards: { ...this.state.cards }, owners: { ...this.state.owners }, imports: { ...this.state.imports } };
     const at = Date.now();
-    fresh.forEach((c) => { next.cards[c.mint] = c; next.owners[c.mint] = owner; next.imports[c.mint] = { source, at }; });
+    fresh.forEach((c) => { next.cards[c.mint] = c; next.owners[c.mint] = owner; next.imports[c.mint] = { source, at, by: owner }; });
     this.commit(next);
     // Demo collector: proposes a trade for one of the new cards a few seconds later.
     setTimeout(() => this.incomingTrade(owner, fresh.map((c) => c.mint)), 6000);

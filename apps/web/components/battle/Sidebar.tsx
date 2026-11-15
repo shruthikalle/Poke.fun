@@ -31,14 +31,16 @@ function RoomItem({ room, onOpen }: { room: ChatRoom; onOpen: (room: ChatRoom) =
   );
 }
 
-function LiveBattleRow({ battle }: { battle: LiveBattle }) {
+function LiveBattleRow({ battle, onOpen }: { battle: LiveBattle; onOpen: () => void }) {
   const [a, b] = battle.trainers;
   return (
-    <li className={styles.live}>
-      <img src={`/trainers/${a.avatar}.png`} alt="" width={28} height={28} />
-      <span className={styles.liveNames}><strong>{a.name}</strong><i>vs</i><strong>{b.name}</strong></span>
-      <img src={`/trainers/${b.avatar}.png`} alt="" width={28} height={28} />
-      <small>{battle.format} · Turn {battle.turn}</small>
+    <li>
+      <button className={styles.live} onClick={onOpen} title={`Watch ${a.name} vs ${b.name}`}>
+        <img src={`/trainers/${a.avatar}.png`} alt="" width={28} height={28} />
+        <span className={styles.liveNames}><strong>{a.name}</strong><i>vs</i><strong>{b.name}</strong></span>
+        <img src={`/trainers/${b.avatar}.png`} alt="" width={28} height={28} />
+        <small>{battle.format} · Turn {battle.turn}</small>
+      </button>
     </li>
   );
 }
@@ -61,7 +63,19 @@ export function Sidebar({ lobby, onOpenRoom, onHide }: { lobby: LobbySnapshot | 
 
       <h2 className={styles.sideHeading}>Live battles</h2>
       <ul className={styles.lives}>
-        {(lobby?.liveBattles ?? []).map((b) => <LiveBattleRow key={b.id} battle={b} />)}
+        {(lobby?.liveBattles ?? []).map((b) => <LiveBattleRow
+            key={b.id}
+            battle={b}
+            onOpen={() =>
+              onOpenRoom({
+                id: `live-${b.id}`,
+                name: `${b.trainers[0].name} vs ${b.trainers[1].name}`,
+                users: 40 + b.turn * 7,
+                description: `Watching ${b.format} · Turn ${b.turn}. Cheer on both trainers.`,
+                section: "community",
+              })
+            }
+          />)}
       </ul>
 
       <div className={styles.filter} role="radiogroup" aria-label="Filter rooms">
