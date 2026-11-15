@@ -22,44 +22,6 @@ var (
 	ErrFull = errors.New("arena is full")
 )
 
-type Move struct {
-	Name       string  `json:"name"`
-	Damage     int     `json:"damage"`
-	Range      float64 `json:"range"`
-	CooldownMs int     `json:"cooldownMs"`
-}
-
-type Card struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	Type    string  `json:"type"`
-	Level   int     `json:"level"`
-	MaxHP   int     `json:"maxHp"`
-	Speed   float64 `json:"speed"`
-	Basic   Move    `json:"basic"`
-	Special Move    `json:"special"`
-}
-
-var cards = []Card{
-	{ID: "pikachu", Name: "Pikachu", Type: "Electric", Level: 50, MaxHP: 95, Speed: 250,
-		Basic:   Move{Name: "Quick Attack", Damage: 9, Range: 145, CooldownMs: 450},
-		Special: Move{Name: "Thunderbolt", Damage: 26, Range: 225, CooldownMs: 4500}},
-	{ID: "charmander", Name: "Charmander", Type: "Fire", Level: 50, MaxHP: 110, Speed: 215,
-		Basic:   Move{Name: "Scratch", Damage: 11, Range: 135, CooldownMs: 550},
-		Special: Move{Name: "Flamethrower", Damage: 29, Range: 205, CooldownMs: 5000}},
-}
-
-func Cards() []Card { return cards }
-
-func FindCard(id string) (Card, bool) {
-	for _, c := range cards {
-		if c.ID == id {
-			return c, true
-		}
-	}
-	return Card{}, false
-}
-
 type Fighter struct {
 	Name              string  `json:"name"`
 	Card              Card    `json:"card"`
@@ -284,9 +246,14 @@ func (g *Game) Step() {
 			aimX, aimY = f.ChargeDX, f.ChargeDY
 		}
 		hit := distance <= move.Range
-		if f.Card.ID == "charmander" && kind == "special" && distance > 0 {
-			// Flamethrower covers a 52-degree cone in the aimed direction.
-			hit = hit && (aimX*targetDX+aimY*targetDY)/distance >= math.Cos(26*math.Pi/180)
+		if move.Shape == ShapeCone && distance > 0 {
+			// A cone special only reaches targets within ConeHalfAngle of the aim.
+			hit = hit && (aimX*targetDX+aimY*targetDY)/distance >= math.Cos(ConeHalfAngle*math.Pi/180)
+		}
+		dealt := 0
+		if hit {
+			dealt = hitDamage(f.Card, move, target.Card)
+			hit = dealt > 0 // an immune target shrugs the move off
 		}
 		f.LastAttack, f.LastAttackTick = kind, g.Tick
 		f.AttackX, f.AttackY = sourceX, sourceY
@@ -294,7 +261,7 @@ func (g *Game) Step() {
 		f.AttackTargetX, f.AttackTargetY = target.X, target.Y
 		f.LastAttackHit = hit
 		if hit && g.Tick >= target.dodgeUntil {
-			damage[1-i] += move.Damage
+			damage[1-i] += dealt
 			if kind == "basic" {
 				f.Energy = min(MaxEnergy, f.Energy+1)
 			}
