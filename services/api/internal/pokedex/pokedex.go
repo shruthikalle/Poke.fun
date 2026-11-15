@@ -1,7 +1,7 @@
 // Package pokedex is the battle server's read-only Pokémon database: every
-// species the card catalog can produce, with its types, base stats, sprite,
-// power tier and every damaging move it can learn, plus the catalog's card →
-// species mapping. It is imported from PokéAPI by scripts/build-pokedex.mjs
+// Pokémon species (default forms plus the alternate forms printed on cards),
+// with its types, base stats, sprite, power tier and every damaging move it can
+// learn, plus the card catalog's card → species mapping. It is imported from PokéAPI by scripts/build-pokedex.mjs
 // into pokedex.json, which is embedded in the binary, so lookups need no
 // network and every server runs the same reviewed, versioned data (PRD N-02).
 package pokedex
@@ -33,13 +33,15 @@ type Learned struct {
 }
 
 type Species struct {
-	Key    string   `json:"key"` // PokéAPI pokemon key, e.g. "pikachu" or "goodra-hisui"
-	Name   string   `json:"name"`
-	Dex    int      `json:"dex"`
-	Types  []string `json:"types"`
-	Tier   int      `json:"tier"` // 1–3; matchmaking only pairs equal tiers
-	Base   Stats    `json:"base"`
-	Sprite string   `json:"sprite"`
+	Key     string   `json:"key"`     // PokéAPI pokemon key, e.g. "pikachu" or "goodra-hisui"
+	Species string   `json:"species"` // base species, e.g. "goodra" for goodra-hisui
+	Default bool     `json:"default"` // the species' default form, which a plain name means
+	Name    string   `json:"name"`
+	Dex     int      `json:"dex"`
+	Types   []string `json:"types"`
+	Tier    int      `json:"tier"` // 1–3; matchmaking only pairs equal tiers
+	Base    Stats    `json:"base"`
+	Sprite  string   `json:"sprite"`
 	// Learnset holds damaging level-up moves; OtherMoves the damaging moves it
 	// learns any other way (TM, tutor, egg). Either may be empty (e.g. Ditto).
 	Learnset   []Learned `json:"learnset"`
@@ -83,7 +85,7 @@ var db = load(raw)
 type index struct {
 	dataset
 	byKey      map[string]int
-	byName     map[string]string // normalised display name → key
+	byName     map[string]string // normalised name of a default form → key ("" if ambiguous)
 	setByAlias map[string]string
 	byCard     map[string]string // "<set id>#<number>" → species key
 }
@@ -97,9 +99,12 @@ func load(data []byte) *index {
 	sort.SliceStable(ix.Species, func(i, j int) bool { return ix.Species[i].Dex < ix.Species[j].Dex })
 	for i, s := range ix.Species {
 		ix.byKey[s.Key] = i
+		if !s.Default {
+			continue // forms are reached through their species and a form marker
+		}
 		name := normalize(s.Name)
 		if prev, taken := ix.byName[name]; taken && prev != s.Key {
-			ix.byName[name] = "" // ambiguous, e.g. Nidoran♀ and Nidoran♂: match by set and number only
+			ix.byName[name] = "" // ambiguous: never guess between two species
 		} else {
 			ix.byName[name] = s.Key
 		}

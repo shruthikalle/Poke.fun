@@ -1,12 +1,16 @@
 // Imports the Pokémon data the battle server needs from PokéAPI into a versioned
 // dataset that the Go API embeds: services/api/internal/pokedex/pokedex.json.
 //
-// It covers every species the card catalog (apps/web/lib/cards/catalog.generated.json)
-// can produce, so any card a player brings maps to a fighter. For each species it
+// It covers every Pokémon: all species' default forms, plus the alternate forms
+// printed on cards (Alolan, Galarian, Hisuian and Paldean forms, Mega,
+// Gigantamax and Primal), plus any form the card catalog uses. For each one it
 // stores types, base stats, sprite, power tier and every damaging move it can
 // learn: level-up moves with their level, plus TM, tutor and egg moves. Each move
 // is stored once in a shared move table. The catalog's card →
 // species mapping is copied too, so the server can check an NFT's set and number.
+//
+// It also writes apps/web/lib/cards/species.generated.json, a small name index the
+// web app uses to recognise cards outside the catalog by their printed name.
 //
 // Usage (from the repo root):
 //   node scripts/build-pokedex.mjs            # uses cached responses when present
@@ -21,14 +25,18 @@ import { resolve } from "node:path";
 const ROOT = new URL("..", import.meta.url).pathname;
 const CATALOG = resolve(ROOT, "apps/web/lib/cards/catalog.generated.json");
 const OUTPUT = resolve(ROOT, "services/api/internal/pokedex/pokedex.json");
+const NAME_INDEX = resolve(ROOT, "apps/web/lib/cards/species.generated.json");
 const CACHE = resolve(ROOT, "scripts/.cache/pokeapi");
 const API = "https://pokeapi.co/api/v2";
 const REFRESH = process.argv.includes("--refresh");
 const CONCURRENCY = 6;
 
 const STAT_KEYS = { hp: "hp", attack: "atk", defense: "def", "special-attack": "spa", "special-defense": "spd", speed: "spe" };
-// Card name prefixes for regional forms, matching SpeciesService's display names.
-const FORM_LABELS = [[/-hisui$/, "Hisuian"], [/-alola$/, "Alolan"], [/-galar$/, "Galarian"], [/-paldea$/, "Paldean"], [/-gmax$/, "Gigantamax"]];
+// Alternate forms worth a fighter: the ones printed on cards. Cosmetic and
+// event forms (Pikachu in a cap, Totem Pokémon such as raticate-totem-alola) are left out.
+const CARD_FORMS = /-(alola|galar|hisui|paldea)(-|$)|-mega(-[xy])?$|-gmax$|-primal$/;
+// Card-style display prefixes for forms, matching SpeciesService's names.
+const FORM_LABELS = [[/-hisui(-|$)/, "Hisuian"], [/-alola(-|$)/, "Alolan"], [/-galar(-|$)/, "Galarian"], [/-paldea(-|$)/, "Paldean"], [/-gmax$/, "Gigantamax"], [/-primal$/, "Primal"]];
 
 const titleCase = (s) => s.split("-").map((w) => w[0].toUpperCase() + w.slice(1)).join(" ");
 const english = (names) => names?.find((n) => n.language.name === "en")?.name;
@@ -116,12 +124,15 @@ async function importSpecies(key) {
   const source = pokemon.moves.length ? pokemon : base ?? pokemon;
   return {
     key,
+    species: species.name, // the base species, e.g. "darmanitan" for darmanitan-galar-standard
+    default: pokemon.is_default,
     name: displayName(key, species),
     dex: species.id,
     types: pokemon.types.sort((a, b) => a.slot - b.slot).map((t) => titleCase(t.type.name)),
     tier: await tierOf(key, species),
     base: Object.fromEntries(pokemon.stats.map((s) => [STAT_KEYS[s.stat.name], s.base_stat])),
-    sprite: pokemon.sprites.front_default ?? base?.sprites.front_default ?? pokemon.sprites.other?.["official-artwork"]?.front_default ?? "",
+    sprite: pokemon.sprites.front_default ?? base?.sprites.front_default ?? pokemon.sprites.other?.["official-artwork"]?.front_default
+      ?? base?.sprites.other?.["official-artwork"]?.front_default ?? "",
     learnset: levelUpMoves(source),
     otherMoves: otherMoves(source),
   };
@@ -144,8 +155,18 @@ async function importMove(id) {
 const catalog = JSON.parse(await readFile(CATALOG, "utf8"));
 await mkdir(CACHE, { recursive: true });
 
-const keys = [...new Set(catalog.entries.map((e) => e.species))].sort();
-console.log(`Importing ${keys.length} species from PokéAPI…`);
+// Every species' default form and card-relevant alternate forms, plus whatever
+// the card catalog uses.
+const allSpecies = (await get("/pokemon-species?limit=5000")).results.map((r) => r.name);
+console.log(`Reading ${allSpecies.length} species from PokéAPI…`);
+const keySet = new Set(catalog.entries.map((e) => e.species));
+for (const sp of await mapLimit(allSpecies, (name) => get(`/pokemon-species/${name}`))) {
+  for (const v of sp.varieties) {
+    if (v.is_default || (CARD_FORMS.test(v.pokemon.name) && !v.pokemon.name.includes("-totem"))) keySet.add(v.pokemon.name);
+  }
+}
+const keys = [...keySet].sort();
+console.log(`Importing ${keys.length} Pokémon (species and forms)…`);
 const species = await mapLimit(keys, importSpecies);
 
 const moveIds = [...new Set(species.flatMap((s) => [...s.learnset.map((l) => l.move), ...s.otherMoves]))].sort();
@@ -184,4 +205,13 @@ await writeFile(OUTPUT, [
   ` "cards": {\n  "sets": ${JSON.stringify(dataset.cards.sets)},\n  "entries": [\n${lines(dataset.cards.entries.map((x) => ` ${JSON.stringify(x)}`))}\n  ]\n }`,
   "}",
 ].join("\n") + "\n");
-console.log(`Wrote ${species.length} species, ${Object.keys(moves).length} moves and ${dataset.cards.entries.length} cards to ${OUTPUT.replace(ROOT, "")}`);
+const missingSprite = species.filter((s) => !s.sprite).map((s) => s.key);
+if (missingSprite.length) console.warn(`No sprite on PokéAPI: ${missingSprite.join(", ")}`);
+
+// The browser's name index: just enough to recognise a card by its printed name.
+await writeFile(NAME_INDEX, `${JSON.stringify({
+  version: dataset.version,
+  species: species.map(({ key, species: base, default: isDefault, name, dex, tier }) => ({ key, species: base, default: isDefault, name, dex, tier })),
+}, null, 0).replace(/},{/g, "},\n{")}\n`);
+console.log(`Wrote ${species.length} Pokémon, ${Object.keys(moves).length} moves and ${dataset.cards.entries.length} cards to ${OUTPUT.replace(ROOT, "")}`);
+console.log(`Wrote the name index to ${NAME_INDEX.replace(ROOT, "")}`);
