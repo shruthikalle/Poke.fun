@@ -7,11 +7,14 @@ import (
 	"time"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/arena"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/collectibles"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/pokedex"
 )
 
 type arenaQueueEntry struct {
 	id, token, playerToken string
 	name, cardID           string
+	tier                   int // the fighter's power tier; only equal tiers are paired
 	rating                 int
 	entryCents             int
 	created                time.Time
@@ -65,7 +68,8 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid name, rating, or demo entry")
 		return
 	}
-	if _, ok := arena.FindCard(req.CardID); !ok {
+	fighter, ok := arena.FindCard(req.CardID)
+	if !ok {
 		writeError(w, http.StatusBadRequest, "card is not supported in the live arena")
 		return
 	}
@@ -83,7 +87,7 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 			writeCollectibleError(w, err)
 			return
 		}
-		if card.Attribute("Category") != "Pokemon" || !strings.EqualFold(card.Attribute("Card Name"), req.CardID) {
+		if card.Attribute("Category") != "Pokemon" || nftSpecies(card) != req.CardID {
 			writeError(w, http.StatusForbidden, "NFT does not match the selected fighter")
 			return
 		}
@@ -113,10 +117,12 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	s.pruneWaitingQueue(now)
-	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, rating: req.Rating, entryCents: req.EntryCents, created: now, lastSeen: now}
+	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, tier: fighter.Tier, rating: req.Rating, entryCents: req.EntryCents, created: now, lastSeen: now}
 	var best *arenaQueueEntry
 	for _, candidate := range s.arenaQueue {
-		if candidate.match != nil || candidate.entryCents != req.EntryCents {
+		// Same stake and same power tier (PRD: comparable cards first), then
+		// the closest rating.
+		if candidate.match != nil || candidate.entryCents != req.EntryCents || candidate.tier != fighter.Tier {
 			continue
 		}
 		if best == nil || math.Abs(float64(candidate.rating-req.Rating)) < math.Abs(float64(best.rating-req.Rating)) ||
@@ -217,4 +223,15 @@ func (s *Server) authorizedQueue(r *http.Request) *arenaQueueEntry {
 		return nil
 	}
 	return entry
+}
+
+// nftSpecies is the fighter an NFT battles as: its set and card number looked
+// up in the card catalog, or, for test NFTs that only carry a name, the species
+// with that display name ("Mr. Mime" → mr-mime). "" if neither matches.
+func nftSpecies(card collectibles.Card) string {
+	if key, ok := pokedex.SpeciesForCard(card.Attribute("Set"), card.Attribute("Card Number")); ok {
+		return key
+	}
+	key, _ := pokedex.SpeciesForName(card.Attribute("Card Name"))
+	return key
 }
