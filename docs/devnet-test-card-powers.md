@@ -1,6 +1,6 @@
 # Devnet test card powers
 
-Generated 2026-11-15T05:58:43.839Z from [PokéAPI](https://pokeapi.co/docs/v2) for the Poke.fun test collection `9cu8Rf7ryTHPrN24D62Q4xsEHnP8aBHS28mBdy4WRuCv`. These NFTs are **not vaulted or graded**. PokéAPI base stats and move power are inputs; battle HP and other combat stats use Poke.fun's level 50 formula. Move selection mirrors `SpeciesService` and may change if the game rules change.
+Generated 2026-11-15T18:42:04.362Z from [PokéAPI](https://pokeapi.co/docs/v2) for the Poke.fun test collection `9cu8Rf7ryTHPrN24D62Q4xsEHnP8aBHS28mBdy4WRuCv`. These NFTs are **not vaulted or graded**. PokéAPI base stats and move power are inputs; battle HP and other combat stats use Poke.fun's level 50 formula. Move selection mirrors `SpeciesService` and may change if the game rules change.
 
 | Card | Owner | Asset | Type | Lv | HP | Atk | Def | SpA | SpD | Speed | Tier |
 | --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -15,6 +15,12 @@ Generated 2026-11-15T05:58:43.839Z from [PokéAPI](https://pokeapi.co/docs/v2) f
 | Squirtle | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/Hawz8gU9hvAwFf9BdKaFMC3FPpzDfvLQy49f2C7FV33t?cluster=devnet) | Water | 50 | 119 | 68 | 85 | 70 | 84 | 43 | 1 |
 | Charizard | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/CeCov3xQBZyL1G1yNz81sb4xAWCt6N6TbQEJqiPytPPh?cluster=devnet) | Fire/Flying | 50 | 153 | 104 | 98 | 129 | 105 | 100 | 3 |
 | Venusaur | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/CWF1Zru2Y4sTvxnwuzkgM1AbMHn63XUZNS1NFhUgrjPb?cluster=devnet) | Grass/Poison | 50 | 155 | 102 | 103 | 120 | 120 | 80 | 3 |
+| Pidgey | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/GmqY9WtQ5tPVtrTV3fcL1yGjLYUqH29UaWfR8viYKoKP?cluster=devnet) | Normal/Flying | 50 | 115 | 65 | 60 | 55 | 55 | 56 | 1 |
+| Growlithe | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/AVpRHftY9xkexqBdjPzYXTmU1KubBvRJNMcfjyntunfF?cluster=devnet) | Fire | 50 | 130 | 90 | 65 | 90 | 70 | 60 | 1 |
+| Ninetales | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/oFfrg7S9n2rpxPfBGa8FYNrgxYmrSZeWuAXZzNXyiqG?cluster=devnet) | Fire | 50 | 148 | 96 | 95 | 101 | 120 | 100 | 2 |
+| Dragonair | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/BZ6rjUGu7m2iCsMHx6FJaYrGX9oPuU5Kpy5DUygyrpr5?cluster=devnet) | Dragon | 50 | 136 | 104 | 85 | 90 | 90 | 70 | 2 |
+| Alakazam | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/BE8uFTDnoqNuAazvb2kK1YCagXJaaKkbQQR4LcefUNwo?cluster=devnet) | Psychic | 50 | 130 | 70 | 65 | 155 | 115 | 120 | 3 |
+| Zapdos | `5EBw…shru` | [Explorer](https://explorer.solana.com/address/5XXtEhpmN5m7ncpT29nKsCEPMj479BKqKFQQNYpz6dEh?cluster=devnet) | Electric/Flying | 50 | 165 | 110 | 105 | 145 | 110 | 100 | 3 |
 
 ## Pikachu — Base Set #58
 
@@ -136,3 +142,69 @@ NFT: `CWF1Zru2Y4sTvxnwuzkgM1AbMHn63XUZNS1NFhUgrjPb` · [PokéAPI species](https:
 | [Petal Dance](https://pokeapi.co/api/v2/move/petal-dance) | Grass | special | 120 | 100% | 10 |
 | [Double-Edge](https://pokeapi.co/api/v2/move/double-edge) | Normal | physical | 120 | 100% | 15 |
 | [Power Whip](https://pokeapi.co/api/v2/move/power-whip) | Grass | physical | 120 | 85% | 10 |
+
+## Pidgey — Base Set #57
+
+NFT: `GmqY9WtQ5tPVtrTV3fcL1yGjLYUqH29UaWfR8viYKoKP` · [PokéAPI species](https://pokeapi.co/api/v2/pokemon/pidgey)
+
+| Move | Type | Class | Power | Accuracy | PP |
+| --- | --- | --- | ---: | ---: | ---: |
+| [Razor Wind](https://pokeapi.co/api/v2/move/razor-wind) | Normal | special | 80 | 100% | 10 |
+| [Hurricane](https://pokeapi.co/api/v2/move/hurricane) | Flying | special | 110 | 70% | 10 |
+| [Twister](https://pokeapi.co/api/v2/move/twister) | Dragon | special | 40 | 100% | 20 |
+| [Air Slash](https://pokeapi.co/api/v2/move/air-slash) | Flying | special | 75 | 95% | 15 |
+
+## Growlithe — Base Set #28
+
+NFT: `AVpRHftY9xkexqBdjPzYXTmU1KubBvRJNMcfjyntunfF` · [PokéAPI species](https://pokeapi.co/api/v2/pokemon/growlithe)
+
+| Move | Type | Class | Power | Accuracy | PP |
+| --- | --- | --- | ---: | ---: | ---: |
+| [Flare Blitz](https://pokeapi.co/api/v2/move/flare-blitz) | Fire | physical | 120 | 100% | 15 |
+| [Flamethrower](https://pokeapi.co/api/v2/move/flamethrower) | Fire | special | 90 | 100% | 15 |
+| [Outrage](https://pokeapi.co/api/v2/move/outrage) | Dragon | physical | 120 | 100% | 10 |
+| [Play Rough](https://pokeapi.co/api/v2/move/play-rough) | Fairy | physical | 90 | 90% | 10 |
+
+## Ninetales — Base Set #12
+
+NFT: `oFfrg7S9n2rpxPfBGa8FYNrgxYmrSZeWuAXZzNXyiqG` · [PokéAPI species](https://pokeapi.co/api/v2/pokemon/ninetales)
+
+| Move | Type | Class | Power | Accuracy | PP |
+| --- | --- | --- | ---: | ---: | ---: |
+| [Fire Blast](https://pokeapi.co/api/v2/move/fire-blast) | Fire | special | 110 | 85% | 5 |
+| [Flamethrower](https://pokeapi.co/api/v2/move/flamethrower) | Fire | special | 90 | 100% | 15 |
+| [Extrasensory](https://pokeapi.co/api/v2/move/extrasensory) | Psychic | special | 80 | 100% | 20 |
+| [Hex](https://pokeapi.co/api/v2/move/hex) | Ghost | special | 65 | 100% | 10 |
+
+## Dragonair — Base Set #18
+
+NFT: `BZ6rjUGu7m2iCsMHx6FJaYrGX9oPuU5Kpy5DUygyrpr5` · [PokéAPI species](https://pokeapi.co/api/v2/pokemon/dragonair)
+
+| Move | Type | Class | Power | Accuracy | PP |
+| --- | --- | --- | ---: | ---: | ---: |
+| [Outrage](https://pokeapi.co/api/v2/move/outrage) | Dragon | physical | 120 | 100% | 10 |
+| [Dragon Rush](https://pokeapi.co/api/v2/move/dragon-rush) | Dragon | physical | 100 | 75% | 10 |
+| [Hyper Beam](https://pokeapi.co/api/v2/move/hyper-beam) | Normal | special | 150 | 90% | 5 |
+| [Aqua Tail](https://pokeapi.co/api/v2/move/aqua-tail) | Water | physical | 90 | 90% | 10 |
+
+## Alakazam — Base Set #1
+
+NFT: `BE8uFTDnoqNuAazvb2kK1YCagXJaaKkbQQR4LcefUNwo` · [PokéAPI species](https://pokeapi.co/api/v2/pokemon/alakazam)
+
+| Move | Type | Class | Power | Accuracy | PP |
+| --- | --- | --- | ---: | ---: | ---: |
+| [Future Sight](https://pokeapi.co/api/v2/move/future-sight) | Psychic | special | 120 | 100% | 10 |
+| [Psychic](https://pokeapi.co/api/v2/move/psychic) | Psychic | special | 90 | 100% | 10 |
+| [Psyshock](https://pokeapi.co/api/v2/move/psyshock) | Psychic | special | 80 | 100% | 10 |
+| [Zen Headbutt](https://pokeapi.co/api/v2/move/zen-headbutt) | Psychic | physical | 80 | 90% | 15 |
+
+## Zapdos — Base Set #16
+
+NFT: `5XXtEhpmN5m7ncpT29nKsCEPMj479BKqKFQQNYpz6dEh` · [PokéAPI species](https://pokeapi.co/api/v2/pokemon/zapdos)
+
+| Move | Type | Class | Power | Accuracy | PP |
+| --- | --- | --- | ---: | ---: | ---: |
+| [Sky Attack](https://pokeapi.co/api/v2/move/sky-attack) | Flying | physical | 140 | 90% | 5 |
+| [Thunderbolt](https://pokeapi.co/api/v2/move/thunderbolt) | Electric | special | 90 | 100% | 15 |
+| [Ancient Power](https://pokeapi.co/api/v2/move/ancient-power) | Rock | special | 60 | 100% | 5 |
+| [Drill Peck](https://pokeapi.co/api/v2/move/drill-peck) | Flying | physical | 80 | 100% | 20 |

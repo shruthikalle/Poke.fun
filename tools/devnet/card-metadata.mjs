@@ -13,6 +13,12 @@ export const cards = [
   { name: "Squirtle", number: "63/102", id: "base1-63", image: "https://images.pokemontcg.io/base1/63.png", ownerIndex: 0 },
   { name: "Charizard", number: "4/102", id: "base1-4", image: "https://images.pokemontcg.io/base1/4.png", ownerIndex: 0 },
   { name: "Venusaur", number: "15/102", id: "base1-15", image: "https://images.pokemontcg.io/base1/15.png", ownerIndex: 0 },
+  { name: "Pidgey", number: "57/102", id: "base1-57", image: "https://images.pokemontcg.io/base1/57.png", ownerIndex: 0 },
+  { name: "Growlithe", number: "28/102", id: "base1-28", image: "https://images.pokemontcg.io/base1/28.png", ownerIndex: 0 },
+  { name: "Ninetales", number: "12/102", id: "base1-12", image: "https://images.pokemontcg.io/base1/12.png", ownerIndex: 0 },
+  { name: "Dragonair", number: "18/102", id: "base1-18", image: "https://images.pokemontcg.io/base1/18.png", ownerIndex: 0 },
+  { name: "Alakazam", number: "1/102", id: "base1-1", image: "https://images.pokemontcg.io/base1/1.png", ownerIndex: 0 },
+  { name: "Zapdos", number: "16/102", id: "base1-16", image: "https://images.pokemontcg.io/base1/16.png", ownerIndex: 0 },
 ];
 
 function svg(label, icon, color) {

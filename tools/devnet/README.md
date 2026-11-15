@@ -1,6 +1,6 @@
 # Devnet test card minter
 
-Creates a Metaplex Core collection and eleven clearly labeled **devnet-only test NFTs**: eight for the first wallet and three for the second. The roster is in `card-metadata.mjs`. None is a vaulted card or carries redemption rights.
+Creates a Metaplex Core collection and seventeen clearly labeled **devnet-only test NFTs**: fourteen for the first wallet and three for the second. The roster is in `card-metadata.mjs`. None is a vaulted card or carries redemption rights.
 
 Run from `tools/devnet` after `npm install`:
 

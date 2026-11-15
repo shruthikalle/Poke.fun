@@ -1,7 +1,7 @@
 {
   "network": "solana:devnet",
   "collection": "9cu8Rf7ryTHPrN24D62Q4xsEHnP8aBHS28mBdy4WRuCv",
-  "generatedAt": "2026-11-15T05:58:43.839Z",
+  "generatedAt": "2026-11-15T18:42:04.362Z",
   "cards": [
     {
       "asset": "DVSLcvnNv2JtWXsLmUWUsPtZCveuLSbc4ximXmSMk5Yn",
@@ -810,6 +810,446 @@
         }
       ],
       "source": "https://pokeapi.co/api/v2/pokemon/venusaur"
+    },
+    {
+      "asset": "GmqY9WtQ5tPVtrTV3fcL1yGjLYUqH29UaWfR8viYKoKP",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-57",
+      "card": "Pidgey",
+      "set": "Base Set",
+      "number": "57",
+      "image": "https://images.pokemontcg.io/base1/57.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Normal",
+        "Flying"
+      ],
+      "base": {
+        "hp": 40,
+        "attack": 45,
+        "defense": 40,
+        "special-attack": 35,
+        "special-defense": 35,
+        "speed": 56
+      },
+      "battle": {
+        "hp": 115,
+        "attack": 65,
+        "defense": 60,
+        "specialAttack": 55,
+        "specialDefense": 55,
+        "speed": 56
+      },
+      "moves": [
+        {
+          "id": "razor-wind",
+          "name": "Razor Wind",
+          "type": "Normal",
+          "category": "special",
+          "power": 80,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/razor-wind"
+        },
+        {
+          "id": "hurricane",
+          "name": "Hurricane",
+          "type": "Flying",
+          "category": "special",
+          "power": 110,
+          "accuracy": 70,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/hurricane"
+        },
+        {
+          "id": "twister",
+          "name": "Twister",
+          "type": "Dragon",
+          "category": "special",
+          "power": 40,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/twister"
+        },
+        {
+          "id": "air-slash",
+          "name": "Air Slash",
+          "type": "Flying",
+          "category": "special",
+          "power": 75,
+          "accuracy": 95,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/air-slash"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/pidgey"
+    },
+    {
+      "asset": "AVpRHftY9xkexqBdjPzYXTmU1KubBvRJNMcfjyntunfF",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-28",
+      "card": "Growlithe",
+      "set": "Base Set",
+      "number": "28",
+      "image": "https://images.pokemontcg.io/base1/28.png",
+      "level": 50,
+      "tier": 1,
+      "types": [
+        "Fire"
+      ],
+      "base": {
+        "hp": 55,
+        "attack": 70,
+        "defense": 45,
+        "special-attack": 70,
+        "special-defense": 50,
+        "speed": 60
+      },
+      "battle": {
+        "hp": 130,
+        "attack": 90,
+        "defense": 65,
+        "specialAttack": 90,
+        "specialDefense": 70,
+        "speed": 60
+      },
+      "moves": [
+        {
+          "id": "flare-blitz",
+          "name": "Flare Blitz",
+          "type": "Fire",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flare-blitz"
+        },
+        {
+          "id": "flamethrower",
+          "name": "Flamethrower",
+          "type": "Fire",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flamethrower"
+        },
+        {
+          "id": "outrage",
+          "name": "Outrage",
+          "type": "Dragon",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/outrage"
+        },
+        {
+          "id": "play-rough",
+          "name": "Play Rough",
+          "type": "Fairy",
+          "category": "physical",
+          "power": 90,
+          "accuracy": 90,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/play-rough"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/growlithe"
+    },
+    {
+      "asset": "oFfrg7S9n2rpxPfBGa8FYNrgxYmrSZeWuAXZzNXyiqG",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-12",
+      "card": "Ninetales",
+      "set": "Base Set",
+      "number": "12",
+      "image": "https://images.pokemontcg.io/base1/12.png",
+      "level": 50,
+      "tier": 2,
+      "types": [
+        "Fire"
+      ],
+      "base": {
+        "hp": 73,
+        "attack": 76,
+        "defense": 75,
+        "special-attack": 81,
+        "special-defense": 100,
+        "speed": 100
+      },
+      "battle": {
+        "hp": 148,
+        "attack": 96,
+        "defense": 95,
+        "specialAttack": 101,
+        "specialDefense": 120,
+        "speed": 100
+      },
+      "moves": [
+        {
+          "id": "fire-blast",
+          "name": "Fire Blast",
+          "type": "Fire",
+          "category": "special",
+          "power": 110,
+          "accuracy": 85,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/fire-blast"
+        },
+        {
+          "id": "flamethrower",
+          "name": "Flamethrower",
+          "type": "Fire",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/flamethrower"
+        },
+        {
+          "id": "extrasensory",
+          "name": "Extrasensory",
+          "type": "Psychic",
+          "category": "special",
+          "power": 80,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/extrasensory"
+        },
+        {
+          "id": "hex",
+          "name": "Hex",
+          "type": "Ghost",
+          "category": "special",
+          "power": 65,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/hex"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/ninetales"
+    },
+    {
+      "asset": "BZ6rjUGu7m2iCsMHx6FJaYrGX9oPuU5Kpy5DUygyrpr5",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-18",
+      "card": "Dragonair",
+      "set": "Base Set",
+      "number": "18",
+      "image": "https://images.pokemontcg.io/base1/18.png",
+      "level": 50,
+      "tier": 2,
+      "types": [
+        "Dragon"
+      ],
+      "base": {
+        "hp": 61,
+        "attack": 84,
+        "defense": 65,
+        "special-attack": 70,
+        "special-defense": 70,
+        "speed": 70
+      },
+      "battle": {
+        "hp": 136,
+        "attack": 104,
+        "defense": 85,
+        "specialAttack": 90,
+        "specialDefense": 90,
+        "speed": 70
+      },
+      "moves": [
+        {
+          "id": "outrage",
+          "name": "Outrage",
+          "type": "Dragon",
+          "category": "physical",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/outrage"
+        },
+        {
+          "id": "dragon-rush",
+          "name": "Dragon Rush",
+          "type": "Dragon",
+          "category": "physical",
+          "power": 100,
+          "accuracy": 75,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/dragon-rush"
+        },
+        {
+          "id": "hyper-beam",
+          "name": "Hyper Beam",
+          "type": "Normal",
+          "category": "special",
+          "power": 150,
+          "accuracy": 90,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/hyper-beam"
+        },
+        {
+          "id": "aqua-tail",
+          "name": "Aqua Tail",
+          "type": "Water",
+          "category": "physical",
+          "power": 90,
+          "accuracy": 90,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/aqua-tail"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/dragonair"
+    },
+    {
+      "asset": "BE8uFTDnoqNuAazvb2kK1YCagXJaaKkbQQR4LcefUNwo",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-1",
+      "card": "Alakazam",
+      "set": "Base Set",
+      "number": "1",
+      "image": "https://images.pokemontcg.io/base1/1.png",
+      "level": 50,
+      "tier": 3,
+      "types": [
+        "Psychic"
+      ],
+      "base": {
+        "hp": 55,
+        "attack": 50,
+        "defense": 45,
+        "special-attack": 135,
+        "special-defense": 95,
+        "speed": 120
+      },
+      "battle": {
+        "hp": 130,
+        "attack": 70,
+        "defense": 65,
+        "specialAttack": 155,
+        "specialDefense": 115,
+        "speed": 120
+      },
+      "moves": [
+        {
+          "id": "future-sight",
+          "name": "Future Sight",
+          "type": "Psychic",
+          "category": "special",
+          "power": 120,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/future-sight"
+        },
+        {
+          "id": "psychic",
+          "name": "Psychic",
+          "type": "Psychic",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/psychic"
+        },
+        {
+          "id": "psyshock",
+          "name": "Psyshock",
+          "type": "Psychic",
+          "category": "special",
+          "power": 80,
+          "accuracy": 100,
+          "maxPp": 10,
+          "source": "https://pokeapi.co/api/v2/move/psyshock"
+        },
+        {
+          "id": "zen-headbutt",
+          "name": "Zen Headbutt",
+          "type": "Psychic",
+          "category": "physical",
+          "power": 80,
+          "accuracy": 90,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/zen-headbutt"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/alakazam"
+    },
+    {
+      "asset": "5XXtEhpmN5m7ncpT29nKsCEPMj479BKqKFQQNYpz6dEh",
+      "owner": "5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru",
+      "cardId": "base1-16",
+      "card": "Zapdos",
+      "set": "Base Set",
+      "number": "16",
+      "image": "https://images.pokemontcg.io/base1/16.png",
+      "level": 50,
+      "tier": 3,
+      "types": [
+        "Electric",
+        "Flying"
+      ],
+      "base": {
+        "hp": 90,
+        "attack": 90,
+        "defense": 85,
+        "special-attack": 125,
+        "special-defense": 90,
+        "speed": 100
+      },
+      "battle": {
+        "hp": 165,
+        "attack": 110,
+        "defense": 105,
+        "specialAttack": 145,
+        "specialDefense": 110,
+        "speed": 100
+      },
+      "moves": [
+        {
+          "id": "sky-attack",
+          "name": "Sky Attack",
+          "type": "Flying",
+          "category": "physical",
+          "power": 140,
+          "accuracy": 90,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/sky-attack"
+        },
+        {
+          "id": "thunderbolt",
+          "name": "Thunderbolt",
+          "type": "Electric",
+          "category": "special",
+          "power": 90,
+          "accuracy": 100,
+          "maxPp": 15,
+          "source": "https://pokeapi.co/api/v2/move/thunderbolt"
+        },
+        {
+          "id": "ancient-power",
+          "name": "Ancient Power",
+          "type": "Rock",
+          "category": "special",
+          "power": 60,
+          "accuracy": 100,
+          "maxPp": 5,
+          "source": "https://pokeapi.co/api/v2/move/ancient-power"
+        },
+        {
+          "id": "drill-peck",
+          "name": "Drill Peck",
+          "type": "Flying",
+          "category": "physical",
+          "power": 80,
+          "accuracy": 100,
+          "maxPp": 20,
+          "source": "https://pokeapi.co/api/v2/move/drill-peck"
+        }
+      ],
+      "source": "https://pokeapi.co/api/v2/pokemon/zapdos"
     }
   ]
 }

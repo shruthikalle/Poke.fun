@@ -2,6 +2,8 @@
 
 These Metaplex Core NFTs are **test assets only**. They are not Collector Crypt NFTs, do not represent vaulted physical cards, and carry no redemption rights.
 
+The original two assets are listed below. The [full 17-card roster and powers](devnet-test-card-powers.md) includes six newer cards in `5EBw…shru`: two each at tiers 1, 2, and 3.
+
 | Test card | Asset | Recipient wallet |
 | --- | --- | --- |
 | Pikachu stand-in | [`DVSLcvn…Mk5Yn`](https://explorer.solana.com/address/DVSLcvnNv2JtWXsLmUWUsPtZCveuLSbc4ximXmSMk5Yn?cluster=devnet) | `5EBwgTSMRNRqFtrz27tQoFetTXViWZmwb1x2k4yshru` |
@@ -13,4 +15,4 @@ The mint script uploads PNG images and Metaplex Core metadata with `name`, `symb
 
 An onchain verified collection means each asset belongs to that collection. Phantom applies separate marketplace verification and filtering rules, so valid Devnet NFTs may still be absent from its Collectibles tab. The app's onchain lookup does not depend on Phantom's display or a Devnet SOL balance in the receiving wallets.
 
-To display these cards in the app, copy the three public addresses into `apps/web/.env.local` using `apps/web/.env.example` and set `NEXT_PUBLIC_COLLECTION_SOURCE=devnet`. The server route checks each asset's owner and collection on Solana Devnet when a wallet loads its cards.
+The default loadout reads the connected wallet's assets from the configured DAS-enabled Devnet RPC and filters for this test collection. The optional `NEXT_PUBLIC_COLLECTION_SOURCE=devnet` server route currently checks only the original Pikachu and Charmander asset IDs configured in `apps/web/.env.local`; leave that setting unset to display the full roster.
