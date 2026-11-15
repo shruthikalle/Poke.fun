@@ -93,39 +93,3 @@ input.pf-input, select.pf-input { padding: 8px 10px; background: var(--ink-0); }
 .pf-input[aria-invalid="true"], .pf-input:has([aria-invalid="true"]) { box-shadow: inset 0 0 0 2px var(--bad), inset 0 3px 0 2px rgba(0, 0, 0, .45); }
 .pf-btn:focus-visible, .pf-chip:focus-visible, .pf-frame:focus-visible { outline: 2px solid var(--accent-hi); outline-offset: -6px; }
 
-/* Light "chrome" theme shared by the battle screen and marketplace: blue-gray panels, white content, thin borders, dense type. */
-.pf-chrome {
-  color-scheme: light;
-  --ink-0: #ffffff; --ink-1: #f3f6fa; --ink-2: #e9eef5; --ink-3: #dfe6f0; --ink-4: #d3ddea;
-  --line: #ccd4de; --line-strong: #a7b2c1;
-  --text: #111; --text-dim: #4c5563; --text-faint: #7d8693;
-  --accent: #3463a8; --accent-hi: #1f4f94; --accent-ink: #fff; --accent-glow: rgba(52, 99, 168, .22);
-  --link: #1f56a3; --good: #2fae57; --warn: #e3a90b; --bad: #d23a2c; --violet: #6d5bd0;
-  --font-display: Verdana, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-label: Verdana, "Segoe UI", Helvetica, Arial, sans-serif;
-  --font-body: Verdana, "Segoe UI", Helvetica, Arial, sans-serif;
-  --notch-shape: none;
-  --panel-bg: linear-gradient(180deg, #fbfcfe, #edf2f8);
-  --panel-border: inset 0 0 0 1px var(--line-strong);
-  --shadow-drop: 0 4px 14px rgba(30, 50, 80, .18);
-  --chrome-top: linear-gradient(180deg, #f4f7fb 0%, #dbe5f1 55%, #c9d6e7 100%);
-  --chrome-side: linear-gradient(180deg, #eef3f9, #dfe8f3);
-  --btn-face: linear-gradient(180deg, #fafafa, #e1e4e8);
-  color: var(--text); background: var(--ink-0); font-family: var(--font-body);
-}
-.pf-chrome ::selection { background: #b9d1f3; color: #000; }
-.pf-chrome :focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.pf-chrome .pf-btn, .pf-chrome .pf-chip { padding: 4px 12px; border: 1px solid var(--line-strong); border-radius: 5px; color: #222; background: var(--btn-face); box-shadow: none;
-  font-family: var(--font-body); font-size: 12px; letter-spacing: 0; text-transform: none; }
-.pf-chrome .pf-btn:hover:not(:disabled), .pf-chrome .pf-chip:hover:not(:disabled) { filter: none; border-color: #7d8899; background: linear-gradient(180deg, #fff, #eaedf1); }
-.pf-chrome .pf-btn[data-variant="primary"] { color: #fff; border-color: #2a5596; background: linear-gradient(180deg, #4f80c6, #3463a8); }
-.pf-chrome .pf-btn[data-variant="primary"]:hover:not(:disabled) { background: linear-gradient(180deg, #5b8cd2, #3a6cb4); border-color: #1f4f94; }
-.pf-chrome .pf-btn[data-size="sm"] { padding: 2px 8px; font-size: 11px; }
-.pf-chrome .pf-btn[data-size="lg"] { padding: 8px 18px; font-size: 14px; }
-.pf-chrome .pf-chip[data-on], .pf-chrome .pf-chip[aria-checked="true"] { color: #fff; border-color: #2a5596; background: linear-gradient(180deg, #4f80c6, #3463a8); transform: none; }
-.pf-chrome .pf-input, .pf-chrome input.pf-input, .pf-chrome select.pf-input { border: 1px solid var(--line-strong); border-radius: 3px; background: #fff; box-shadow: inset 0 1px 2px rgba(0, 0, 0, .08); font-size: 12px; }
-.pf-chrome input.pf-input, .pf-chrome select.pf-input { padding: 4px 6px; }
-.pf-chrome .pf-input input, .pf-chrome .pf-input select { padding: 4px 0; }
-.pf-chrome .pf-input:focus-within, .pf-chrome input.pf-input:focus, .pf-chrome select.pf-input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
-.pf-chrome .pf-input select option { background: #fff; }
-.pf-chrome .pf-eyebrow { font-size: 10px; letter-spacing: .08em; }

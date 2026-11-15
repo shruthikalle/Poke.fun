@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import type { ChatRoom, LobbySnapshot } from "../../lib/lobby/useLobby";
+import type { ChatRoom, LiveBattle, LobbySnapshot } from "../../lib/lobby/useLobby";
 import styles from "./battle.module.css";
 
 type Filter = "all" | "official" | "community";
@@ -13,13 +13,13 @@ function RoomItem({ room, onOpen }: { room: ChatRoom; onOpen: (room: ChatRoom) =
         <span className={styles.roomTop}>
           <span className={styles.bubble} aria-hidden="true" />
           <strong>{room.name}</strong>
-          <small>({room.users} users)</small>
+          <small>{room.users} online</small>
         </span>
         <span className={styles.roomDesc}>{room.description}</span>
       </button>
       {room.subrooms && (
         <div className={styles.subrooms}>
-          ↳ Subrooms:{" "}
+          Subrooms
           {room.subrooms.map((s) => (
             <button key={s} className={styles.subroom} onClick={() => onOpen({ ...room, id: `${room.id}-${s}`, name: s, users: Math.max(3, Math.round(room.users / 6)), subrooms: undefined })}>
               <span className={styles.bubble} aria-hidden="true" />{s}
@@ -30,6 +30,20 @@ function RoomItem({ room, onOpen }: { room: ChatRoom; onOpen: (room: ChatRoom) =
     </div>
   );
 }
+
+function LiveBattleRow({ battle }: { battle: LiveBattle }) {
+  const [a, b] = battle.trainers;
+  return (
+    <li className={styles.live}>
+      <img src={`/trainers/${a.avatar}.png`} alt="" width={28} height={28} />
+      <span className={styles.liveNames}><strong>{a.name}</strong><i>vs</i><strong>{b.name}</strong></span>
+      <img src={`/trainers/${b.avatar}.png`} alt="" width={28} height={28} />
+      <small>{battle.format} · Turn {battle.turn}</small>
+    </li>
+  );
+}
+
+const FILTERS: [Filter, string][] = [["all", "All rooms"], ["official", "Official"], ["community", "Community"]];
 
 export function Sidebar({ lobby, onOpenRoom, onHide }: { lobby: LobbySnapshot | null; onOpenRoom: (room: ChatRoom) => void; onHide: () => void }) {
   const [filter, setFilter] = useState<Filter>("all");
@@ -45,11 +59,16 @@ export function Sidebar({ lobby, onOpenRoom, onHide }: { lobby: LobbySnapshot | 
         <img className={styles.statTrainer} src="/trainers/rook.png" alt="" width={56} height={56} />
       </div>
 
-      <select className={styles.filter} value={filter} onChange={(e) => setFilter(e.target.value as Filter)} aria-label="Filter rooms">
-        <option value="all">(All rooms)</option>
-        <option value="official">Official</option>
-        <option value="community">Community</option>
-      </select>
+      <h2 className={styles.sideHeading}>Live battles</h2>
+      <ul className={styles.lives}>
+        {(lobby?.liveBattles ?? []).map((b) => <LiveBattleRow key={b.id} battle={b} />)}
+      </ul>
+
+      <div className={styles.filter} role="radiogroup" aria-label="Filter rooms">
+        {FILTERS.map(([f, label]) => (
+          <button key={f} className="pf-chip" role="radio" aria-checked={filter === f} onClick={() => setFilter(f)}>{label}</button>
+        ))}
+      </div>
 
       {show("official") && (
         <>

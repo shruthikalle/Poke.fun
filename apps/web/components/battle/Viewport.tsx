@@ -105,6 +105,13 @@ export function Viewport({ state, odds, badge, summon = false }: { state: Battle
     <div className={styles.viewport}>
       <div className={styles.field} />
       {started && <div className={styles.turnBadge}>Turn {state.turn}</div>}
+      {!started && (
+        <div className={styles.intro} aria-live="polite">
+          <div className={styles.introSide}><img src={`/trainers/${state.sides[me].trainer.avatar}.png`} alt="" width={72} height={72} /><strong>{state.sides[me].trainer.name}</strong></div>
+          <div className={styles.introVs}><span>{state.format.name.replace(/^\[[^\]]*\]\s*/, "")}</span><b>VS</b><small>Get ready…</small></div>
+          <div className={styles.introSide}><img src={`/trainers/${state.sides[foe].trainer.avatar}.png`} alt="" width={72} height={72} /><strong>{state.sides[foe].trainer.name}</strong></div>
+        </div>
+      )}
       {badge && <div className={styles.stakeBadge}>{badge}</div>}
       {started && foeActive && !foeActive.fainted && summoning[foe] === null && <HpBar creature={foeActive} role="foe" />}
       {started && myActive && !myActive.fainted && summoning[me] === null && <HpBar creature={myActive} role="me" />}

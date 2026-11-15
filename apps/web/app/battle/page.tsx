@@ -147,7 +147,8 @@ export default function BattlePage() {
     : <>Free match · Ranked</>);
 
   return (
-    <div className={`pf-chrome ${styles.app}`} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
+    <div className={styles.app} data-sidebar={sidebar || undefined} data-still={!options.animations || undefined}>
+      <div className={styles.backdrop} aria-hidden="true" />
       <TopBar title={title} subtitle={subtitle} rooms={rooms} activeTab={tab} onSelect={setTab} onCloseRoom={closeRoom}
         onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => signIn()} />
 
