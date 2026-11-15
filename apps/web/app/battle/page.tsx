@@ -11,6 +11,7 @@ import { Viewport } from "../../components/battle/Viewport";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { MockBattleStream } from "../../lib/battle/MockBattleStream";
+import { ServerBattleStream } from "../../lib/battle/ServerBattleStream";
 import { createCreature, makeFormat } from "../../lib/battle/roster";
 import type { BattleStreamSource, Creature, Side } from "../../lib/battle/types";
 import { FORMAT_LABEL, type CardPick } from "../../lib/cards/mapping";
@@ -83,7 +84,6 @@ export default function BattlePage() {
 
   const ticket = load.status === "ready" ? load.ticket : null;
 
-  // TODO(realtime): construct the QuickNode Streams / Go API source here instead.
   const source = useMemo<BattleStreamSource | null>(() => {
     if (!ready || load.status !== "ready") return null;
     const t = load.ticket;
@@ -94,7 +94,12 @@ export default function BattlePage() {
       { name: "Entry", description: t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
       { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
     ]);
-    return new MockBattleStream({ you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format });
+    const config = { you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format };
+    // The Go server is the referee. Set NEXT_PUBLIC_LIVE_BATTLE=0 to fall back
+    // to the offline client-side simulation.
+    return process.env.NEXT_PUBLIC_LIVE_BATTLE === "0"
+      ? new MockBattleStream(config)
+      : new ServerBattleStream(config);
   }, [ready, load, playerName]);
 
   const battle = useBattleStream(source);
