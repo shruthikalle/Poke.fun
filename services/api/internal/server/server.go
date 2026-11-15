@@ -20,6 +20,8 @@ type Server struct {
 	mu      sync.Mutex
 	matches map[string]*battle.Match      // one-card duels (/play)
 	battles map[string]*livebattle.Battle // team battles (/battle)
+	queue   map[string]*queueEntry        // matchmaking searches by ticket
+	waiting []*queueEntry                 // unpaired searches, oldest first
 	origin  string
 }
 
@@ -36,6 +38,7 @@ func New(origin string) http.Handler {
 	s := &Server{
 		matches: make(map[string]*battle.Match),
 		battles: make(map[string]*livebattle.Battle),
+		queue:   make(map[string]*queueEntry),
 		origin:  origin,
 	}
 	mux := http.NewServeMux()
@@ -49,7 +52,7 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("POST /api/matches/{id}/join", s.joinMatch)
 	mux.HandleFunc("GET /api/matches/{id}", s.getMatch)
 	mux.HandleFunc("POST /api/matches/{id}/attacks", s.submitAttack)
-	// Team battles (live.go): single-player vs AI, or two players.
+	// Team battles (live.go): single-player vs AI, or two players via the queue.
 	mux.HandleFunc("POST /api/battles", s.createBattle)
 	mux.HandleFunc("GET /api/battles/{id}/events", s.battleEvents)
 	mux.HandleFunc("POST /api/battles/{id}/team", s.battleTeam)
@@ -57,6 +60,10 @@ func New(origin string) http.Handler {
 	mux.HandleFunc("POST /api/battles/{id}/timer", s.battleTimer)
 	mux.HandleFunc("POST /api/battles/{id}/chat", s.battleChat)
 	mux.HandleFunc("POST /api/battles/{id}/rematch", s.battleRematch)
+	// Two-player matchmaking (matchmaking.go).
+	mux.HandleFunc("POST /api/queue", s.enqueue)
+	mux.HandleFunc("GET /api/queue/{ticket}", s.pollQueue)
+	mux.HandleFunc("DELETE /api/queue/{ticket}", s.cancelQueue)
 	return s.withCORS(mux)
 }
 
@@ -66,7 +73,7 @@ func (s *Server) withCORS(next http.Handler) http.Handler {
 			w.Header().Set("Access-Control-Allow-Origin", s.origin)
 			w.Header().Set("Vary", "Origin")
 			w.Header().Set("Access-Control-Allow-Headers", "Authorization, Content-Type")
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
 		}
 		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusNoContent)

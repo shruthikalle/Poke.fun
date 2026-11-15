@@ -92,3 +92,72 @@ func TestLiveBattleAgainstAI(t *testing.T) {
 		t.Fatalf("expected 409 after the battle ended, got %d", code)
 	}
 }
+
+func TestTwoPlayerBattleThroughMatchmaking(t *testing.T) {
+	h := harness{t, New("http://localhost:3000")}
+	join := func(name string) (int, map[string]any) {
+		return h.call("POST", "/api/queue", `{"trainer":{"id":"`+name+`","name":"`+name+`","avatar":"maya"},
+		  "rating":1500,"format":"champion","tier":1,"entry":5,"team":[{"species":"pikachu"}]}`, "")
+	}
+
+	// The first player waits; a different stake must not pair with them.
+	code, ash := join("Ash")
+	if code != http.StatusAccepted || ash["status"] != "searching" {
+		t.Fatalf("first player should be searching: %d %v", code, ash)
+	}
+	if code, other := h.call("POST", "/api/queue", `{"trainer":{"id":"x","name":"Gary","avatar":"kai"},
+	  "rating":1500,"format":"champion","tier":1,"entry":25,"team":[{"species":"eevee"}]}`, ""); code != http.StatusAccepted {
+		t.Fatalf("a different entry should not be paired: %d %v", code, other)
+	}
+
+	// The second compatible player is paired immediately as p2.
+	code, misty := join("Misty")
+	if code != http.StatusOK || misty["status"] != "matched" || misty["side"] != "p2" {
+		t.Fatalf("second player should be matched as p2: %d %v", code, misty)
+	}
+	_, ashMatch := h.call("GET", "/api/queue/"+ash["ticket"].(string), "", "")
+	if ashMatch["status"] != "matched" || ashMatch["side"] != "p1" || ashMatch["id"] != misty["id"] {
+		t.Fatalf("first player should be matched into the same battle as p1: %v", ashMatch)
+	}
+	if opp := ashMatch["opponent"].(map[string]any)["trainer"].(map[string]any)["name"]; opp != "Misty" {
+		t.Fatalf("p1 should see p2's trainer, got %v", opp)
+	}
+
+	id := misty["id"].(string)
+	p1, p2 := ashMatch["token"].(string), misty["token"].(string)
+	team := func(c string) string {
+		return `{"team":[` + c + `],"format":{"name":"Online","rated":true,"rules":[]}}`
+	}
+
+	// Nothing starts until both teams are in.
+	h.call("POST", "/api/battles/"+id+"/team", team(creatureJSON("a", "charizard", "Fire", 300, 120, 40)), p1)
+	if evs, _ := h.events(id, p1, 0); len(evs) != 0 {
+		t.Fatalf("battle opened with one team: %s", types(evs))
+	}
+	h.call("POST", "/api/battles/"+id+"/team", team(creatureJSON("b", "blastoise", "Water", 300, 80, 40)), p2)
+
+	open1, c1 := h.events(id, p1, 0)
+	open2, c2 := h.events(id, p2, 0)
+	if types(open1) != types(open2) || !strings.HasPrefix(types(open1), "init,") {
+		t.Fatalf("both players should see the same opening: %s vs %s", types(open1), types(open2))
+	}
+
+	// p1's hidden choice must not reveal anything; the turn resolves on p2's.
+	h.call("POST", "/api/battles/"+id+"/choice", `{"kind":"move","moveIndex":0}`, p1)
+	if evs, _ := h.events(id, p2, c2); len(evs) != 0 {
+		t.Fatalf("p1's choice leaked to p2: %s", types(evs))
+	}
+	if code, out := h.call("POST", "/api/battles/"+id+"/choice", `{"kind":"move","moveIndex":0}`, p2); code != http.StatusOK {
+		t.Fatalf("p2 choice: %d %v", code, out)
+	}
+	turn1, _ := h.events(id, p1, c1)
+	turn2, _ := h.events(id, p2, c2)
+	if types(turn1) != types(turn2) || strings.Count(types(turn1), "move") != 2 {
+		t.Fatalf("both players should see the same resolved turn with two moves: %s vs %s", types(turn1), types(turn2))
+	}
+
+	// A player's token only controls their own side, and rematch waits for the end.
+	if code, _ := h.call("POST", "/api/battles/"+id+"/rematch", `{}`, p1); code != http.StatusConflict {
+		t.Fatalf("rematch mid-battle should be refused, got %d", code)
+	}
+}
