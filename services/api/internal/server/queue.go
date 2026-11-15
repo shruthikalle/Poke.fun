@@ -13,6 +13,7 @@ type arenaQueueEntry struct {
 	id, token, playerToken string
 	name, cardID           string
 	rating                 int
+	tier                   int
 	entryCents             int
 	created                time.Time
 	lastSeen               time.Time
@@ -54,6 +55,7 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 		Name       string `json:"name"`
 		CardID     string `json:"cardId"`
 		Rating     int    `json:"rating"`
+		Tier       int    `json:"tier"`
 		EntryCents int    `json:"entryCents"`
 		AssetID    string `json:"assetId"`
 		Wallet     string `json:"walletAddress"`
@@ -61,8 +63,11 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &req) {
 		return
 	}
-	if !validName(req.Name) || req.Rating < 0 || req.Rating > 5000 || req.EntryCents < 0 || req.EntryCents > 10000 {
-		writeError(w, http.StatusBadRequest, "invalid name, rating, or demo entry")
+	if req.Tier == 0 {
+		req.Tier = 1
+	}
+	if !validName(req.Name) || req.Rating < 0 || req.Rating > 5000 || req.Tier < 1 || req.Tier > 3 || req.EntryCents < 0 || req.EntryCents > 10000 {
+		writeError(w, http.StatusBadRequest, "invalid name, rating, power tier, or demo entry")
 		return
 	}
 	if _, ok := arena.FindCard(req.CardID); !ok {
@@ -113,10 +118,10 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	s.pruneWaitingQueue(now)
-	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, rating: req.Rating, entryCents: req.EntryCents, created: now, lastSeen: now}
+	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, rating: req.Rating, tier: req.Tier, entryCents: req.EntryCents, created: now, lastSeen: now}
 	var best *arenaQueueEntry
 	for _, candidate := range s.arenaQueue {
-		if candidate.match != nil || candidate.entryCents != req.EntryCents {
+		if candidate.match != nil || candidate.entryCents != req.EntryCents || candidate.tier != req.Tier {
 			continue
 		}
 		if best == nil || math.Abs(float64(candidate.rating-req.Rating)) < math.Abs(float64(best.rating-req.Rating)) ||

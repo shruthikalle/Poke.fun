@@ -174,7 +174,7 @@ export default function LoadoutPage() {
       const ownedAsset = process.env.NEXT_PUBLIC_COLLECTION_SOURCE === "devnet" && session && !lead.rental
         ? { assetId: lead.key, walletAddress: session.address }
         : undefined;
-      const ticket = await arenaApi.enqueue(playerName, lead.species, rank.rating, Math.round(entry * 100), ownedAsset);
+      const ticket = { ...await arenaApi.enqueue(playerName, lead.species, rank.rating, lead.tier, Math.round(entry * 100), ownedAsset), tier: lead.tier };
       tabStorage.remove(ARENA_SESSION_STORAGE_KEY);
       tabStorage.set(ARENA_QUEUE_STORAGE_KEY, JSON.stringify(ticket));
       setQueue(ticket.status === "matched" ? { status: "found", ticket } : { status: "searching", ticket, since: Date.now() });
@@ -324,7 +324,7 @@ export default function LoadoutPage() {
           <div className={styles.radar}><Emblem size={56} /></div>
           <p className="pf-eyebrow">{queue.status === "found" ? "Match found" : "Finding a match"}</p>
           <h2>{queue.status === "found" ? `Matched with ${queue.ticket.opponent ?? "another player"}` : "Waiting for another player…"}</h2>
-          <p className={styles.hint}>{queue.status === "found" ? "Opening the live battle now." : `Searching for ${formatDollars(queue.ticket.entryCents / 100)} demo entry · closest available demo rating first.`}</p>
+          <p className={styles.hint}>{queue.status === "found" ? "Opening the live battle now." : `Only players with a power tier ${queue.ticket.tier ?? 1} card and a ${queue.ticket.entryCents ? `${formatDollars(queue.ticket.entryCents / 100)} demo` : "free"} entry can match you · closest rating first.`}</p>
           {queue.status === "searching" && <button className="pf-btn" data-variant="ghost" disabled={finding} onClick={() => void cancelSearch()}>Cancel search</button>}
         </div>
       </div>}

@@ -190,7 +190,7 @@ export default function ArenaPage() {
     if (!name.trim() || !cardId) { setError("Enter a name and choose a fighter."); return; }
     setBusy(true); setError("");
     try {
-      const ticket = await arenaApi.enqueue(name.trim(), cardId, 1500);
+      const ticket = await arenaApi.enqueue(name.trim(), cardId, 1500, 1);
       tabStorage.remove(ARENA_SESSION_STORAGE_KEY);
       tabStorage.set(ARENA_QUEUE_STORAGE_KEY, JSON.stringify(ticket));
       setQueue(ticket);

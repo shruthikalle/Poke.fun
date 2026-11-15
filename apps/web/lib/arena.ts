@@ -5,7 +5,7 @@ export type ArenaCard = { id: string; name: string; type: string; level: number;
 export type Fighter = { name: string; card: ArenaCard; x: number; y: number; hp: number; energy: number; basicCooldownMs: number; specialCooldownMs: number; dodgeCooldownMs: number; dodging: boolean; charging: boolean; chargeMsLeft: number; chargeX: number; chargeY: number; chargeDx: number; chargeDy: number; lastAttack?: string; lastAttackTick: number; attackX: number; attackY: number; attackDx: number; attackDy: number; attackTargetX: number; attackTargetY: number; lastAttackHit: boolean };
 export type ArenaView = { id: string; status: "waiting" | "playing" | "finished"; you: number; fighters: [Fighter, Fighter | null]; tick: number; timeLeftMs: number; winner?: "player1" | "player2" | "draw" };
 export type ArenaSession = { id: string; token: string; entryCents?: number };
-export type ArenaQueueTicket = { id: string; token: string; status: "waiting" | "matched"; entryCents: number; arena?: ArenaSession; opponent?: string };
+export type ArenaQueueTicket = { id: string; token: string; status: "waiting" | "matched"; entryCents: number; tier?: number; arena?: ArenaSession; opponent?: string };
 export const ARENA_QUEUE_STORAGE_KEY = "pokefun-realtime-queue";
 export const ARENA_SESSION_STORAGE_KEY = "pokefun-realtime-arena";
 
@@ -24,7 +24,7 @@ async function request<T>(path: string, init?: RequestInit, token?: string): Pro
 
 export const arenaApi = {
   cards: () => request<ArenaCard[]>("/api/arena-cards"),
-  enqueue: (name: string, cardId: string, rating: number, entryCents = 0, ownedAsset?: { assetId: string; walletAddress: string }) => request<ArenaQueueTicket>("/api/arena-queue", { method: "POST", body: JSON.stringify({ name, cardId, rating, entryCents, ...ownedAsset }) }),
+  enqueue: (name: string, cardId: string, rating: number, tier: number, entryCents = 0, ownedAsset?: { assetId: string; walletAddress: string }) => request<ArenaQueueTicket>("/api/arena-queue", { method: "POST", body: JSON.stringify({ name, cardId, rating, tier, entryCents, ...ownedAsset }) }),
   queueStatus: (ticket: ArenaQueueTicket) => request<ArenaQueueTicket>(`/api/arena-queue/${encodeURIComponent(ticket.id)}`, undefined, ticket.token),
   cancelQueue: async (ticket: ArenaQueueTicket) => {
     const response = await fetch(`${API_URL}/api/arena-queue/${encodeURIComponent(ticket.id)}`, { method: "DELETE", headers: { Authorization: `Bearer ${ticket.token}` } });

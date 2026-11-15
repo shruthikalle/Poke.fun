@@ -96,3 +96,40 @@ func TestQueuePairsRealPlayersAndCanCancel(t *testing.T) {
 		t.Fatal("matching demo entries did not pair")
 	}
 }
+
+func TestQueueOnlyPairsSamePowerTier(t *testing.T) {
+	s := httptest.NewServer(New("http://localhost:3000"))
+	defer s.Close()
+	enqueue := func(name string, tier int) arenaQueueResponse {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"name": name, "cardId": "pikachu", "rating": 1000, "tier": tier})
+		res, err := http.Post(s.URL+"/api/arena-queue", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var entry arenaQueueResponse
+		if err := json.NewDecoder(res.Body).Decode(&entry); err != nil {
+			t.Fatal(err)
+		}
+		return entry
+	}
+	if a := enqueue("Ash", 1); a.Status != "waiting" {
+		t.Fatal("first player was not queued")
+	}
+	if b := enqueue("Brock", 3); b.Status != "waiting" {
+		t.Fatal("tier 3 player was paired with a tier 1 player")
+	}
+	if c := enqueue("Misty", 1); c.Status != "matched" || c.Opponent != "Ash" {
+		t.Fatal("same-tier players did not pair")
+	}
+	body, _ := json.Marshal(map[string]any{"name": "Gary", "cardId": "pikachu", "rating": 1000, "tier": 4})
+	res, err := http.Post(s.URL+"/api/arena-queue", "application/json", bytes.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid tier accepted: %s", res.Status)
+	}
+}
