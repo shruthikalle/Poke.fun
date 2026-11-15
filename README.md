@@ -17,7 +17,7 @@ docs/                             Architecture and rules decisions
 
 Each player uses one card. Both submit an attack; the Go server resolves both simultaneously. Quick attacks are neutral and generate one energy, while stronger attacks cost two energy and carry the card's element, so they earn a same-type bonus and can be super-effective or resisted against the opponent's type. Each turn has a 60-second deadline; a player who misses it has their quick attack auto-played. The first card at zero HP loses. If both reach zero on the same turn, the match is a draw.
 
-The full ruleset is documented in [`docs/battle-spec.md`](docs/battle-spec.md) and implemented authoritatively in `services/api/internal/battle`.
+The full ruleset is documented in [`docs/battle-spec.md`](docs/battle-spec.md) and implemented authoritatively in `services/api/internal/battle`. For a detailed walkthrough of both battle engines (the one-card duel and the rich `/battle` team battle), see [`docs/game-mechanics.md`](docs/game-mechanics.md).
 
 ## Run locally
 

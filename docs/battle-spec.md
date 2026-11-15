@@ -1,5 +1,9 @@
 # Battle spec (rules v1.0.0)
 
+> For a detailed, example-driven walkthrough of both battle engines, see
+> [`game-mechanics.md`](game-mechanics.md). This file is the terse canonical spec.
+
+
 The authoritative battle rules, implemented by the Go server in
 `services/api/internal/battle`. The server is the referee: it owns every HP,
 energy, turn and winner value, and the web client only displays what the server
