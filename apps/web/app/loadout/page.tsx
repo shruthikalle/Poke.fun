@@ -303,7 +303,7 @@ export default function LoadoutPage() {
           {entryError && <p id="entry-error" className={styles.warn} role="alert">{entryError}</p>}
           <div className={styles.pot} hidden={!!entryError}>
             <span>{entry ? <>Demo entry <strong>{formatDollars(entry)}</strong> per player</> : "Free live match"}</span>
-            <em>Demo only · no real money moves</em>
+            <em>Demo only · no money or NFT transfers</em>
           </div>
 
           <p className={styles.label}>Demo rating</p>
