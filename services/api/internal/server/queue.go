@@ -15,9 +15,12 @@ type arenaQueueEntry struct {
 	rating                 int
 	entryCents             int
 	created                time.Time
+	lastSeen               time.Time
 	match                  *arenaSession
 	opponent               string
 }
+
+const arenaQueueHeartbeatTimeout = 20 * time.Second
 
 type arenaSession struct {
 	ID         string `json:"id"`
@@ -108,7 +111,9 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 	}
-	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, rating: req.Rating, entryCents: req.EntryCents, created: time.Now()}
+	now := time.Now()
+	s.pruneWaitingQueue(now)
+	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, rating: req.Rating, entryCents: req.EntryCents, created: now, lastSeen: now}
 	var best *arenaQueueEntry
 	for _, candidate := range s.queue {
 		if candidate.match != nil || candidate.entryCents != req.EntryCents {
@@ -166,9 +171,25 @@ func (s *Server) getArenaQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "queue entry not found")
 		return
 	}
+	if entry.match == nil && time.Since(entry.lastSeen) > arenaQueueHeartbeatTimeout {
+		delete(s.queue, entry.id)
+		s.mu.Unlock()
+		writeError(w, http.StatusGone, "queue entry expired; search again")
+		return
+	}
+	entry.lastSeen = time.Now()
 	response := entry.response(false)
 	s.mu.Unlock()
 	writeJSON(w, http.StatusOK, response)
+}
+
+// pruneWaitingQueue is called with s.mu held. Matched tickets remain available for reconnects.
+func (s *Server) pruneWaitingQueue(now time.Time) {
+	for id, entry := range s.queue {
+		if entry.match == nil && now.Sub(entry.lastSeen) > arenaQueueHeartbeatTimeout {
+			delete(s.queue, id)
+		}
+	}
 }
 
 func (s *Server) cancelArenaQueue(w http.ResponseWriter, r *http.Request) {

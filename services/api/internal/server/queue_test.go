@@ -6,7 +6,21 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 )
+
+func TestQueuePrunesAbandonedWaitingPlayer(t *testing.T) {
+	now := time.Now()
+	s := &Server{queue: map[string]*arenaQueueEntry{
+		"OLD":     {id: "OLD", lastSeen: now.Add(-arenaQueueHeartbeatTimeout - time.Second)},
+		"CURRENT": {id: "CURRENT", lastSeen: now.Add(-time.Second)},
+		"MATCHED": {id: "MATCHED", lastSeen: now.Add(-time.Hour), match: &arenaSession{ID: "GAME"}},
+	}}
+	s.pruneWaitingQueue(now)
+	if s.queue["OLD"] != nil || s.queue["CURRENT"] == nil || s.queue["MATCHED"] == nil {
+		t.Fatal("queue heartbeat pruning removed the wrong ticket")
+	}
+}
 
 func TestQueuePairsRealPlayersAndCanCancel(t *testing.T) {
 	s := httptest.NewServer(New("http://localhost:3000"))
