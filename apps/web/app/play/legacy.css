@@ -78,3 +78,7 @@
 .legacy .attack-grid { grid-template-columns: 1fr; }
 .legacy .intro { margin-top: 45px; }
 .legacy .panel, .legacy .arena { padding: 20px; } }
+
+/* Keep the full embedded Pokédex usable without an unbounded setup page. */
+.legacy .card-grid { max-height: 31rem; overflow-y: auto; }
+.legacy .choose-card img, .legacy .pokemon-sprite { object-fit: contain; image-rendering: pixelated; margin-inline: auto; }

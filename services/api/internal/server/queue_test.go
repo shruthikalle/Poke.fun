@@ -96,3 +96,35 @@ func TestQueuePairsRealPlayersAndCanCancel(t *testing.T) {
 		t.Fatal("matching demo entries did not pair")
 	}
 }
+
+func TestQueueOnlyPairsEqualPowerTiers(t *testing.T) {
+	s := httptest.NewServer(New("http://localhost:3000"))
+	defer s.Close()
+	enqueue := func(name, card string) arenaQueueResponse {
+		t.Helper()
+		body, _ := json.Marshal(map[string]any{"name": name, "cardId": card, "rating": 1500, "entryCents": 0})
+		res, err := http.Post(s.URL+"/api/arena-queue", "application/json", bytes.NewReader(body))
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		if res.StatusCode != http.StatusCreated {
+			t.Fatalf("enqueue %s: %s", card, res.Status)
+		}
+		var entry arenaQueueResponse
+		if err := json.NewDecoder(res.Body).Decode(&entry); err != nil {
+			t.Fatal(err)
+		}
+		return entry
+	}
+	// Every catalog species is a fighter now, not just Pikachu and Charmander.
+	if a := enqueue("Alice", "mewtwo"); a.Status != "waiting" { // tier 3
+		t.Fatal("first player was not queued")
+	}
+	if b := enqueue("Bob", "pikachu"); b.Status != "waiting" { // tier 1 must not face tier 3
+		t.Fatalf("tier 1 Pikachu was paired with tier 3 Mewtwo: %+v", b)
+	}
+	if c := enqueue("Cara", "charmander"); c.Status != "matched" || c.Opponent != "Bob" { // tier 1 vs tier 1
+		t.Fatalf("equal tiers should pair: %+v", c)
+	}
+}

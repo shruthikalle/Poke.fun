@@ -31,11 +31,9 @@ const turnDeadline = turnSeconds * time.Second
 
 var sides = []string{"p1", "p2"}
 
-var opponentLines = []string{"gl hf", "nice switch", "oof", "that crit tho", "gg", "close one!"}
-
 // Config is the setup for a battle. AI battles arrive with both teams; PvP
-// battles are created by matchmaking with trainers only, and each player then
-// submits their own team (SetTeam).
+// battles receive validated queue selections; legacy direct setup can submit
+// each side once through SetTeam. Incoming combat fields are never trusted.
 type Config struct {
 	Mode     Mode                  `json:"mode"`
 	You      Trainer               `json:"you"`
@@ -67,13 +65,20 @@ type Battle struct {
 	over         bool
 	timerEnabled bool
 	deadline     time.Time
-	rng          *rand.Rand
+	rng          *snapshotRNG
 	seed         int64
 	log          []Event
+	round        int
+	rematchVotes map[string]bool
+	weather      string // "", "rain", "sun", "sand", "hail" or "snow"
+	weatherTurns int
+	// Per-turn scratch state, reset by resolveTurn (never between turns).
+	flinched map[string]bool
+	acted    map[string]bool
 }
 
 // New builds a battle. AI battles need both teams and open immediately; PvP
-// battles open once both players have called SetTeam.
+// battles open when both locked teams exist (or after legacy SetTeam setup).
 func New(id string, cfg Config) (*Battle, error) {
 	mode := cfg.Mode
 	if mode == "" {
@@ -105,10 +110,26 @@ func New(id string, cfg Config) (*Battle, error) {
 	}
 	for _, side := range sides {
 		if team := cfg.Teams[side]; len(team) > 0 {
-			b.initial[side] = team
+			canonical, err := CanonicalTeam(team, side)
+			if err != nil {
+				return nil, err
+			}
+			if mode == ModePvP && len(canonical) != 1 && len(canonical) != 3 {
+				return nil, fmt.Errorf("PvP teams must have 1 or 3 creatures")
+			}
+			if expected := formatSize(cfg.Format); mode == ModePvP && expected != 0 && len(canonical) != expected {
+				return nil, fmt.Errorf("team does not match the declared format")
+			}
+			b.initial[side] = canonical
 		}
 	}
-	if mode == ModeAI {
+	if len(b.initial["p1"]) > 0 && len(b.initial["p2"]) > 0 && mode == ModePvP && len(b.initial["p1"]) != len(b.initial["p2"]) {
+		return nil, fmt.Errorf("both teams must use the same format")
+	}
+	if len(b.initial["p1"]) > 0 {
+		b.formats["p1"] = TeamFormat(len(b.initial["p1"]), mode == ModePvP)
+	}
+	if mode == ModeAI || (len(b.initial["p1"]) > 0 && len(b.initial["p2"]) > 0) {
 		b.Open()
 	}
 	return b, nil
@@ -125,25 +146,6 @@ func (b *Battle) SideFor(token string) string {
 		}
 	}
 	return ""
-}
-
-// SetTeam records a PvP player's team. The battle opens once both are in.
-func (b *Battle) SetTeam(side string, team []Creature, format Format) error {
-	if b.mode != ModePvP {
-		return ErrWrongMode
-	}
-	if b.started {
-		return fmt.Errorf("%w: teams are locked once the battle starts", ErrInvalidChoice)
-	}
-	if len(team) == 0 || len(team) > 3 {
-		return fmt.Errorf("%w: a team has 1 to 3 creatures", ErrInvalidChoice)
-	}
-	b.initial[side] = team
-	b.formats[side] = format
-	if len(b.initial["p1"]) > 0 && len(b.initial["p2"]) > 0 {
-		b.Open()
-	}
-	return nil
 }
 
 // Mode reports whether side p2 is the AI or a second human.
@@ -186,12 +188,15 @@ func cloneTeam(team []Creature) []*Creature {
 // Open (re)starts the battle from the locked teams and records the opening
 // events. It is also how a rematch begins; the init event resets each client.
 func (b *Battle) Open() {
-	b.rng = rand.New(rand.NewSource(b.seed))
+	b.round++
+	b.rematchVotes = map[string]bool{}
+	b.rng = newSnapshotRNG(b.seed)
 	b.turn = 1
 	b.pending = map[string]*Choice{}
 	b.switchQueue = nil
 	b.over = false
 	b.started = true
+	b.weather, b.weatherTurns = "", 0
 	b.sides = map[string]*SideState{}
 	for _, side := range sides {
 		b.sides[side] = &SideState{Side: side, Trainer: b.trainers[side], Team: cloneTeam(b.initial[side])}
@@ -258,12 +263,7 @@ func timerSeconds(enabled bool) any {
 	return nil
 }
 
-// Chat records a player's line. Against the AI, the bot sometimes replies. It
-// uses the global RNG, not the battle's seeded one, so chatting never changes
-// the dice rolls and a seeded battle replays identically.
+// Chat records a player's line without simulating a human response.
 func (b *Battle) Chat(side, text string) {
 	b.record(evChat(b.trainers[side].Name, text))
-	if b.mode == ModeAI && rand.Float64() < 0.4 {
-		b.record(evChat(b.trainers["p2"].Name, opponentLines[rand.Intn(len(opponentLines))]))
-	}
 }

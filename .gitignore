@@ -12,3 +12,11 @@ bin/
 *.tsbuildinfo
 contracts/target/
 contracts/.anchor/
+
+# PokéAPI responses cached by scripts/build-pokedex.mjs
+scripts/.cache/
+
+# Persistent local-server state: player records, game checkpoints, sealed
+# results and the private referee signing key
+data/
+services/api/data/

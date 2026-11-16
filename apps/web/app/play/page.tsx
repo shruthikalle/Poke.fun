@@ -1,5 +1,6 @@
 "use client";
 
+import { OutcomeReceipt } from "../../components/battle/OutcomeReceipt";
 import { session as tabStorage } from "../../lib/storage";
 
 import { useCallback, useEffect, useState } from "react";
@@ -20,11 +21,9 @@ function BattleCard({ player, label }: { player: NonNullable<Match["players"][nu
   return (
     <article className={`battle-card ${player.card.element.toLowerCase()}`}>
       <span className="card-label">{label}</span>
-      <div className="card-symbol" aria-hidden="true">
-        {player.card.element === "Fire" ? "✦" : player.card.element === "Water" ? "≈" : "✿"}
-      </div>
+      <img className="pokemon-sprite" src={player.card.sprite} alt={player.card.name} width={96} height={96} />
       <h3>{player.card.name}</h3>
-      <p className="player-name">{player.name} · {player.card.element}</p>
+      <p className="player-name">{player.name} · {player.card.types.join(" / ")} · Lv. {player.card.level}</p>
       <div className="stat-line"><span>HP</span><strong>{player.hp}/{player.card.maxHp}</strong></div>
       <div className="hp-track"><div style={{ width: `${hp}%` }} /></div>
       <div className="stat-line"><span>Energy</span><strong>{player.energy}</strong></div>
@@ -34,6 +33,7 @@ function BattleCard({ player, label }: { player: NonNullable<Match["players"][nu
 
 export default function Home() {
   const [cards, setCards] = useState<Card[]>([]);
+  const [search, setSearch] = useState("");
   const [name, setName] = useState("");
   const [cardId, setCardId] = useState("");
   const [roomCode, setRoomCode] = useState("");
@@ -49,7 +49,7 @@ export default function Home() {
     }
     api.cards().then((data) => {
       setCards(data);
-      setCardId((current) => current || data[0]?.id || "");
+      setCardId((current) => data.some((c) => c.id === current) ? current : data.find((c) => c.id === "pikachu")?.id ?? data[0]?.id ?? "");
     }).catch((cause: Error) => setError(cause.message));
   }, []);
 
@@ -70,8 +70,8 @@ export default function Home() {
   }, [session, refresh]);
 
   async function enter(mode: "create" | "join") {
-    if (!name.trim() || !cardId || (mode === "join" && !roomCode.trim())) {
-      setError("Enter a name, choose a card, and add a room code if joining.");
+    if (!name.trim() || new TextEncoder().encode(name.trim()).length > 24 || /[\x00-\x1f\x7f-\x9f]/.test(name) || !cardId || (mode === "join" && !roomCode.trim())) {
+      setError("Use a player name of 1–24 bytes without control characters, choose a Pokémon, and add a room code if joining.");
       return;
     }
     setBusy(true);
@@ -110,6 +110,9 @@ export default function Home() {
     setError("");
   }
 
+  const visibleCards = cards.filter((card) => `${card.name} ${card.id} ${card.types.join(" ")}`.toLowerCase().includes(search.toLowerCase()));
+  const selectedCard = cards.find((card) => card.id === cardId);
+
   const you = match?.players[match.you];
   const opponent = match?.players[1 - match.you];
   const secondsLeft = match?.status === "playing" && match.deadlineUnixMs
@@ -122,7 +125,7 @@ export default function Home() {
     <div className="legacy">
     <main>
       <header className="site-header"><div className="brand">POKE<span>.FUN</span></div><span className="badge">ONE-CARD DEMO</span></header>
-      <div className="intro"><p className="eyebrow">TURN-BASED 1V1</p><h1>One card. One opponent. Your move.</h1><p>Pick a card, share a room code, and battle a friend in another browser. Both attacks resolve together each turn.</p></div>
+      <div className="intro"><p className="eyebrow">TURN-BASED 1V1</p><h1>One card. One opponent. Your move.</h1><p>Pick a card, share a room code, and battle a friend in another browser. All 1,214 embedded Pokémon and forms are available at level 50. Both attacks resolve together each turn.</p></div>
       {error && <div className="error" role="alert">{error}</div>}
 
       {session && !match && <button className="secondary reset-session" onClick={leave}>Start a new match</button>}
@@ -132,8 +135,11 @@ export default function Home() {
           <h2>Choose your fighter</h2>
           <label htmlFor="player-name">Your name</label>
           <input id="player-name" maxLength={24} value={name} onChange={(e) => setName(e.target.value)} placeholder="Player name" />
-          <div className="card-grid">{cards.map((card) => <button className={`choose-card ${card.id === cardId ? "selected" : ""}`} key={card.id} type="button" onClick={() => setCardId(card.id)}>
-            <span className="element">{card.element}</span><strong>{card.name}</strong><small>{card.maxHp} HP · 2 attacks</small>
+          <label htmlFor="pokemon-search">Find a Pokémon</label>
+          <input id="pokemon-search" type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Name, form, or type" />
+          <p className="hint">Selected: {selectedCard?.name ?? "None"} · {visibleCards.length} Pokémon found</p>
+          <div className="card-grid">{visibleCards.map((card) => <button className={`choose-card ${card.id === cardId ? "selected" : ""}`} key={card.id} type="button" onClick={() => setCardId(card.id)}>
+            <img src={card.sprite} alt="" width={64} height={64} loading="lazy" /><span className="element">{card.types.join(" / ")}</span><strong>{card.name}</strong><small>{card.maxHp} HP · {card.attacks.length} {card.attacks.length === 1 ? "attack" : "attacks"} · Tier {card.tier}</small>
           </button>)}</div>
         </section>
         <section className="panel join-panel"><h2>Start playing</h2><button className="primary" disabled={busy || !cards.length} onClick={() => void enter("create")}>Create match</button><div className="divider">or join a friend</div><label htmlFor="room-code">Room code</label><input id="room-code" value={roomCode} onChange={(e) => setRoomCode(e.target.value.toUpperCase())} placeholder="8-character code" maxLength={8} /><button className="secondary" disabled={busy || !cards.length} onClick={() => void enter("join")}>Join match</button><p className="hint">Free demo match. Entry fees come later.</p></section>
@@ -144,12 +150,12 @@ export default function Home() {
         {match.status === "waiting" ? <div className="waiting"><h2>Waiting for opponent</h2><p>Share room code <strong>{match.id}</strong>. Have your friend open this app in another browser or a private window and join with the code.</p></div> : <>
           <div className="battle-top"><span>TURN {match.turn}</span><strong>{winnerText || (match.submitted[match.you] ? "Attack locked in · waiting for opponent" : "Choose an attack")}</strong>{secondsLeft !== null && <span className={`turn-timer${secondsLeft <= 10 ? " low" : ""}`}>⏱ {secondsLeft}s</span>}</div>
           <div className="fighters">{opponent && <BattleCard player={opponent} label="OPPONENT" />}<div className="versus">VS</div>{you && <BattleCard player={you} label="YOU" />}</div>
-          {match.status === "playing" && you && <div className="attacks"><h2>Your attacks</h2><div className="attack-grid">{you.card.attacks.map((move) => <button key={move.id} disabled={busy || match.submitted[match.you] || you.energy < move.cost} onClick={() => void attack(move.id)}><strong>{move.name}</strong><span>{move.element} · {move.damage} damage · {move.cost ? `costs ${move.cost} energy` : `gains ${move.gain} energy`}</span></button>)}</div></div>}
-          {match.status === "finished" && <div className="result"><h2>{winnerText}</h2><button className="primary" onClick={leave}>Play another match</button></div>}
+          {match.status === "playing" && you && <div className="attacks"><h2>Your attacks</h2><div className="attack-grid">{you.card.attacks.map((move) => <button key={move.id} disabled={busy || match.submitted[match.you] || you.energy < move.cost} onClick={() => void attack(move.id)}><strong>{move.name}</strong><span>{move.id === "struggle" ? "Typeless · 25% max-HP recoil" : `${move.element} · ${move.category}`} · {move.power} power · {move.cost ? `costs ${move.cost} energy` : `gains ${move.gain} energy`}</span></button>)}</div></div>}
+          {match.status === "finished" && <div className="result"><h2>{winnerText}</h2><OutcomeReceipt mode="matches" id={session.id} token={session.token} /><button className="primary" onClick={leave}>Play another match</button></div>}
           <div className="history"><h2>Battle log</h2>{match.history.length ? [...match.history].reverse().map((turn) => <p key={turn.number}>Turn {turn.number}: {match.players[0]?.name} used {turn.attacks[0]}{turn.auto[0] ? " (timed out)" : ""} for {turn.damage[0]} damage.{EFFECT_TEXT[turn.effect[0]]} {match.players[1]?.name} used {turn.attacks[1]}{turn.auto[1] ? " (timed out)" : ""} for {turn.damage[1]} damage.{EFFECT_TEXT[turn.effect[1]]}</p>) : <p>First turn is waiting for attacks.</p>}</div>
         </>}
       </section>}
-      <footer>Fictional sample cards. Bringing your own cards and paid entries are coming soon.</footer>
+      <footer>Custom simultaneous duels: quick attacks gain 1 energy; heavy attacks cost 2. Damage uses level-50 stats, both defensive types, and STAB. Attacks always hit and have unlimited uses in this format. No secondary effects, Transform, or abilities. Struggle is typeless with 25% max-HP recoil. Players need distinct names.</footer>
     </main>
     </div>
   );

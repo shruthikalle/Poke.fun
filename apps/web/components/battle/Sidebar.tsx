@@ -21,7 +21,7 @@ function RoomItem({ room, onOpen }: { room: ChatRoom; onOpen: (room: ChatRoom) =
         <div className={styles.subrooms}>
           Subrooms
           {room.subrooms.map((s) => (
-            <button key={s} className={styles.subroom} onClick={() => onOpen({ ...room, id: `${room.id}-${s}`, name: s, users: Math.max(3, Math.round(room.users / 6)), subrooms: undefined })}>
+            <button key={s} className={styles.subroom} onClick={() => onOpen({ ...room, id: `${room.id}-${s}`, name: s, users: 0, subrooms: undefined })}>
               <span className={styles.bubble} aria-hidden="true" />{s}
             </button>
           ))}
@@ -35,11 +35,11 @@ function LiveBattleRow({ battle, onOpen }: { battle: LiveBattle; onOpen: () => v
   const [a, b] = battle.trainers;
   return (
     <li>
-      <button className={styles.live} onClick={onOpen} title={`Watch ${a.name} vs ${b.name}`}>
+      <button className={styles.live} onClick={onOpen} title={`Open discussion: ${a.name} vs ${b.name}`}>
         <img src={`/trainers/${a.avatar}.png`} alt="" width={28} height={28} />
         <span className={styles.liveNames}><strong>{a.name}</strong><i>vs</i><strong>{b.name}</strong></span>
         <img src={`/trainers/${b.avatar}.png`} alt="" width={28} height={28} />
-        <small>{battle.format} · Turn {battle.turn}</small>
+        <small>{battle.format} · {battle.kind === "arena" ? `${battle.turn}s elapsed` : `Turn ${battle.turn}`} · Chat</small>
       </button>
     </li>
   );
@@ -62,16 +62,17 @@ export function Sidebar({ lobby, onOpenRoom, onHide }: { lobby: LobbySnapshot | 
       </div>
 
       <h2 className={styles.sideHeading}>Live battles</h2>
+      {!lobby ? <p role="status">Lobby unavailable. Reconnecting…</p> : lobby.liveBattles.length === 0 ? <p>No active battles.</p> : null}
       <ul className={styles.lives}>
         {(lobby?.liveBattles ?? []).map((b) => <LiveBattleRow
             key={b.id}
             battle={b}
             onOpen={() =>
-              onOpenRoom({
-                id: `live-${b.id}`,
+              onOpenRoom(rooms.find((r) => r.id === b.roomId) ?? {
+                id: b.roomId ?? `live-${b.id}`,
                 name: `${b.trainers[0].name} vs ${b.trainers[1].name}`,
-                users: 40 + b.turn * 7,
-                description: `Watching ${b.format} · Turn ${b.turn}. Cheer on both trainers.`,
+                users: 0,
+                description: `${b.format} discussion (chat only).`,
                 section: "community",
               })
             }
@@ -93,6 +94,7 @@ export function Sidebar({ lobby, onOpenRoom, onHide }: { lobby: LobbySnapshot | 
       {show("community") && (
         <>
           <h2 className={styles.sideHeading}>Community rooms</h2>
+          {lobby && rooms.every((r) => r.section !== "community") && <p>No community rooms.</p>}
           {rooms.filter((r) => r.section === "community").map((r) => <RoomItem key={r.id} room={r} onOpen={onOpenRoom} />)}
         </>
       )}

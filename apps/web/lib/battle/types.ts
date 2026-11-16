@@ -6,7 +6,7 @@ export type Side = "p1" | "p2";
 
 export const otherSide = (side: Side): Side => (side === "p1" ? "p2" : "p1");
 
-export type MoveCategory = "physical" | "special";
+export type MoveCategory = "physical" | "special" | "status";
 
 export interface Move {
   id: string;
@@ -17,6 +17,7 @@ export interface Move {
   accuracy: number;
   pp: number;
   maxPp: number;
+  effect?: Record<string, unknown>;
 }
 
 export interface CreatureSprites {
@@ -42,6 +43,10 @@ export interface Creature {
   maxHp: number;
   moves: Move[];
   fainted: boolean;
+  status?: string;
+  statusTurns?: number;
+  confused?: number;
+  boosts?: Record<string, number>;
 }
 
 export interface Trainer {
@@ -109,6 +114,8 @@ export interface BattleState {
   pendingChoice: BattleChoice | null;
   winner: Side | "draw" | null;
   timer: TimerState;
+  weather?: string;
+  weatherTurns?: number;
   animation: (BattleAnimation & { seq: number }) | null;
 }
 
@@ -131,8 +138,17 @@ export type BattleEvent =
   | { type: "choice-cancelled" }
   | { type: "resolving" }
   | { type: "switch"; side: Side; teamIndex: number }
+  | { type: "moves"; side: Side; moves: Move[] }
   | { type: "move"; side: Side; moveIndex: number; ppLeft: number }
-  | { type: "damage"; side: Side; hp: number; effectiveness: Effectiveness; crit: boolean }
+  | { type: "damage"; side: Side; hp: number; effectiveness: Effectiveness; crit: boolean; cause?: string }
+  | { type: "status"; side: Side; status: string }
+  | { type: "volatile"; side: Side; volatile: string; active: boolean }
+  | { type: "boost"; side: Side; stat: string; change: number; stage: number }
+  | { type: "heal"; side: Side; hp: number }
+  | { type: "cant"; side: Side; reason: string }
+  | { type: "hits"; side: Side; count: number }
+  | { type: "fail"; side: Side }
+  | { type: "weather"; weather: string; turns: number }
   | { type: "miss"; side: Side }
   | { type: "faint"; side: Side }
   | { type: "chat"; user: string; text: string }

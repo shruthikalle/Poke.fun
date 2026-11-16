@@ -27,10 +27,14 @@ var (
 
 func newAI(t *testing.T, p1, p2 []Creature, seed int64) *Battle {
 	t.Helper()
-	b, err := New("B1", Config{Mode: ModeAI, You: you, Opponent: opp, Teams: map[string][]Creature{"p1": p1, "p2": p2}, Seed: seed})
+	b, err := New("B1", Config{Mode: ModePvP, You: you, Opponent: opp, Seed: seed})
 	if err != nil {
 		t.Fatal(err)
 	}
+	b.mode = ModeAI
+	b.timerEnabled = false
+	b.initial = map[string][]Creature{"p1": p1, "p2": p2}
+	b.Open()
 	return b
 }
 
@@ -40,11 +44,8 @@ func newPvP(t *testing.T, p1, p2 []Creature, seed int64) *Battle {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for side, team := range map[string][]Creature{"p1": p1, "p2": p2} {
-		if err := b.SetTeam(side, team, Format{Name: "Test"}); err != nil {
-			t.Fatal(err)
-		}
-	}
+	b.initial = map[string][]Creature{"p1": p1, "p2": p2}
+	b.Open()
 	return b
 }
 
@@ -187,13 +188,21 @@ func TestSwitchToBenchCreature(t *testing.T) {
 	}
 }
 
-func TestSpentMovesStillUsableWhenAllAreSpent(t *testing.T) {
+func TestSpentMovesBecomeStruggle(t *testing.T) {
 	lead := creature("a", "emberfox", 200, []string{"Fire"}, mv("ember", "Fire", 40, 1))
 	b := newAI(t, []Creature{lead}, []Creature{creature("b", "tidecub", 200, []string{"Water"}, mv("splash", "Water", 10, 10))}, 9)
 	must(t, b.SubmitChoice("p1", move0())) // spends the only PP
-	if err := b.SubmitChoice("p1", move0()); err != nil {
-		t.Fatalf("a creature with no PP left should still be able to attack: %v", err)
+	if got := b.active("p1").Moves[0].ID; got != "struggle" {
+		t.Fatalf("expected explicit Struggle, got %s", got)
 	}
+	hp := b.active("p1").HP
+	if err := b.SubmitChoice("p1", move0()); err != nil {
+		t.Fatal(err)
+	}
+	if b.active("p1").HP > hp-50 {
+		t.Fatal("Struggle must apply quarter-max-HP recoil")
+	}
+
 }
 
 func TestAITimeoutResolvesExactlyOneTurn(t *testing.T) {
@@ -218,7 +227,7 @@ func TestPvPWaitsForBothTeams(t *testing.T) {
 	if err := b.SubmitChoice("p1", move0()); !errors.Is(err, ErrNotStarted) {
 		t.Fatalf("expected ErrNotStarted before teams, got %v", err)
 	}
-	must(t, b.SetTeam("p1", []Creature{creature("a", "emberfox", 100, []string{"Fire"}, mv("ember", "Fire", 40, 10))}, Format{}))
+	must(t, b.SetTeam("p1", []Creature{{SpriteID: "charmander"}}, Format{}))
 	if b.Started() {
 		t.Fatal("battle started with only one team")
 	}

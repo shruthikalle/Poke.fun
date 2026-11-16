@@ -47,10 +47,16 @@ export function applyBattleEvent(state: BattleState | null, event: BattleEvent):
       return { ...state, phase: "resolving" };
     case "switch": {
       const side = state.sides[event.side];
-      const next = { ...state, sides: { ...state.sides, [event.side]: { ...side, activeIndex: event.teamIndex } } };
+      const team = side.team.map((c, i) => i === side.activeIndex ? { ...c, boosts: {}, confused: 0 } : c);
+      const next = { ...state, sides: { ...state.sides, [event.side]: { ...side, team, activeIndex: event.teamIndex } } };
       const species = side.team[event.teamIndex].species;
       const text = event.side === state.you ? `Go! **${species}**!` : `${side.trainer.name} sent out **${species}**!`;
       return { ...next, log: push(entry("switch", text)), animation: { kind: "switch-in", side: event.side, seq } };
+    }
+    case "moves": {
+      const side = state.sides[event.side];
+      const team = side.team.map((c, i) => i === side.activeIndex ? { ...c, moves: event.moves } : c);
+      return { ...state, sides: { ...state.sides, [event.side]: { ...side, team } } };
     }
     case "move": {
       const side = state.sides[event.side];
@@ -73,9 +79,33 @@ export function applyBattleEvent(state: BattleState | null, event: BattleEvent):
       if (event.effectiveness === "super") lines.push(entry("effect", "It's super effective!"));
       if (event.effectiveness === "resisted") lines.push(entry("effect", "It's not very effective..."));
       if (event.effectiveness === "immune") lines.push(entry("effect", `It doesn't affect ${ownerPrefix(state, event.side).toLowerCase()}${target.species}...`));
-      else lines.push(entry("damage", `(${ownerPrefix(state, event.side)}${target.species} lost ${lost}% of its health!)`));
+      else lines.push(entry("damage", event.cause ? `${target.species} took ${lost}% damage from ${event.cause}.` : `(${ownerPrefix(state, event.side)}${target.species} lost ${lost}% of its health!)`));
       return { ...state, sides: { ...state.sides, [event.side]: { ...side, team } }, log: push(...lines), animation: { kind: "hit", side: event.side, seq } };
     }
+    case "status": {
+      const side = state.sides[event.side];
+      const team = side.team.map((c, i) => i === side.activeIndex ? { ...c, status: event.status } : c);
+      return { ...state, sides: { ...state.sides, [event.side]: { ...side, team } }, log: push(entry("effect", `${nameOf(state, event.side)} ${event.status ? `is affected by ${event.status}` : "recovered from its status"}.`)) };
+    }
+    case "volatile": {
+      const side = state.sides[event.side];
+      const team = side.team.map((c, i) => i === side.activeIndex && event.volatile === "confusion" ? { ...c, confused: event.active ? 1 : 0 } : c);
+      return { ...state, sides: { ...state.sides, [event.side]: { ...side, team } }, log: push(entry("effect", `${nameOf(state, event.side)} ${event.active ? "became" : "is no longer"} ${event.volatile}.`)) };
+    }
+    case "boost": {
+      const side = state.sides[event.side];
+      const team = side.team.map((c, i) => i === side.activeIndex ? { ...c, boosts: { ...c.boosts, [event.stat]: event.stage } } : c);
+      return { ...state, sides: { ...state.sides, [event.side]: { ...side, team } }, log: push(entry("effect", `${nameOf(state, event.side)}'s ${event.stat} ${event.change > 0 ? "rose" : "fell"}.`)) };
+    }
+    case "heal": {
+      const side = state.sides[event.side];
+      const team = side.team.map((c, i) => i === side.activeIndex ? { ...c, hp: event.hp } : c);
+      return { ...state, sides: { ...state.sides, [event.side]: { ...side, team } }, log: push(entry("effect", `${nameOf(state, event.side)} recovered health.`)) };
+    }
+    case "cant": return { ...state, log: push(entry("effect", `${nameOf(state, event.side)} could not move (${event.reason}).`)) };
+    case "hits": return { ...state, log: push(entry("effect", `Hit ${event.count} times.`)) };
+    case "fail": return { ...state, log: push(entry("effect", `${nameOf(state, event.side)}'s move failed.`)) };
+    case "weather": return { ...state, weather: event.weather, weatherTurns: event.turns, log: push(entry("effect", event.weather ? `${event.weather} began.` : "The weather cleared.")) };
     case "miss":
       return { ...state, log: push(entry("miss", `${ownerPrefix(state, event.side)}${nameOf(state, event.side)} avoided the attack!`)) };
     case "faint": {
@@ -116,8 +146,8 @@ export interface BattleStream {
 
 /**
  * Subscribes to a battle source and folds its events into BattleState.
- * TODO(realtime): pass a QuickNode Streams-backed BattleStreamSource
- * (or the Go API's match feed) instead of MockBattleStream; the UI is unchanged.
+ * Online play passes ServerBattleStream (the Go API's authoritative feed);
+ * MockBattleStream is used only when NEXT_PUBLIC_LIVE_BATTLE=0.
  */
 export function useBattleStream(source: BattleStreamSource | null): BattleStream {
   const [state, dispatch] = useReducer(reducer, null);

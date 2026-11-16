@@ -4,6 +4,8 @@ export type Attack = {
   id: string;
   name: string;
   element: string;
+  category: "physical" | "special";
+  power: number;
   damage: number;
   cost: number;
   gain: number;
@@ -14,6 +16,11 @@ export type Card = {
   name: string;
   element: string;
   maxHp: number;
+  types: string[];
+  level: number;
+  tier: number;
+  sprite: string;
+  stats: { hp: number; atk: number; def: number; spa: number; spd: number; spe: number };
   attacks: Attack[];
 };
 

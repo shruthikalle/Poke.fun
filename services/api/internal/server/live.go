@@ -3,12 +3,14 @@ package server
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/livebattle"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/pokedex"
 )
 
 // Rich team battle endpoints. A battle keeps a shared, append-only event log;
@@ -61,6 +63,11 @@ func (s *Server) battleEvents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	b.ApplyTimeout(time.Now())
+	if err := s.recordLiveResult(b); err != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusInternalServerError, "could not save ranked result")
+		return
+	}
 	events, cursor := b.EventsSince(since)
 	started := b.Started()
 	s.mu.Unlock()
@@ -119,13 +126,7 @@ func (s *Server) battleChat(w http.ResponseWriter, r *http.Request) {
 // battleRematch restarts a battle. In a two-player battle it is only allowed
 // once the match is over, so neither player can wipe a battle in progress.
 func (s *Server) battleRematch(w http.ResponseWriter, r *http.Request) {
-	s.act(w, r, func(b *livebattle.Battle, _ string) error {
-		if b.Mode() == livebattle.ModePvP && !b.Over() {
-			return livebattle.ErrNotYourTurn
-		}
-		b.Open()
-		return nil
-	})
+	s.act(w, r, func(b *livebattle.Battle, side string) error { return b.RequestRematch(side) })
 }
 
 // act authenticates the caller's side, runs fn under the server lock and maps
@@ -138,7 +139,18 @@ func (s *Server) act(w http.ResponseWriter, r *http.Request, fn func(b *livebatt
 		writeError(w, http.StatusUnauthorized, "battle or token not found")
 		return
 	}
+	b.ApplyTimeout(time.Now())
+	if err := s.recordLiveResult(b); err != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusInternalServerError, "could not save ranked result")
+		return
+	}
 	err := fn(b, side)
+	if recordErr := s.recordLiveResult(b); recordErr != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusInternalServerError, "could not save ranked result")
+		return
+	}
 	s.mu.Unlock()
 	switch {
 	case err == nil:
@@ -183,9 +195,29 @@ func (s *Server) newBattleID() (string, error) {
 // client creature shape can evolve without breaking battle creation.
 func decodeBattle(w http.ResponseWriter, r *http.Request, target any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20) // 1 MiB
-	if err := json.NewDecoder(r.Body).Decode(target); err != nil {
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(target); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid battle payload")
 		return false
 	}
+	var extra any
+	if err := decoder.Decode(&extra); err != io.EOF {
+		writeError(w, http.StatusBadRequest, "only one JSON object is allowed")
+		return false
+	}
 	return true
+}
+
+// species exposes the same versioned definitions used to construct battles.
+func (s *Server) species(w http.ResponseWriter, r *http.Request) {
+	entry, ok := pokedex.Lookup(r.PathValue("key"))
+	if !ok {
+		writeError(w, http.StatusNotFound, "unknown species")
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"key": entry.Key, "dex": entry.Dex, "name": entry.Name, "tier": entry.Tier, "types": entry.Types, "base": entry.Base,
+		"moves": livebattle.SpeciesMoves(entry), "sprites": livebattle.SpeciesSprites(entry), "artwork": entry.Sprite, "cry": nil,
+		"version": pokedex.Version(),
+	})
 }

@@ -1,4 +1,5 @@
 import { local } from "../storage";
+import { communityRequest } from "../lobby/communityApi";
 export type RankTier = "Bronze" | "Silver" | "Gold" | "Platinum" | "Master";
 
 export interface RankInfo {
@@ -6,8 +7,11 @@ export interface RankInfo {
   tier: RankTier;
   wins: number;
   losses: number;
-  history: { at: number; opponent: string; result: "win" | "loss" | "draw"; delta: number }[];
+  history: { at: number; opponent: string; result: "win" | "loss" | "draw"; delta: number; matchId?: string }[];
 }
+
+export interface LeaderboardEntry extends RankInfo { name: string; draws: number }
+export interface Leaderboard { entries: LeaderboardEntry[]; namespace: string }
 
 export interface RankService {
   getRank(player: string): Promise<RankInfo>;
@@ -29,7 +33,7 @@ const expected = (r: number, o: number) => 1 / (1 + 10 ** ((o - r) / 400));
 const delta = (r: number, o: number, score: number) => Math.round(K * (score - expected(r, o)));
 const keyFor = (player: string) => `pf:rank:v1:${player}`;
 
-/** TODO(backend): read and write ratings through the Go API once ranked matches are server-side. */
+/** Browser-local ranks, kept for explicit offline demos only; the default is ApiRankService. */
 export class MockRankService implements RankService {
   async getRank(player: string): Promise<RankInfo> {
     try {
@@ -59,4 +63,21 @@ export class MockRankService implements RankService {
   }
 }
 
-export const rankService: RankService = new MockRankService();
+export class ApiRankService implements RankService {
+  getRank(player: string): Promise<RankInfo> {
+    return communityRequest(`/api/ranks?player=${encodeURIComponent(player)}`);
+  }
+
+  preview(rating: number, opponentRating: number) {
+    return { win: delta(rating, opponentRating, 1), loss: delta(rating, opponentRating, 0) };
+  }
+
+  /** Compatibility for older battle views: only the server can record a win. */
+  async recordResult(player: string, _opponent: string, _opponentRating: number, _result: "win" | "loss" | "draw") {
+    const rank = await this.getRank(player);
+    return { before: rank, after: rank, delta: 0 };
+  }
+}
+
+export const getLeaderboard = () => communityRequest<Leaderboard>("/api/leaderboard");
+export const rankService: RankService = new ApiRankService();
