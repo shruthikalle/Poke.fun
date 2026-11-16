@@ -11,9 +11,10 @@ export class ApiError extends Error {
  * JSON request to the Go battle API. Sends the player token as a bearer token
  * when given, and throws ApiError (with the server's message) on failure.
  */
-export async function apiRequest<T = any>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown, token?: string): Promise<T> {
+export async function apiRequest<T = any>(method: "GET" | "POST" | "DELETE", path: string, body?: unknown, token?: string, signal?: AbortSignal): Promise<T> {
   const res = await fetch(`${API_URL}${path}`, {
     method,
+    signal,
     headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

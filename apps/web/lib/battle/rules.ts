@@ -28,10 +28,10 @@ const BALANCE_SCALE = 0.55;
  * any other landed hit deals at least 1.
  */
 export function computeDamage(attacker: Creature, defender: Creature, move: Move, rng: Rng = Math.random): DamageResult {
-  const mult = typeMultiplier(move.type, defender.types);
+  const mult = move.id === "struggle" ? 1 : typeMultiplier(move.type, defender.types);
   if (mult === 0) return { damage: 0, effectiveness: "immune", crit: false };
 
-  const stab = attacker.types.includes(move.type) ? STAB_MULT : 1;
+  const stab = move.id !== "struggle" && attacker.types.includes(move.type) ? STAB_MULT : 1;
   const crit = rng() < CRIT_CHANCE;
   const [atk, def] = move.category === "physical"
     ? [attacker.stats.atk, defender.stats.def]
@@ -51,7 +51,7 @@ export function chooseAiMove(attacker: Creature, defender: Creature, rng: Rng = 
   let best = 0;
   let bestScore = -Infinity;
   attacker.moves.forEach((m, i) => {
-    const score = m.pp > 0 ? m.power * typeMultiplier(m.type, defender.types) * (0.7 + rng() * 0.6) : -1;
+    const score = m.pp > 0 ? m.power * (m.id === "struggle" ? 1 : typeMultiplier(m.type, defender.types)) * (0.7 + rng() * 0.6) : -1;
     if (score > bestScore) {
       best = i;
       bestScore = score;

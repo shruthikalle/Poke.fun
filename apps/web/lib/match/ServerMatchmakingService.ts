@@ -1,34 +1,50 @@
-import { apiRequest } from "../battle/battleApi";
+import { ApiError, apiRequest } from "../battle/battleApi";
 import type { Side, Trainer } from "../battle/types";
 import type { CardPick } from "../cards/mapping";
 import { tierFor } from "../rank/RankService";
 import type { MatchmakingService, MatchRequest, MatchSearch, MatchTicket } from "./MatchmakingService";
 
 const POLL_MS = 1000;
-/** Maximum time to look for a human rival. */
 const HUMAN_SEARCH_MS = 90_000;
 
+interface QueuePlayer {
+  trainer: Trainer;
+  rating: number;
+  wins: number;
+  losses: number;
+  team: CardPick[];
+}
 interface QueueMatched {
   status: "matched";
   id: string;
   token: string;
   side: Side;
-  opponent: { trainer: Trainer; rating: number; team: CardPick[] };
+  opponent: QueuePlayer;
+  you: QueuePlayer;
 }
 type QueueReply = QueueMatched | { status: "searching"; ticket: string };
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-/**
- * Real two-player matchmaking through the Go API queue, which pairs players by
- * format, card power tier and entry. If nobody compatible turns up within
- * HUMAN_SEARCH_MS, the search ends without inventing an opponent.
- */
+/** Server queue, paired by format, canonical team tier and demo entry amount. */
 export class ServerMatchmakingService implements MatchmakingService {
   find(request: MatchRequest): MatchSearch {
     let cancelled = false;
     let ticket: string | null = null;
-    const withdraw = () => (ticket ? apiRequest("DELETE", `/api/queue/${ticket}`).catch(() => {}) : Promise.resolve());
+    const withdraw = () => ticket ? apiRequest("DELETE", `/api/queue/${ticket}`) : Promise.resolve();
+    // Cancellation can race pairing. Matched tickets remain collectable after
+    // DELETE; only an unpaired search disappears. Never strand the other side.
+    const withdrawAndCollect = async (): Promise<QueueMatched | null> => {
+      if (!ticket) return null;
+      await withdraw();
+      try {
+        const reply = await apiRequest<QueueReply>("GET", `/api/queue/${ticket}`);
+        return reply.status === "matched" ? reply : null;
+      } catch (error) {
+        if (error instanceof ApiError && error.status === 404) return null;
+        throw error;
+      }
+    };
 
     const result = (async (): Promise<MatchTicket> => {
       const startedAt = Date.now();
@@ -37,23 +53,27 @@ export class ServerMatchmakingService implements MatchmakingService {
           trainer: { id: request.player, name: request.player, avatar: "maya" },
           rating: request.rating, format: request.format, tier: request.tier, entry: request.entry, team: request.team,
         });
-        while (reply.status === "searching" && Date.now() - startedAt < HUMAN_SEARCH_MS) {
+        while (reply.status === "searching") {
           ticket = reply.ticket;
+          if (cancelled || Date.now() - startedAt >= HUMAN_SEARCH_MS) {
+            const matched = await withdrawAndCollect();
+            if (matched) return toTicket(matched, request);
+            throw new Error(cancelled ? "cancelled" : "No player with the same format, card tier, and entry joined within 90 seconds. Try again together.");
+          }
           await sleep(POLL_MS);
-          if (cancelled) throw new Error("cancelled");
+          if (cancelled) {
+            const matched = await withdrawAndCollect();
+            if (matched) return toTicket(matched, request);
+            throw new Error("cancelled");
+          }
           reply = await apiRequest<QueueReply>("GET", `/api/queue/${ticket}`);
         }
-        if (reply.status === "searching") {
-          // Withdraw first so we can't be paired from here on, then check once
-          // more: a rival who matched us in the meantime must not be stranded.
-          await withdraw();
-          reply = await apiRequest<QueueReply>("GET", `/api/queue/${ticket}`).catch(() => reply);
-        }
-        if (reply.status === "matched") return toTicket(reply, request);
-        throw new Error("No player with the same format, card tier, and entry joined within 90 seconds. Try again together.");
-      } catch (e) {
-        await withdraw();
-        throw e;
+        // A POST already paired us even if Cancel was clicked in flight.
+        return toTicket(reply, request);
+      } catch (error) {
+        const matched = await withdrawAndCollect();
+        if (matched) return toTicket(matched, request);
+        throw error;
       }
     })();
 
@@ -61,7 +81,8 @@ export class ServerMatchmakingService implements MatchmakingService {
       result,
       cancel: () => {
         cancelled = true;
-        void withdraw();
+        // Prompt withdrawal; result still performs the final GET and owns errors.
+        void withdraw().catch(() => {});
       },
     };
   }
@@ -72,13 +93,13 @@ function toTicket(reply: QueueMatched, request: MatchRequest): MatchTicket {
     matchId: reply.id,
     format: request.format,
     entry: request.entry,
-    you: { name: request.player, rating: request.rating, team: request.team },
+    you: { name: reply.you.trainer.name, rating: reply.you.rating, team: reply.you.team },
     opponent: {
       trainer: reply.opponent.trainer,
       rating: reply.opponent.rating,
       tier: tierFor(reply.opponent.rating),
-      wins: 0, // the queue does not share records yet
-      losses: 0,
+      wins: reply.opponent.wins,
+      losses: reply.opponent.losses,
       team: reply.opponent.team,
     },
     live: { battleId: reply.id, token: reply.token, side: reply.side },

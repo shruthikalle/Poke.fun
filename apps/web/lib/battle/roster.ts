@@ -1,4 +1,4 @@
-import type { BattleFormat, Creature } from "./types";
+import type { BattleFormat, Creature, Move } from "./types";
 import type { SpeciesData } from "../pokemon/SpeciesService";
 
 // Re-exported so existing UI imports (`from ".../battle/roster"`) keep working
@@ -34,8 +34,8 @@ export function createCreature(species: SpeciesData, level: number, uid: string,
 /**
  * Wraps caller-supplied rules (match, entry, ranks) with the clauses the battle
  * enforces: one of each species per team (see buildTeam) and HP shown as a
- * percentage. Status-based clauses are omitted because the engine has no status
- * effects yet.
+ * percentage. Explicit offline practice uses the retained damage-only engine;
+ * online play receives the server's full format and effect rules.
  */
 export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFormat {
   return {
@@ -44,7 +44,17 @@ export function makeFormat(name: string, rules: BattleFormat["rules"]): BattleFo
     rules: [
       { name: "Species Clause", description: "Limit one of each creature" },
       { name: "HP Percentage Mod", description: "HP is shown in percentages" },
+      { name: "Custom damage", description: "Level 50; priority then speed orders hidden turns; 0.55 damage scale; 6% critical hits." },
+      process.env.NEXT_PUBLIC_LIVE_BATTLE === "0"
+        ? { name: "Offline practice", description: "Damage-only simulation. No secondary effects, status, priority or multi-hit." }
+        : { name: "Move effects", description: "Supported status, stat, weather, priority and multi-hit effects. Abilities and held items are excluded." },
+      { name: "Struggle", description: "Without supported moves or remaining PP: typeless 50 power with 25% max-HP recoil." },
       ...rules,
     ],
   };
+}
+
+/** Shared explicit fallback for the retained offline species provider/engine. */
+export function createStruggleMove(): Move {
+  return { id: "struggle", name: "Struggle", type: "Normal", category: "physical", power: 50, accuracy: 100, pp: 1, maxPp: 1 };
 }
