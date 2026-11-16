@@ -110,6 +110,14 @@ in order: switches first, then moves by speed.
   the timer is optional.
 - **Determinism.** Each battle runs from a per-match seed; a given sequence of
   choices replays identically.
+- **Canonical teams.** The server rebuilds level-50 combat definitions from the
+  embedded Pokédex, validates species uniqueness and locks queue selections.
+  Browser HP, stats, move definitions and PP never determine online combat.
+- **Exhausted moves.** Struggle replaces a creature's spent move list: typeless
+  50-power physical damage, no same-type bonus, and 25% max-HP recoil. Species
+  without a supported damaging move start with it.
+- **Rematches.** Both humans must request a new round after the previous round
+  ends. Each completed round contributes to server records exactly once.
 
 See [`game-mechanics.md`](game-mechanics.md) for the formulas, the full turn
 flow, the matchmaking rules and the HTTP API.

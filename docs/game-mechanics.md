@@ -11,7 +11,7 @@ the code actually does today.
 
 There are three battle systems, all authoritative on the Go server. They serve
 different screens and model the game at different depths. The live arena is the
-main mode: Find match on `/loadout` leads there.
+main mode: Champion on `/loadout` leads there; Squad of 3 opens the team battle.
 
 | | Live arena (`/battle/live`) | Team battle (`/battle`) | One-card duel (`/play`) |
 | --- | --- | --- | --- |
@@ -20,7 +20,7 @@ main mode: Find match on `/loadout` leads there.
 | Turn model | Real time, 20 ticks per second | Simultaneous hidden choice, resolved in speed order | Simultaneous hidden choice, damage applied together |
 | Actions | Move, aim, dodge, a basic and a special | PP-limited moves + switches | 2 attacks + an energy economy |
 | Opponent | A second human (matchmaking) | A second human (matchmaking), or the server AI | A second human (room code) |
-| Data | Every species in the Pokédex dataset | Creatures built from PokéAPI in the browser | Fictional cards in `cards.json` |
+| Data | Every species in the Pokédex dataset | Server-built level-50 creatures from the embedded Pokédex | Fictional cards in `cards.json` |
 
 All three are server-authoritative: the Go server owns every HP, energy, PP, faint
 and winner value, and the web client only displays what the server reports.
@@ -119,21 +119,32 @@ Served by `services/api/internal/livebattle`. The client side is
 
 ### Creatures and teams
 
-The client turns each chosen card into a `Creature` from PokéAPI data
-(`lib/battle/roster.ts` → `createCreature`): HP and stats (atk/def/spa/spd) are
-scaled to the creature's level, and each move starts at full PP. A team is 1
-creature (Champion 1v1) or 3 (Squad of 3, padded with shared rentals). Each
-player sends **their own** team to the server; in a single-player battle the
-client also sends the bot's team.
+The client submits species selections. The Go server rebuilds every creature
+from its embedded Pokédex at level 50: HP, stats, types, moves, PP and sprites
+cannot be overridden by browser-supplied values. Unknown species and duplicate
+base species are rejected. Queue format requires exactly one creature for
+Champion or three for Squad. Teams are locked when players pair; submitting a
+different team afterwards is rejected. Squad uses the selected lead, other
+distinct owned creatures, then shared rentals to fill the bench.
+
+Move selection uses actual damaging learnsets, favouring same-type moves and
+coverage. Sparse learnsets stay sparse rather than being padded with attacks
+the species cannot learn. The same construction applies to server AI battles.
+Optional PokéAPI presentation data preserves animated sprites, artwork and cry
+audio without replacing server stats or moves. If that short request fails,
+the server's sprite remains available and combat continues with its own data.
 
 ### Moves
 
 A move has a type, a category (**physical** uses atk/def, **special** uses
 spa/spd), a power, an accuracy, and PP. Using a move spends 1 PP. A move can
 **miss**: it lands only if `random(0,100) < accuracy`. A move with no PP left
-can't be chosen while another move still has PP; once **every** move is spent the
-creature may keep using them, a stand-in for the games' "Struggle" so a battle
-can never get stuck.
+can't be chosen. Once **every** move is spent, the server replaces the move list
+with **Struggle** and publishes that change to both clients. Species without a
+supported damaging move start with Struggle. This custom rule is a typeless,
+50-power physical attack with no same-type bonus and 25% max-HP recoil (at least
+1 HP); it also hits Ghost types. Recoil can knock out both remaining creatures
+for a draw. Struggle remains available without consuming PP.
 
 ### Damage
 
@@ -168,8 +179,8 @@ and `lib/battle/rules.ts` (`computeDamage`, used by the offline simulator).
    player (a "switching" request naming their side) while the other waits. Then
    the next turn opens for both.
 4. When a whole team has fainted, the battle ends. In speed order, the first
-   side to be wiped out loses before the other can act, so draws effectively
-   cannot happen here.
+   side to be wiped out loses before the other can act. Struggle recoil can
+   wipe out both sides on one action, producing a draw.
 
 ### The AI opponent
 
@@ -186,17 +197,20 @@ two-player matches can be rejoined.
 ### Two-player matches
 
 1. **Matchmaking** (`POST /api/queue`). Players are paired only with someone in
-   the **same format, card power tier and entry amount** (PRD: compare format and
-   power tier first, never pair different stakes); the longest-waiting
-   compatible player is chosen. If no rival appears within **90 seconds**, the
+   the **same format, team power tier and entry amount** (PRD: compare format and
+   power tier first, never pair different stakes) and a **rating within the
+   band** (see [Rating bands](#rating-bands)); the longest-waiting such player
+   is chosen. If no rival appears within **90 seconds**, the
    client withdraws from the queue and reports that no player was found. It checks once
    more after withdrawing, so a rival who matched at the last moment is never
-   left stranded. Searches expire after 2 minutes.
+   left stranded. Searches expire after 2 minutes. A team's tier is its highest
+   species tier, computed and checked by the server; client ratings and records
+   are replaced with the server's stored records.
 2. **Each side gets its own token.** Pairing creates the battle and returns a
    token for p1 and another for p2. A token can only act for its own side.
-3. **Teams.** Each player sends their own creatures (`POST …/team`). The battle
-   opens once both are in; if the opponent hasn't arrived after 30 seconds, the
-   waiting player is told to find another match.
+3. **Teams.** Pairing creates both canonical teams from the locked selections
+   and opens the battle. The compatibility `POST …/team` endpoint may confirm
+   those selections but cannot replace them after pairing.
 4. **One shared log.** The battle records every event in an append-only log.
    Both clients poll it (`GET …/events?since=N`, every 0.6 s) and render the
    same events, so both screens show the identical battle; each client just
@@ -208,8 +222,9 @@ two-player matches can be rejoined.
 6. **Refresh to rejoin.** Reloading the page reuses the saved ticket and token,
    reads the log from the start, applies the history instantly and animates only
    the current turn.
-7. **Rematch** is allowed once the battle is over, so neither player can reset a
-   match in progress.
+7. **Rematch** requires the battle to be over and both human players to consent.
+   One request records a vote; the second starts a new round. Each round records
+   its outcome once, so repeated polls cannot award duplicate wins.
 
 ### Determinism
 
@@ -235,6 +250,7 @@ down for display. Chat is cosmetic banter; the AI occasionally replies.
 | `GET /api/battles/{id}/events?since=N` | Read the shared log from cursor N (also enforces deadlines) |
 | `POST /api/battles/{id}/choice` | Submit your side's hidden move or switch |
 | `POST /api/battles/{id}/timer\|chat\|rematch` | Toggle the timer, chat, or restart after the end |
+| `POST /api/battles/{id}/forfeit` | Concede: the opponent wins with reason `forfeit`, ranked and sealed once |
 
 All battle endpoints after creation require `Authorization: Bearer <token>`.
 
@@ -242,7 +258,16 @@ All battle endpoints after creation require `Authorization: Bearer <token>`.
 
 `NEXT_PUBLIC_LIVE_BATTLE=0` explicitly selects the client-side
 `MockBattleStream` for offline demo matches. Without the Go API, normal
-matchmaking reports an error.
+matchmaking reports an error; it never silently switches to a simulation.
+
+The offline engine follows the server rules exactly: the same embedded Pokédex
+and move selection, level-50 teams with the species clause, the same damage
+formula (`rules.ts` mirrors `resolve.go`), PP spent per use, switching before
+moves, and typeless 50-power Struggle with 25% max-HP recoil once every move
+is spent. Faints resolve in the server's order (target, then recoil, then the
+attacker), so a Struggle recoil knock-out ends the battle the same way. The
+1.3 MB offline Pokédex is a separate chunk, loaded only when an offline battle
+starts. Offline results are never ranked or sealed.
 
 ---
 
@@ -273,8 +298,10 @@ browser sends or on PokéAPI being up mid-match.
   (the browser's name index). Re-run it when PokéAPI adds Pokémon, or after
   `npm run catalog` changes the card catalog. Responses are cached in `scripts/.cache/pokeapi/`
   (`--refresh` downloads again). Seven species (Ditto, Smeargle, Wobbuffet,
-  Wynaut, Pyukumuku, Cosmog and Cosmoem) learn no damaging move; the battle
-  engines give them standard Normal-type moves.
+  Wynaut, Pyukumuku, Cosmog and Cosmoem) learn no damaging move; every battle
+  engine gives them only Struggle (typeless, 50 power, 25% max-HP recoil).
+  Their signature mechanics (Transform, Sketch, Counter and so on) are not
+  implemented.
 
 ### Which Pokémon a card is
 
@@ -375,7 +402,8 @@ median between 5 and 10 seconds.
 
 - Find match on `/loadout` queues the selected card's fighter
   (`POST /api/arena-queue`). Players are paired only with the **same entry and
-  the same power tier**, then by the closest rating, so a Mewtwo never faces a
+  the same power tier** inside the [rating band](#rating-bands), then by the
+  closest rating, so a Mewtwo never faces a
   Magikarp. Abandoned searches expire after 20 seconds without a heartbeat.
 - **Guests** borrow tier-1 fighters (Pikachu, Charmander and the shared rental
   pool), so any two guests can be paired.
@@ -384,22 +412,122 @@ median between 5 and 10 seconds.
   in [Which Pokémon a card is](#which-pokémon-a-card-is): by set and number for
   catalog cards, by printed name otherwise ("Dark Charizard" from Team Rocket →
   Charizard). An NFT that isn't the selected fighter is refused.
+- **One card, one battle.** A verified NFT can back only one waiting search
+  or unfinished match at a time, across the arena queue, private arenas and the
+  team queue. A second entry is refused (409) until the first match ends or the
+  search is cancelled or expires. Rentals are unlimited.
+- **One wallet per team.** Every owned card in a Squad must be verified
+  against the same wallet, and one card can fill only one slot.
 - `GET /api/arena-cards` lists every fighter (1,214, gzipped to about 67 KB);
   `?ids=pikachu,charizard` returns just those, which is what the loadout uses.
   `/arena` lets anyone pick any fighter (searchable) and enter the same queue.
 
 ---
 
-## What is not modeled yet
+### Rating bands
 
-To keep the implemented mechanics honest about their scope, the engines do **not**
-include: status conditions (sleep/poison/burn/etc.), abilities, held items,
-weather/terrain, stat-stage changes, or multi-hit and priority moves.
-Matchmaking does not yet use rating bands or share player records (a real
-opponent shows as 0–0), and there are no spectators.
-Battles live **in server memory**: a server restart ends them (PRD R-01
-persistence is still open). Wallet login, NFT ownership/eligibility and staking
-live in other services and branches and do not change these rules.
+Both queues (PRD M-01) pair compatible players only when their server ratings
+are within a band. The band starts at ±100 Elo and widens by 50 for every 5
+seconds the longer-waiting player has searched: ±400 after 30 seconds, ±700
+after a minute, ±1,000 at the team queue's 90-second client limit. Close
+ratings therefore pair at once, while a lone high or low rated player still
+finds a match. Pairing is retried on every queue poll as well as on arrival, so
+two players who are already waiting pair as soon as the band covers them.
+Ratings are always the server's stored records (`rating_band.go`).
+
+## Server player records and community
+
+The Go server records completed human arena matches and team rounds exactly once.
+New public-name records start at 1200 Elo and zero wins, losses and draws. Elo
+uses K=32 and the usual expected score `1 / (1 + 10^((opponent-rating)/400))`;
+draws score 0.5. Both players' records and the result ID are saved together with
+an atomic file replacement. The API process uses `data/players.json` by default
+and accepts `PLAYER_STORE_PATH`. An unreadable or corrupt store prevents startup
+rather than silently resetting records. Matches are checkpointed separately
+(see [Persistence](#persistence)).
+
+`GET /api/ranks?player=<name>` and `GET /api/leaderboard` expose those records.
+There is no endpoint accepting client-submitted wins or Elo. Public names are
+local server identifiers, not verified accounts. Arena matchmaking replaces a
+submitted rating with the stored rating and chooses the closest compatible
+player, breaking equal distances by waiting time. Team pairing shares actual
+opponent records and uses format, highest species tier and entry compatibility.
+
+The community feed (`GET /api/community`) lists actual active human matches and
+live heartbeat/socket presence. Rooms share message history through
+`GET/POST /api/community/rooms/{room}/messages`; sending requires a room presence
+token. Presence expires when heartbeats stop. Chat and presence are in memory,
+and the landing feed has explicit empty and unavailable states. It does not seed
+players, wins, messages or live matches.
+
+An active arena also accepts authenticated
+`POST /api/arenas/{id}/forfeit`. It immediately awards the opponent, clears held
+inputs, broadcasts the same final result and records it once. Merely leaving the
+view keeps the previous behavior and does not silently forfeit the match.
+
+## Final results and match terms
+
+When two seats pair, the server fixes the match's **terms**: the entry both
+agreed to and, per seat, the verified NFT behind each creature (`""` for a
+rental). Terms are stored server-side, never sent to the opponent, and
+checkpointed with the match.
+
+A finished arena, team round or duel is sealed once into an immutable result
+signed with the server's Ed25519 referee key (`GET /api/referee`), and is
+fetched with a player token from `GET /api/{arenas|battles|matches}/{id}/result`.
+The result holds the mode, round, both players and their species, the winner
+and reason (knockout, timeout, forfeit or disconnect), rules and catalog
+versions, a SHA-256 state hash, the agreed `entryCents` and each seat's verified
+`assets`. Re-sealing a completed round with different data is refused. Results
+are always marked `funding: "unfunded"` and `settlement: "not_connected"`. A
+settlement consumer reads the stake and eligibility from the signed result, but
+deposits, escrow and payouts belong to the wagering integration.
+
+## Persistence
+
+The API checkpoints matches, queues and match terms to `GAME_STORE_PATH`
+(default `data/games.json`) after every HTTP mutation, about once a second
+during an arena, and at once when a match ends. Sealed results go to
+`RESULT_STORE_PATH` (`data/results.json`), signed with the key at
+`REFEREE_KEY_PATH` (`data/referee.key`, created on first start), so receipts
+issued before a restart still verify. On SIGINT/SIGTERM the server stops
+accepting requests and flushes a final checkpoint. A restored arena pauses
+until both players reconnect, with a fresh disconnect grace period. A corrupt or
+tampered store prevents startup rather than silently resetting games. This is a
+single-process store; it must not be shared by several API instances.
+
+## Deferred integrations preserved
+
+Wager deployment and Collector Crypt integration are intentionally skipped until
+their configuration is available. Existing marketplace, price, stake, auth
+fallback and offline demo features remain in the project. Their presence is not
+evidence of real transfers, verified vault custody or external market prices.
+Optional DAS collection discovery is available when configured; the previous
+two-Core-asset reader remains the fallback without that configuration.
+
+## Move effects and scope
+
+Team battles use the embedded Pokédex move effects for status conditions,
+confusion, stat stages, priority, multi-hit, drain, recoil, healing, flinch,
+critical-hit stages, one-hit KOs, forced switches and weather. The server
+chooses four supported moves per species and applies the effects; the battle
+feed carries each change to both clients. Abilities, held items, terrain,
+hazards, screens and one-off moves that need bespoke rules remain excluded.
+The real-time arena and energy-based duel keep their own documented rules.
+
+Finished matches appear under `/history` by public player name. Each result
+is signed and commits to a saved replay with its state hash. Team replays use
+the authoritative event log, duel replays use the complete turn record, and
+arena replays use the public state recorded each simulation tick. Replays and
+results survive a server restart when the result store is configured.
+There are no spectators (outside the first release, PRD §3).
+Rankings and opponent records come from server-adjudicated results rather
+than fabricated starting records. Public player names identify these local
+server records; they are not verified wallet accounts.
+Matches survive restarts on a single API process (see
+[Persistence](#persistence)). Wallet login (proving the caller controls the
+wallet that owns a card), NFT discovery and staking live in other services and
+do not change these rules.
 
 ## Code map
 
@@ -409,11 +537,12 @@ live in other services and branches and do not change these rules.
 | Pokédex lookups, card → species by set/number or name | `services/api/internal/pokedex/{pokedex,cards}.go` |
 | Card → species in the browser | `apps/web/lib/cards/mapping.ts` (catalog), `cardNames.ts` (any other card) |
 | Live arena — fighters from the Pokédex, damage | `services/api/internal/arena/fighters.go` |
-| Live arena — real-time simulation | `services/api/internal/arena/arena.go` |
+| Live arena — state and real-time simulation | `services/api/internal/arena/{arena,step}.go` |
 | Live arena HTTP, WebSocket and queue | `services/api/internal/server/{arena,queue}.go` |
 | Live arena UI | `apps/web/app/arena/page.tsx` (also `/battle/live`), `apps/web/lib/arena.ts` |
 | One-card engine | `services/api/internal/battle/{match,catalog,types}.go` |
 | Team engine — setup, lifecycle, event log | `services/api/internal/livebattle/engine.go` |
+| Team engine — canonical species, stats and moves | `services/api/internal/livebattle/team.go` |
 | Team engine — hidden choices, forced switches, timeouts | `services/api/internal/livebattle/choices.go` |
 | Team engine — turn resolution, damage, AI | `services/api/internal/livebattle/resolve.go` |
 | Team engine — event shapes | `services/api/internal/livebattle/events.go` |
@@ -424,3 +553,10 @@ live in other services and branches and do not change these rules.
 | Matchmaking client | `apps/web/lib/match/ServerMatchmakingService.ts` (`MockMatchmakingService` only in offline mode) |
 | Offline simulator | `apps/web/lib/battle/MockBattleStream.ts` |
 | Reducer + UI hook | `apps/web/lib/battle/BattleEngine.ts` |
+| Server rankings and persistent results | `services/api/internal/playerstore/store.go`, `services/api/internal/server/community_ranks.go` |
+| Rating bands (both queues) | `services/api/internal/server/rating_band.go` |
+| Match terms, one-card-one-battle eligibility | `services/api/internal/server/{match_terms,arena_eligibility}.go` |
+| Signed final results | `services/api/internal/resultstore/`, `services/api/internal/server/{results,result_handlers}.go` |
+| Team forfeit | `services/api/internal/livebattle/forfeit.go`, `services/api/internal/server/team_actions.go` |
+| Game checkpoints and restore | `services/api/internal/gamestore/`, `services/api/internal/server/persistence*.go` |
+| Offline Pokédex copy | `apps/web/scripts/build-offline-dex.mjs` → `apps/web/lib/pokemon/offlineDex.generated.json` |

@@ -1,6 +1,6 @@
 # Poke.fun
 
-A browser card-battle game with a Go referee. The main `/loadout` flow queues two players into a real-time, one-card arena at `/battle/live`. The earlier turn-based team battle remains at `/battle`, and the room-code duel remains at `/play`. Phantom Devnet sign-in and test-card reads are available. Paid entries shown in the UI are demos; the Solana wager contract under `contracts/` is not connected to matchmaking or settlement.
+A browser card-battle game with a Go referee. Choose Champion on `/loadout` for the real-time, one-card arena at `/battle/live`, or Squad of 3 for turn-based multiplayer at `/battle`. The room-code duel remains at `/play`. Phantom Devnet sign-in and test-card reads are available. Paid entries shown in the UI are demos; the Solana wager contract under `contracts/` is not connected to matchmaking or settlement.
 
 ## Repository layout
 
@@ -22,7 +22,8 @@ The Go server decides battle outcomes. The live arena simulates both players at 
 
 - **Live arena (`/battle/live`).** One level-50 fighter per player: any Pokémon (all 1,025 species plus Mega, Gigantamax, Primal and regional forms), with stats and moves derived from PokéAPI data. Any Pokémon card can battle, recognised by set and number or by its printed name. Players are only paired with the same power tier. Move, aim, dodge, and use basic and special attacks in real time. The server simulates movement and attacks at 20 ticks per second and broadcasts snapshots over WebSocket. Knock out the opponent within 90 seconds; a timeout compares remaining HP percentages.
 
-- **Team battle (`/battle`).** One creature (Champion 1v1) or three (Squad of 3). Each turn you pick a move or a switch. Switches happen first, then moves in speed order. Damage uses the creatures' PokéAPI stats with type effectiveness, a same-type bonus, accuracy, crits and limited PP. When a creature faints, only its owner chooses the replacement. The last player with a creature standing wins. Online matches run a 150-second turn clock that the server enforces.
+- **Team battle (`/battle`).** One creature (Champion 1v1) or three (Squad of 3). Each turn you pick a move or a switch. Switches happen first, then moves in priority and speed order. Damage uses the creatures' PokéAPI stats with type effectiveness, a same-type bonus, accuracy, crits and limited PP. Supported moves also apply status, stat, weather and multi-hit effects. When a creature faints, only its owner chooses the replacement. The last player with a creature standing wins. Online matches run a 150-second turn clock that the server enforces.
+- **History and replays (`/history`).** Finished matches are listed by public demo name. Signed results bind to saved team event logs, duel turns or arena tick frames and can be played back after a restart.
 - **One-card duel (`/play`).** Each card has a quick attack (free, builds one energy) and a heavy attack (costs two energy, carries the card's element). Both attacks land at the same time, so both cards can be knocked out together for a draw. A 60-second turn deadline auto-plays the quick attack.
 
 Read [`docs/game-mechanics.md`](docs/game-mechanics.md) for the full rules, formulas, matchmaking, API and where the Pokémon data comes from, and [`docs/battle-spec.md`](docs/battle-spec.md) for the terse canonical spec. The engines live in `services/api/internal/livebattle` and `services/api/internal/battle`.
@@ -47,14 +48,16 @@ npm run dev
 The frontend routes:
 
 - `/`: pixel-art landing page. Sign-in (Phantom or guest) opens in a dialog.
-- `/loadout`: pick a card, select a demo entry, and queue for the live arena. Every Pokémon card can fight; the panel shows its arena moves and tier.
+- `/loadout`: pick an owned card or an explicit rental, choose Champion or Squad, select an entry, and queue. Champion shows arena moves; Squad shows the three server-defined creatures and moves. Demo entry choices remain available without moving funds.
 - `/battle/live`: the real-time match opened automatically when two compatible players queue.
 - `/arena`: direct arena controls and match view.
 - `/battle`: the earlier turn-based team battle.
 - `/market` and `/collection`: the card marketplace and your card collection (mock data).
 - `/play`: the original one-card demo that talks to the Go API.
 
-To try a **two-player live arena**, open `http://localhost:3000/loadout` in two separate browser profiles. Pick fighters of the same power tier (guests get tier-1 rentals, so any two guests work) and the same demo entry in both, then click Find match. The first player waits until the second joins; each receives a separate seat in the same arena. The Go API must be running. The old team-battle queue remains available to code using `/api/queue`.
+To try a **two-player live arena**, open `http://localhost:3000/loadout` in two separate browser profiles. Pick Champion, fighters of the same power tier, and the same demo entry in both, then click Find match. The first player waits until the second joins; each receives a separate seat in the same arena. The Go API must be running. An active arena can be forfeited; the server awards the opponent and records the outcome once.
+
+For **Squad of 3**, choose Squad in both browsers and use the same entry and team tier (the highest species tier on each team). The selected lead and two distinct owned creatures or shared rentals form the squad. Matchmaking locks both selections and opens `/battle`; both players must agree before a completed match restarts. Unknown species, duplicate base species and browser-authored combat stats cannot alter the server's teams.
 
 For `/play`, open `http://localhost:3000/play` in two separate tabs. Create a match in one, copy its room code, and join in the other. Sessions are stored per tab. The API health endpoint is `http://localhost:8080/health`.
 
@@ -62,37 +65,49 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 ### Frontend integration seams
 
-`/loadout`, `/battle/live`, `/market` and `/collection` read data through typed interfaces in `apps/web/lib`. The live arena and its queue use the Go API. Marketplace and ratings remain demos.
+`/loadout`, `/battle/live`, `/market` and `/collection` read data through typed interfaces in `apps/web/lib`. Online combat, player records, community presence, room chat and the landing activity feed use the Go API. Marketplace, external prediction markets, pricing and unconfigured auth integrations retain their existing demo implementations while those integrations are deferred.
 
 | Seam | Interface | Current implementation | TODO |
 | --- | --- | --- | --- |
 | Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `ServerBattleStream` → Go API shared event log (polling); `MockBattleStream` offline | Push transport (WebSocket / QuickNode Streams) instead of polling |
-| Win odds | `OddsProvider`, `useOdds` (`lib/markets`) | `MockOddsProvider` | Gemini prediction markets |
+| Battle HP share | `OddsProvider`, `useOdds` (`lib/markets`) | Current team HP share, explicitly labelled as a heuristic; mock provider retained as an opt-in tool | External prediction market integration |
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
 | Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | `useMockBackend` (any 6-digit code) when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
 | Marketplace | `MarketplaceService`, `useMarketplace` (`lib/market`) | `MockMarketplaceService` (seeded catalog, localStorage) | Marketplace program on devnet |
 | SOL price | `SolPriceSource`, `useSolPrice` (`lib/market`) | `MockSolPriceSource` | Real price feed |
-| Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | `MockLobbyService`, `MockRoomChatService` | Presence and chat API |
+| Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | Go community presence and shared room messages | Durable chat history and verified identities |
 | Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | Devnet test collection plus marketplace demo cards; optional Core verification mode | Broader verified collection support |
 | Card → creature | `CARD_MAPPING`, `resolveCard` (`lib/cards/mapping.ts`) | Versioned table | Reviewed card list |
-| Creature data | `SpeciesService` (`lib/pokemon`) | Live PokéAPI, cached in memory + localStorage | — |
-| Rank | `RankService` (`lib/rank`) | `MockRankService` (localStorage Elo) | Go API ratings |
+| Creature data | `SpeciesService` (`lib/pokemon`) | Go embedded Pokédex for online play; PokéAPI provider retained for explicit offline play | Abilities, held items and bespoke one-off moves |
+| Rank | `RankService` (`lib/rank`) | Go API Elo from actual multiplayer results; persistent JSON records | Verified account identities and a database for multiple servers |
 | Entry and winnings | `StakeService` (`lib/stake`) | `MockStakeService` (no money moves) | Devnet USDC escrow, after legal review |
 | Matchmaking | `lib/arena.ts` and `lib/match` | Go `/api/arena-queue` for live play; `/api/queue` for older team battles | Persistent queues and verified ratings |
 
 Creature stats, moves and sprites come from [PokéAPI](https://pokeapi.co); card art comes from the Pokémon TCG API image CDN. Pokémon is a trademark of Nintendo / The Pokémon Company, so get a rights review before any public launch.
 
-Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run typecheck && npm run build`.
+Run backend tests with `cd services/api && go test ./...` and check the frontend with `cd apps/web && npm run test:battle && npm run typecheck && npm run build`.
 
 ## Next implementation steps
 
-1. Persist matches and the queue so a server restart doesn't end live battles, and define forfeit/refund rules.
+1. Define refund rules for unfinished funded matches (forfeits and disconnects already produce signed results).
 2. Verify wallet sign-in and ownership of supported card NFTs on the server.
-3. Add rating bands to matchmaking and share player records with opponents.
+3. Bind public player records to verified account identities (rating bands are implemented).
 4. Replace polling with a push transport (WebSocket) for battle updates.
 5. Add devnet escrow and settlement once the battle protocol is stable.
 
-Matches, team battles and the matchmaking queue are in memory and disappear when the API restarts. Player tokens are for this local demo only; do not use this code to hold stakes. Real-money or card staking requires legal review before a public launch. The Go server is currently a trusted referee.
+Matches, team battles, queues and their entry terms are checkpointed to `data/games.json` (`GAME_STORE_PATH`) and restored when the API restarts; signed final results are kept in `data/results.json` with the referee key in `data/referee.key` (`RESULT_STORE_PATH`, `REFEREE_KEY_PATH`). These are single-process files, not a shared database. A verified NFT can back only one search or unfinished match at a time. Player tokens are for this local demo only; do not use this code to hold stakes. Real-money or card staking requires legal review before a public launch. The Go server is currently a trusted referee.
+
+### Player records and community
+
+New records start at 1200 Elo with zero wins, losses and draws. Only the server records completed human battles; browser-submitted ratings and results do not award points. Outcomes are idempotent per match/round. The API stores player records in `data/players.json` relative to its working directory; set `PLAYER_STORE_PATH` to choose another file. This is a single-server store with atomic saves. Public player names identify these records and are not verified wallet accounts.
+
+The landing leaderboard and active-match list read actual server state and show empty or unavailable states when appropriate. Room chat uses shared server messages and heartbeat presence, not generated chatter. Presence and chat history remain in memory.
+
+### Optional card discovery
+
+The verified card route can discover all wallet assets in approved collections when `DAS_RPC_URL` and `APPROVED_COLLECTION_IDS` are configured. This removes the two-asset limit for that configured path. Without DAS configuration, the existing Pikachu/Charmander Core lookup remains intact. See [`apps/web/app/api/devnet-cards/README.md`](apps/web/app/api/devnet-cards/README.md).
+
+Wager deployment, Collector Crypt, marketplace transactions and integrations without credentials are preserved and deferred. This project still includes their demo providers and the explicit offline battle tools; it should not be described as entirely free of mocks.
 
 ### Card catalog and summon gallery
 
