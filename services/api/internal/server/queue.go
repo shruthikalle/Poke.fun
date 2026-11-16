@@ -1,7 +1,6 @@
 package server
 
 import (
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -21,6 +20,7 @@ type arenaQueueEntry struct {
 	lastSeen               time.Time
 	match                  *arenaSession
 	opponent               string
+	seat                   seatTerms // the verified NFT, if any, fixed at entry
 }
 
 const arenaQueueHeartbeatTimeout = 20 * time.Second
@@ -60,6 +60,7 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 		EntryCents int    `json:"entryCents"`
 		AssetID    string `json:"assetId"`
 		Wallet     string `json:"walletAddress"`
+		Rental     *bool  `json:"rental,omitempty"`
 	}
 	if !decode(w, r, &req) {
 		return
@@ -73,25 +74,11 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "card is not supported in the live arena")
 		return
 	}
-	if (req.AssetID == "") != (req.Wallet == "") {
-		writeError(w, http.StatusBadRequest, "assetId and walletAddress are required together")
+	if !s.verifyArenaAsset(w, r, req.CardID, req.AssetID, req.Wallet) {
 		return
 	}
-	if req.AssetID != "" {
-		if s.collectibles == nil {
-			writeError(w, http.StatusServiceUnavailable, "NFT reader is not configured")
-			return
-		}
-		card, err := s.collectibles.Read(r.Context(), req.AssetID, req.Wallet)
-		if err != nil {
-			writeCollectibleError(w, err)
-			return
-		}
-		if card.Attribute("Category") != "Pokemon" || nftSpecies(card) != req.CardID {
-			writeError(w, http.StatusForbidden, "NFT does not match the selected fighter")
-			return
-		}
-	}
+
+	req.Rating = s.playerRating(req.Name)
 	token, err := randomToken()
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "could not enter queue")
@@ -117,56 +104,81 @@ func (s *Server) enqueueArena(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	s.pruneWaitingQueue(now)
-	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, tier: fighter.Tier, rating: req.Rating, entryCents: req.EntryCents, created: now, lastSeen: now}
-	var best *arenaQueueEntry
-	for _, candidate := range s.arenaQueue {
-		// Same stake and same power tier (PRD: comparable cards first), then
-		// the closest rating.
-		if candidate.match != nil || candidate.entryCents != req.EntryCents || candidate.tier != fighter.Tier {
-			continue
-		}
-		if best == nil || math.Abs(float64(candidate.rating-req.Rating)) < math.Abs(float64(best.rating-req.Rating)) ||
-			(candidate.rating == best.rating && candidate.created.Before(best.created)) {
-			best = candidate
-		}
+	seat := seatTerms{Assets: []string{req.AssetID}}
+	if !s.claimAssetsLocked(w, seat) {
+		s.mu.Unlock()
+		return
 	}
+	entry := &arenaQueueEntry{id: id, token: token, playerToken: playerToken, name: strings.TrimSpace(req.Name), cardID: req.CardID, tier: fighter.Tier, rating: req.Rating, entryCents: req.EntryCents, created: now, lastSeen: now, seat: seat}
+	best := s.arenaOpponentLocked(entry, now)
+	s.arenaQueue[id] = entry
 	if best == nil {
-		s.arenaQueue[id] = entry
 		s.mu.Unlock()
 		writeJSON(w, http.StatusCreated, entry.response(true))
 		return
 	}
-	var matchID string
-	for {
-		matchID, err = randomCode()
-		if err != nil {
-			s.mu.Unlock()
-			writeError(w, http.StatusInternalServerError, "could not create match")
-			return
-		}
-		if s.arenas[matchID] == nil {
-			break
-		}
-	}
-	game, err := arena.New(matchID, best.name, best.cardID, best.playerToken)
-	if err == nil {
-		err = game.Join(entry.name, entry.cardID, entry.playerToken)
-	}
+	matchID, err := s.pairArenaLocked(best, entry)
 	if err != nil {
+		delete(s.arenaQueue, id)
 		s.mu.Unlock()
 		writeError(w, http.StatusInternalServerError, "could not create match")
 		return
 	}
-	s.arenas[matchID] = game
-	best.match = &arenaSession{ID: matchID, Token: best.playerToken, EntryCents: req.EntryCents}
-	best.opponent = entry.name
-	entry.match = &arenaSession{ID: matchID, Token: entry.playerToken, EntryCents: req.EntryCents}
-	entry.opponent = best.name
-	s.arenaQueue[id] = entry
 	response := entry.response(true)
 	s.mu.Unlock()
 	go s.runArena(matchID)
 	writeJSON(w, http.StatusCreated, response)
+}
+
+// arenaOpponentLocked picks a waiting opponent for entry: same entry amount and
+// power tier, a different name, within the rating band, then the closest
+// rating, breaking ties by waiting time. s.mu must be held.
+func (s *Server) arenaOpponentLocked(entry *arenaQueueEntry, now time.Time) *arenaQueueEntry {
+	var best *arenaQueueEntry
+	for _, candidate := range s.arenaQueue {
+		if candidate == entry || candidate.match != nil || candidate.entryCents != entry.entryCents || candidate.tier != entry.tier ||
+			strings.EqualFold(candidate.name, entry.name) ||
+			!withinRatingBand(candidate.rating, entry.rating, now.Sub(candidate.created), now.Sub(entry.created)) {
+			continue
+		}
+		distance := abs(candidate.rating - entry.rating)
+		if best == nil || distance < abs(best.rating-entry.rating) ||
+			(distance == abs(best.rating-entry.rating) && candidate.created.Before(best.created)) {
+			best = candidate
+		}
+	}
+	return best
+}
+
+// pairArenaLocked starts an arena between a waiting player (seat 1) and entry
+// (seat 2) and records the match terms. The caller starts the arena loop after
+// releasing s.mu.
+func (s *Server) pairArenaLocked(first, second *arenaQueueEntry) (string, error) {
+	var matchID string
+	for {
+		id, err := randomCode()
+		if err != nil {
+			return "", err
+		}
+		if s.arenas[id] == nil {
+			matchID = id
+			break
+		}
+	}
+	game, err := arena.New(matchID, first.name, first.cardID, first.playerToken)
+	if err == nil {
+		err = game.Join(second.name, second.cardID, second.playerToken)
+	}
+	if err != nil {
+		return "", err
+	}
+	s.arenas[matchID] = game
+	s.setTermsLocked(arenaTermsKey(matchID), matchTerms{EntryCents: first.entryCents, Seats: [2]seatTerms{first.seat, second.seat}})
+	first.match = &arenaSession{ID: matchID, Token: first.playerToken, EntryCents: first.entryCents}
+	first.opponent = second.name
+	second.match = &arenaSession{ID: matchID, Token: second.playerToken, EntryCents: second.entryCents}
+	second.opponent = first.name
+	return matchID, nil
 }
 
 func (s *Server) getArenaQueue(w http.ResponseWriter, r *http.Request) {
@@ -183,9 +195,27 @@ func (s *Server) getArenaQueue(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusGone, "queue entry expired; search again")
 		return
 	}
-	entry.lastSeen = time.Now()
+	now := time.Now()
+	entry.lastSeen = now
+	// The band widens while searching, so a poll may pair two waiting players.
+	matchID := ""
+	if entry.match == nil {
+		s.pruneWaitingQueue(now)
+		if waiter := s.arenaOpponentLocked(entry, now); waiter != nil {
+			id, err := s.pairArenaLocked(waiter, entry)
+			if err != nil {
+				s.mu.Unlock()
+				writeError(w, http.StatusInternalServerError, "could not create match")
+				return
+			}
+			matchID = id
+		}
+	}
 	response := entry.response(false)
 	s.mu.Unlock()
+	if matchID != "" {
+		go s.runArena(matchID)
+	}
 	writeJSON(w, http.StatusOK, response)
 }
 

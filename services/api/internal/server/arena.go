@@ -1,8 +1,8 @@
 package server
 
 import (
-	"compress/gzip"
 	"encoding/json"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -17,12 +17,15 @@ type arenaPeer struct {
 }
 
 func (s *Server) createArena(w http.ResponseWriter, r *http.Request) {
-	var req playerRequest
+	var req arenaPlayerRequest
 	if !decode(w, r, &req) {
 		return
 	}
 	if !validName(req.Name) {
 		writeError(w, http.StatusBadRequest, "name must be 1–24 characters")
+		return
+	}
+	if !s.verifyArenaAsset(w, r, req.CardID, req.AssetID, req.Wallet) {
 		return
 	}
 	token, err := randomToken()
@@ -32,6 +35,10 @@ func (s *Server) createArena(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	seat := seatTerms{Assets: []string{req.AssetID}}
+	if !s.claimAssetsLocked(w, seat) {
+		return
+	}
 	for {
 		code, err := randomCode()
 		if err != nil {
@@ -47,18 +54,22 @@ func (s *Server) createArena(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.arenas[code] = game
+		s.setTermsLocked(arenaTermsKey(code), matchTerms{Seats: [2]seatTerms{seat, {Assets: []string{}}}})
 		writeJSON(w, http.StatusCreated, map[string]string{"id": code, "token": token})
 		return
 	}
 }
 
 func (s *Server) joinArena(w http.ResponseWriter, r *http.Request) {
-	var req playerRequest
+	var req arenaPlayerRequest
 	if !decode(w, r, &req) {
 		return
 	}
 	if !validName(req.Name) {
 		writeError(w, http.StatusBadRequest, "name must be 1–24 characters")
+		return
+	}
+	if !s.verifyArenaAsset(w, r, req.CardID, req.AssetID, req.Wallet) {
 		return
 	}
 	token, err := randomToken()
@@ -74,11 +85,27 @@ func (s *Server) joinArena(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "arena not found")
 		return
 	}
+	if strings.EqualFold(game.Fighters[0].Name, strings.TrimSpace(req.Name)) {
+		s.mu.Unlock()
+		writeError(w, http.StatusConflict, "choose a different player name from your opponent")
+		return
+	}
+	seat := seatTerms{Assets: []string{req.AssetID}}
+	if !s.claimAssetsLocked(w, seat) {
+		s.mu.Unlock()
+		return
+	}
 	if err := game.Join(strings.TrimSpace(req.Name), req.CardID, token); err != nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusConflict, err.Error())
 		return
 	}
+	terms := s.terms[arenaTermsKey(id)]
+	if len(terms.Seats[0].Assets) == 0 {
+		terms.Seats[0].Assets = []string{""} // created before terms were recorded
+	}
+	terms.Seats[1] = seat
+	s.setTermsLocked(arenaTermsKey(id), terms)
 	s.broadcastArena(id)
 	s.mu.Unlock()
 	go s.runArena(id)
@@ -91,6 +118,12 @@ func (s *Server) getArena(w http.ResponseWriter, r *http.Request) {
 	if game == nil {
 		s.mu.Unlock()
 		writeError(w, http.StatusUnauthorized, "arena or player token not found")
+		return
+	}
+	game.ApplyDisconnectTimeout(time.Now())
+	if err := s.finishArena(game); err != nil {
+		s.mu.Unlock()
+		writeError(w, http.StatusServiceUnavailable, "arena result could not be saved; retry")
 		return
 	}
 	view := game.ViewFor(index)
@@ -112,17 +145,34 @@ func (s *Server) authenticatedArena(r *http.Request) (*arena.Game, int) {
 }
 
 func (s *Server) runArena(id string) {
+	s.mu.Lock()
+	game := s.arenas[id]
+	if game == nil || game.Running {
+		s.mu.Unlock()
+		return
+	}
+	game.Running = true
+	s.mu.Unlock()
+	defer func() { s.mu.Lock(); game.Running = false; s.mu.Unlock() }()
 	ticker := time.NewTicker(arena.TickMs * time.Millisecond)
 	defer ticker.Stop()
-	for range ticker.C {
+	for now := range ticker.C {
 		s.mu.Lock()
-		game := s.arenas[id]
-		if game == nil {
+		if s.arenas[id] != game {
 			s.mu.Unlock()
 			return
 		}
-		game.Step()
-		if game.Tick%2 == 0 || game.Winner != "" {
+		game.ApplyDisconnectTimeout(now)
+		if game.Ready() {
+			game.Step()
+		}
+		if err := s.finishArena(game); err != nil {
+			s.mu.Unlock()
+			log.Printf("finalize arena %s: %v", id, err)
+			continue
+		}
+		// Keep sending paused state and connection grace even when ticks stop.
+		if game.Tick%2 == 0 || !game.Ready() || game.Winner != "" {
 			s.broadcastArena(id)
 		}
 		finished := game.Winner != ""
@@ -136,6 +186,12 @@ func (s *Server) runArena(id string) {
 // broadcastArena is called with s.mu held; each viewer receives its own perspective.
 func (s *Server) broadcastArena(id string) {
 	game := s.arenas[id]
+	if game == nil {
+		return
+	}
+	if err := s.finishArena(game); err != nil {
+		return
+	}
 	for peer := range s.peers[id] {
 		view := game.ViewFor(peer.index)
 		select {
@@ -178,15 +234,22 @@ func (s *Server) arenaSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	if index < 0 {
 		s.mu.Unlock()
-		_ = conn.WriteJSON(map[string]string{"error": "invalid player token"})
+		_ = conn.WriteJSON(map[string]any{"error": "arena or player token not found", "status": 401})
 		return
 	}
+	game.ApplyDisconnectTimeout(time.Now())
+	if err := s.finishArena(game); err != nil {
+		s.mu.Unlock()
+		_ = conn.WriteJSON(map[string]any{"error": "arena result could not be saved; retry", "status": 503})
+		return
+	}
+	game.Connect(index, time.Now())
 	peer := &arenaPeer{index: index, updates: make(chan arena.View, 3)}
 	if s.peers[id] == nil {
 		s.peers[id] = make(map[*arenaPeer]struct{})
 	}
 	s.peers[id][peer] = struct{}{}
-	peer.updates <- game.ViewFor(index)
+	s.broadcastArena(id)
 	s.mu.Unlock()
 	go func() {
 		for view := range peer.updates {
@@ -210,7 +273,8 @@ func (s *Server) arenaSocket(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		if !connected && s.arenas[id] != nil {
-			s.arenas[id].SetInput(index, arena.Input{})
+			s.arenas[id].Disconnect(index, time.Now())
+			s.broadcastArena(id)
 		}
 		s.mu.Unlock()
 	}()
@@ -230,38 +294,4 @@ func (s *Server) arenaSocket(w http.ResponseWriter, r *http.Request) {
 		}
 		s.mu.Unlock()
 	}
-}
-
-// arenaCards lists every live-arena fighter (over 1,200, about 650 KB), or with
-// ?ids=pikachu,charmander just those, so a page that needs a few fighters
-// doesn't download the whole roster. Unknown ids are skipped.
-func arenaCards(w http.ResponseWriter, r *http.Request) {
-	ids := r.URL.Query().Get("ids")
-	if ids == "" {
-		writeCompressedJSON(w, r, arena.Cards())
-		return
-	}
-	cards := []arena.Card{}
-	for _, id := range strings.Split(ids, ",") {
-		if c, ok := arena.FindCard(strings.TrimSpace(id)); ok {
-			cards = append(cards, c)
-		}
-	}
-	writeJSON(w, http.StatusOK, cards)
-}
-
-// writeCompressedJSON gzips a large response for clients that accept it (every
-// browser does); the full fighter list shrinks by about 90%.
-func writeCompressedJSON(w http.ResponseWriter, r *http.Request, value any) {
-	if !strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
-		writeJSON(w, http.StatusOK, value)
-		return
-	}
-	w.Header().Set("Content-Type", "application/json")
-	w.Header().Set("Content-Encoding", "gzip")
-	w.Header().Add("Vary", "Accept-Encoding")
-	w.WriteHeader(http.StatusOK)
-	gz := gzip.NewWriter(w)
-	defer gz.Close()
-	_ = json.NewEncoder(gz).Encode(value)
 }

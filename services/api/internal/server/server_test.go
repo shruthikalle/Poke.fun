@@ -6,10 +6,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
 )
 
 func TestCreateJoinAndAttack(t *testing.T) {
 	handler := New("http://localhost:3000")
+	charmander, _ := battle.FindCard("charmander")
+	squirtle, _ := battle.FindCard("squirtle")
 	call := func(method, path, body, token string) *httptest.ResponseRecorder {
 		t.Helper()
 		req := httptest.NewRequest(method, path, bytes.NewBufferString(body))
@@ -20,7 +24,7 @@ func TestCreateJoinAndAttack(t *testing.T) {
 		handler.ServeHTTP(w, req)
 		return w
 	}
-	created := call("POST", "/api/matches", `{"name":"Alice","cardId":"emberfox"}`, "")
+	created := call("POST", "/api/matches", `{"name":"Alice","cardId":"charmander"}`, "")
 	if created.Code != http.StatusCreated {
 		t.Fatalf("create: %d %s", created.Code, created.Body.String())
 	}
@@ -31,7 +35,7 @@ func TestCreateJoinAndAttack(t *testing.T) {
 	if err := json.Unmarshal(created.Body.Bytes(), &alice); err != nil {
 		t.Fatal(err)
 	}
-	joined := call("POST", "/api/matches/"+alice.ID+"/join", `{"name":"Bob","cardId":"tidecub"}`, "")
+	joined := call("POST", "/api/matches/"+alice.ID+"/join", `{"name":"Bob","cardId":"squirtle"}`, "")
 	if joined.Code != http.StatusOK {
 		t.Fatalf("join: %d %s", joined.Code, joined.Body.String())
 	}
@@ -41,11 +45,11 @@ func TestCreateJoinAndAttack(t *testing.T) {
 	if err := json.Unmarshal(joined.Body.Bytes(), &bob); err != nil {
 		t.Fatal(err)
 	}
-	first := call("POST", "/api/matches/"+alice.ID+"/attacks", `{"attackId":"claw"}`, alice.Token)
+	first := call("POST", "/api/matches/"+alice.ID+"/attacks", `{"attackId":"`+charmander.Attacks[0].ID+`"}`, alice.Token)
 	if first.Code != http.StatusOK {
 		t.Fatalf("first attack: %d %s", first.Code, first.Body.String())
 	}
-	second := call("POST", "/api/matches/"+alice.ID+"/attacks", `{"attackId":"splash"}`, bob.Token)
+	second := call("POST", "/api/matches/"+alice.ID+"/attacks", `{"attackId":"`+squirtle.Attacks[0].ID+`"}`, bob.Token)
 	if second.Code != http.StatusOK {
 		t.Fatalf("second attack: %d %s", second.Code, second.Body.String())
 	}
