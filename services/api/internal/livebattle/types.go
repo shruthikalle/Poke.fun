@@ -1,11 +1,10 @@
-// Package livebattle is the authoritative engine for the rich team battle shown
-// at /battle. The web client builds creature teams from PokéAPI and sends them
-// here; the server decides every move outcome, damage, faint and winner and
-// returns the ordered events the client reducer already understands. It
-// replaces the client-side MockBattleStream so the server is the referee.
+// Package livebattle implements authoritative team combat using the embedded Pokédex.
 package livebattle
 
-import "github.com/shruthikalle/Poke.fun/services/api/internal/battle"
+import (
+	"github.com/shruthikalle/Poke.fun/services/api/internal/battle"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/pokedex"
+)
 
 // Wire types mirror apps/web/lib/battle/types.ts so JSON round-trips exactly.
 
@@ -13,11 +12,24 @@ type Move struct {
 	ID       string `json:"id"`
 	Name     string `json:"name"`
 	Type     string `json:"type"`
-	Category string `json:"category"` // "physical" | "special"
+	Category string `json:"category"` // "physical" | "special" | "status"
 	Power    int    `json:"power"`
 	Accuracy int    `json:"accuracy"`
 	PP       int    `json:"pp"`
 	MaxPP    int    `json:"maxPp"`
+	// Effect is the move's data-driven behaviour (nil for plain damage and Struggle).
+	Effect *pokedex.Effect `json:"effect,omitempty"`
+}
+
+// Boosts are stat stages from -6 to +6; they reset when the creature switches out.
+type Boosts struct {
+	Atk int `json:"atk,omitempty"`
+	Def int `json:"def,omitempty"`
+	Spa int `json:"spa,omitempty"`
+	Spd int `json:"spd,omitempty"`
+	Spe int `json:"spe,omitempty"`
+	Acc int `json:"acc,omitempty"`
+	Eva int `json:"eva,omitempty"`
 }
 
 type Sprites struct {
@@ -49,6 +61,13 @@ type Creature struct {
 	MaxHP    int      `json:"maxHp"`
 	Moves    []Move   `json:"moves"`
 	Fainted  bool     `json:"fainted"`
+	// Status is "", "burn", "poison", "toxic", "paralysis", "sleep" or "freeze";
+	// it persists through switching. StatusTurns counts sleep turns left, or the
+	// bad-poison damage step. Confused is the confusion turns left.
+	Status      string `json:"status,omitempty"`
+	StatusTurns int    `json:"statusTurns,omitempty"`
+	Confused    int    `json:"confused,omitempty"`
+	Boosts      Boosts `json:"boosts"`
 }
 
 type Trainer struct {

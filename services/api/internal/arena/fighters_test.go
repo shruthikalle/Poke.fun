@@ -17,18 +17,29 @@ func fighter(t *testing.T, id string) Card {
 }
 
 func TestEverySpeciesIsAValidFighter(t *testing.T) {
-	if len(Cards()) != len(pokedex.All()) {
+	if len(Cards()) != 1214 || len(Cards()) != len(pokedex.All()) {
 		t.Fatalf("%d fighters for %d species", len(Cards()), len(pokedex.All()))
 	}
 	for _, c := range Cards() {
+		species, _ := pokedex.Lookup(c.ID)
+		legal := map[string]bool{}
+		for _, m := range append(species.LevelUpMoves(), species.OtherLearnableMoves()...) {
+			legal[m.ID] = true
+		}
+		for _, m := range []Move{c.Basic, c.Special} {
+			if m.ID != "struggle" && !legal[m.ID] {
+				t.Errorf("%s illegal move %s", c.ID, m.ID)
+			}
+		}
+
 		switch {
 		case c.MaxHP <= 0, c.Speed < 170, c.Speed > 300, c.Tier < 1, c.Tier > 3, c.Sprite == "":
 			t.Errorf("%s has invalid stats: %+v", c.ID, c)
-		case c.Basic.Power != basicPower || c.Basic.Range != BasicRange || c.Basic.Damage < 1 || c.Basic.CooldownMs < 400:
+		case (c.Basic.ID != "struggle" && c.Basic.Power != basicPower) || c.Basic.Range != BasicRange || c.Basic.Damage < 1 || c.Basic.CooldownMs < 400:
 			t.Errorf("%s has an invalid basic move: %+v", c.ID, c.Basic)
 		case c.Special.Power <= 0 || c.Special.Damage < 1 || c.Special.Shape == "" || c.Special.CooldownMs < 3500:
 			t.Errorf("%s has an invalid special move: %+v", c.ID, c.Special)
-		case unusable[c.Basic.ID] || unusable[c.Special.ID] || c.Basic.ID == c.Special.ID:
+		case unusable[c.Basic.ID] || unusable[c.Special.ID] || (c.Basic.ID == c.Special.ID && c.Basic.ID != "struggle"):
 			t.Errorf("%s picked an unusable or duplicate move: %s / %s", c.ID, c.Basic.ID, c.Special.ID)
 		}
 	}
@@ -81,7 +92,7 @@ func TestMovePicksFollowTheSpecies(t *testing.T) {
 	if c := fighter(t, "abra"); c.Basic.Category != "special" || c.Special.Type != "Psychic" {
 		t.Errorf("abra (no damaging level-up moves) picked %s / %s", c.Basic.Name, c.Special.Name)
 	}
-	if c := fighter(t, "ditto"); c.Basic.ID != "tackle" || c.Special.ID != "body-slam" {
+	if c := fighter(t, "ditto"); c.Basic.ID != "struggle" || c.Special.ID != "struggle" {
 		t.Errorf("moveless ditto should use the fallback moves, got %s / %s", c.Basic.ID, c.Special.ID)
 	}
 }

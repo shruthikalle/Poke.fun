@@ -1,7 +1,7 @@
 // Package pokedex is the battle server's read-only Pokémon database: every
 // Pokémon species (default forms plus the alternate forms printed on cards),
-// with its types, base stats, sprite, power tier and every damaging move it can
-// learn, plus the card catalog's card → species mapping. It is imported from PokéAPI by scripts/build-pokedex.mjs
+// with its types, base stats, sprite, power tier, every move a battle engine can
+// use (with its team-battle effect) and its chosen team-battle moveset, plus the card catalog's card → species mapping. It is imported from PokéAPI by scripts/build-pokedex.mjs
 // into pokedex.json, which is embedded in the binary, so lookups need no
 // network and every server runs the same reviewed, versioned data (PRD N-02).
 package pokedex
@@ -42,20 +42,58 @@ type Species struct {
 	Tier    int      `json:"tier"` // 1–3; matchmaking only pairs equal tiers
 	Base    Stats    `json:"base"`
 	Sprite  string   `json:"sprite"`
-	// Learnset holds damaging level-up moves; OtherMoves the damaging moves it
+	// Learnset holds usable level-up moves; OtherMoves the usable moves it
 	// learns any other way (TM, tutor, egg). Either may be empty (e.g. Ditto).
 	Learnset   []Learned `json:"learnset"`
 	OtherMoves []string  `json:"otherMoves"`
+	// TeamMoves is the team-battle moveset chosen at import time
+	// (scripts/pokedex/teamMoves.mjs); empty means Struggle only.
+	TeamMoves []string `json:"teamMoves"`
 }
 
 type Move struct {
 	ID       string `json:"-"`
 	Name     string `json:"name"`
 	Type     string `json:"type"`
-	Category string `json:"category"` // "physical" or "special"
+	Category string `json:"category"` // "physical", "special" or "status"
 	Power    int    `json:"power"`
 	Accuracy int    `json:"accuracy"`
 	PP       int    `json:"pp"`
+	// Effect is the team battle's data-driven effect; nil when Unsupported
+	// names the behaviour the effect model can't run (see moveEffects.mjs).
+	Effect      *Effect `json:"effect,omitempty"`
+	Unsupported string  `json:"unsupported,omitempty"`
+}
+
+// Damaging moves have listed power; the arena and duel use only these.
+func (m Move) Damaging() bool { return m.Power > 0 && m.Category != "status" }
+
+// Effect is a move's team-battle behaviour, normalised from PokéAPI metadata.
+// Zero values mean "none"; chances are percentages.
+type Effect struct {
+	Priority        int            `json:"priority,omitempty"`
+	Target          string         `json:"target,omitempty"` // "self", "opponent" or "field"
+	Ailment         string         `json:"ailment,omitempty"`
+	AilmentChance   int            `json:"ailmentChance,omitempty"`
+	MinTurns        int            `json:"minTurns,omitempty"`
+	MaxTurns        int            `json:"maxTurns,omitempty"`
+	Stats           map[string]int `json:"stats,omitempty"` // atk, def, spa, spd, spe, acc, eva → stages
+	StatTarget      string         `json:"statTarget,omitempty"`
+	StatChance      int            `json:"statChance,omitempty"`
+	Drain           int            `json:"drain,omitempty"`   // % of damage dealt healed; negative is recoil
+	Healing         int            `json:"healing,omitempty"` // % of max HP; negative is an HP cost
+	Crit            int            `json:"crit,omitempty"`    // critical-hit stage
+	Flinch          int            `json:"flinch,omitempty"`
+	MinHits         int            `json:"minHits,omitempty"`
+	MaxHits         int            `json:"maxHits,omitempty"`
+	OHKO            bool           `json:"ohko,omitempty"`
+	ForceSwitch     bool           `json:"forceSwitch,omitempty"`
+	NeverMiss       bool           `json:"neverMiss,omitempty"`
+	Weather         string         `json:"weather,omitempty"`
+	WeatherHeal     bool           `json:"weatherHeal,omitempty"`
+	WeatherAccuracy string         `json:"weatherAccuracy,omitempty"`
+	Powder          bool           `json:"powder,omitempty"`
+	ThawsUser       bool           `json:"thawsUser,omitempty"`
 }
 
 type cardEntry struct {
@@ -145,11 +183,29 @@ func MoveByID(id string) (Move, bool) {
 	return m, ok
 }
 
-// LevelUpMoves resolves the species' level-up learnset to full moves.
-func (s Species) LevelUpMoves() []Move { return resolve(s.learnsetIDs()) }
+// LevelUpMoves resolves the species' damaging level-up moves (arena and duel).
+func (s Species) LevelUpMoves() []Move { return damaging(resolve(s.learnsetIDs())) }
 
-// OtherLearnableMoves resolves the moves learned by TM, tutor or egg.
-func (s Species) OtherLearnableMoves() []Move { return resolve(s.OtherMoves) }
+// OtherLearnableMoves resolves the damaging moves learned by TM, tutor or egg.
+func (s Species) OtherLearnableMoves() []Move { return damaging(resolve(s.OtherMoves)) }
+
+// TeamMoveList resolves the species' team-battle moveset.
+func (s Species) TeamMoveList() []Move { return resolve(s.TeamMoves) }
+
+// LearnableMoves includes supported status moves as well as attacks.
+func (s Species) LearnableMoves() []Move {
+	return append(resolve(s.learnsetIDs()), resolve(s.OtherMoves)...)
+}
+
+func damaging(moves []Move) []Move {
+	out := moves[:0:0]
+	for _, m := range moves {
+		if m.Damaging() {
+			out = append(out, m)
+		}
+	}
+	return out
+}
 
 func (s Species) learnsetIDs() []string {
 	ids := make([]string, len(s.Learnset))

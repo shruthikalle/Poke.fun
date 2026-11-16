@@ -7,7 +7,7 @@ import (
 )
 
 func TestMatchResolvesSimultaneousAttacks(t *testing.T) {
-	m, err := NewMatch("TESTCODE", "Alice", "emberfox", "alice-token")
+	m, err := newFixtureMatch("TESTCODE", "Alice", "emberfox", "alice-token")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -38,7 +38,7 @@ func TestMatchResolvesSimultaneousAttacks(t *testing.T) {
 }
 
 func TestMatchEndsWhenCardIsKnockedOut(t *testing.T) {
-	m, _ := NewMatch("TESTCODE", "Alice", "emberfox", "alice-token")
+	m, _ := newFixtureMatch("TESTCODE", "Alice", "emberfox", "alice-token")
 	_ = m.Join("Bob", "tidecub", "bob-token")
 	for m.Winner == "" {
 		move := "claw"
@@ -80,7 +80,7 @@ func TestTypeMultiplier(t *testing.T) {
 }
 
 func TestEffectivenessAndStab(t *testing.T) {
-	m, _ := NewMatch("TESTCODE", "Alice", "emberfox", "alice-token")
+	m, _ := newFixtureMatch("TESTCODE", "Alice", "emberfox", "alice-token")
 	_ = m.Join("Bob", "mossling", "bob-token")
 	m.Players[0].Energy = 2 // let Alice use her heavy Fire attack
 
@@ -103,7 +103,7 @@ func TestEffectivenessAndStab(t *testing.T) {
 }
 
 func TestSimultaneousKnockoutIsADraw(t *testing.T) {
-	m, _ := NewMatch("TESTCODE", "Alice", "emberfox", "alice-token")
+	m, _ := newFixtureMatch("TESTCODE", "Alice", "emberfox", "alice-token")
 	_ = m.Join("Bob", "emberfox", "bob-token")
 	for i := range m.Players {
 		m.Players[i].Energy = 2
@@ -120,7 +120,7 @@ func TestSimultaneousKnockoutIsADraw(t *testing.T) {
 }
 
 func TestMatchLocksRulesVersion(t *testing.T) {
-	m, _ := NewMatch("TESTCODE", "Alice", "emberfox", "alice-token")
+	m, _ := newFixtureMatch("TESTCODE", "Alice", "emberfox", "alice-token")
 	if m.RulesVersion != RulesVersion || m.CatalogVersion != CatalogVersion {
 		t.Fatalf("match did not record versions: %q / %q", m.RulesVersion, m.CatalogVersion)
 	}
@@ -131,7 +131,7 @@ func TestMatchLocksRulesVersion(t *testing.T) {
 }
 
 func TestTurnDeadlineAutoPlaysQuickAttack(t *testing.T) {
-	m, _ := NewMatch("TESTCODE", "Alice", "emberfox", "alice-token")
+	m, _ := newFixtureMatch("TESTCODE", "Alice", "emberfox", "alice-token")
 	_ = m.Join("Bob", "tidecub", "bob-token")
 
 	// Nothing is overdue yet.

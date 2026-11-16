@@ -44,12 +44,9 @@ var unusable = map[string]bool{
 	"future-sight": true, "doom-desire": true, // land two turns later
 }
 
-// Stand-ins for species that learn no usable damaging move (e.g. Ditto), the
-// same Normal-type moves the team battle falls back to.
-var (
-	fallbackBasic   = pokedex.Move{ID: "tackle", Name: "Tackle", Type: "Normal", Category: "physical", Power: 40, Accuracy: 100}
-	fallbackSpecial = pokedex.Move{ID: "body-slam", Name: "Body Slam", Type: "Normal", Category: "physical", Power: 85, Accuracy: 100}
-)
+// Struggle is an explicit fallback, never an invented learnset entry. It is
+// typeless, has no STAB, and recoils for one quarter of max HP on a landed hit.
+var fallbackStruggle = pokedex.Move{ID: "struggle", Name: "Struggle", Type: "Normal", Category: "physical", Power: 50, Accuracy: 100, PP: 1}
 
 type Move struct {
 	ID       string `json:"id"`
@@ -127,7 +124,9 @@ func newCard(s pokedex.Species) Card {
 	}
 	// Faster species attack more often: 450 ms / 4.5 s at base speed 90.
 	c.Basic = arenaMove(basic, BasicRange, int(clamp(roundTo(700-2.8*spe, 50), 400, 700)), "")
-	c.Basic.Power = basicPower
+	if basic.ID != "struggle" {
+		c.Basic.Power = basicPower
+	}
 	c.Special = arenaMove(special, map[string]float64{ShapeRadius: RadiusRange, ShapeCone: ConeRange}[shape], int(clamp(roundTo(6300-20*spe, 100), 3500, 6000)), shape)
 	reference := Card{Stats: Stats{Def: referenceStat, SpD: referenceStat}}
 	c.Basic.Damage = hitDamage(c, c.Basic, reference)
@@ -181,7 +180,15 @@ func pickBasic(s pokedex.Species) pokedex.Move {
 			return candidates[0]
 		}
 	}
-	return fallbackBasic
+	// Some species have damaging moves outside the preferred quick-power band.
+	for _, pool := range [][]pokedex.Move{s.LevelUpMoves(), s.OtherLearnableMoves()} {
+		for _, m := range pool {
+			if !unusable[m.ID] {
+				return m
+			}
+		}
+	}
+	return fallbackStruggle
 }
 
 // pickSpecial chooses the signature attack, by expected power (power ×
@@ -218,7 +225,7 @@ func pickSpecial(s pokedex.Species, basicID string) pokedex.Move {
 			}
 		}
 	}
-	return fallbackSpecial
+	return fallbackStruggle
 }
 
 // hitDamage applies the games' damage formula at level 50, without random
@@ -231,7 +238,7 @@ func pickSpecial(s pokedex.Species, basicID string) pokedex.Move {
 func hitDamage(attacker Card, m Move, target Card) int {
 	basic := m.Shape == ""
 	mult := 1.0
-	if !basic {
+	if !basic && m.ID != "struggle" {
 		mult = battle.Effectiveness(m.Type, target.Types)
 	}
 	if mult == 0 {
@@ -244,7 +251,7 @@ func hitDamage(attacker Card, m Move, target Card) int {
 	levelFactor := float64(2*FighterLevel/5 + 2)
 	base := levelFactor*float64(min(m.Power, maxPower))*float64(atk)/float64(def)/50 + 2
 	stab := 1.0
-	if !basic && slices.Contains(attacker.Types, m.Type) {
+	if !basic && m.ID != "struggle" && slices.Contains(attacker.Types, m.Type) {
 		stab = 1.5
 	}
 	return max(1, int(math.Round(base*stab*mult*damageScale)))

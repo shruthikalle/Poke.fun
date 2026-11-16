@@ -4,9 +4,11 @@
 // It covers every Pokémon: all species' default forms, plus the alternate forms
 // printed on cards (Alolan, Galarian, Hisuian and Paldean forms, Mega,
 // Gigantamax and Primal), plus any form the card catalog uses. For each one it
-// stores types, base stats, sprite, power tier and every damaging move it can
-// learn: level-up moves with their level, plus TM, tutor and egg moves. Each move
-// is stored once in a shared move table. The catalog's card →
+// stores types, base stats, sprite, power tier and every move it can learn that
+// a battle engine can use: level-up moves with their level, plus TM, tutor and
+// egg moves. Each move is stored once in a shared move table with its team-battle
+// effect (scripts/pokedex/moveEffects.mjs), and each species gets its chosen
+// team-battle moveset (scripts/pokedex/teamMoves.mjs). The catalog's card →
 // species mapping is copied too, so the server can check an NFT's set and number.
 //
 // It also writes apps/web/lib/cards/species.generated.json, a small name index the
@@ -21,6 +23,8 @@
 
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { importMoveData } from "./pokedex/moveEffects.mjs";
+import { teamMoves } from "./pokedex/teamMoves.mjs";
 
 const ROOT = new URL("..", import.meta.url).pathname;
 const CATALOG = resolve(ROOT, "apps/web/lib/cards/catalog.generated.json");
@@ -139,17 +143,7 @@ async function importSpecies(key) {
 }
 
 async function importMove(id) {
-  const m = await get(`/move/${id}`);
-  if (!m.power || !["physical", "special"].includes(m.damage_class.name)) return null; // status or variable-power move
-  return {
-    id,
-    name: english(m.names) ?? titleCase(m.name),
-    type: titleCase(m.type.name),
-    category: m.damage_class.name,
-    power: m.power,
-    accuracy: m.accuracy ?? 100, // moves that never miss have no accuracy
-    pp: m.pp ?? 10,
-  };
+  return importMoveData(id, await get(`/move/${id}`));
 }
 
 const catalog = JSON.parse(await readFile(CATALOG, "utf8"));
@@ -174,14 +168,15 @@ console.log(`Importing ${moveIds.length} moves…`);
 const moves = Object.fromEntries((await mapLimit(moveIds, importMove)).filter(Boolean).map((m) => [m.id, m]));
 
 for (const s of species) {
-  // Keep only damaging moves, in a stable order so re-imports diff cleanly.
+  // Keep only usable moves, in a stable order so re-imports diff cleanly.
   s.learnset = s.learnset.filter((l) => moves[l.move]).sort((a, b) => a.level - b.level || a.move.localeCompare(b.move));
   s.otherMoves = s.otherMoves.filter((id) => moves[id]).sort();
+  s.teamMoves = teamMoves(s, moves);
 }
-// A few species (Ditto, for one) only learn non-damaging moves. That is real data,
-// so keep them; the battle engines fall back to standard Normal-type moves.
-const moveless = species.filter((s) => !s.learnset.length && !s.otherMoves.length).map((s) => s.key);
-if (moveless.length) console.warn(`No damaging moves (engines use fallback moves): ${moveless.join(", ")}`);
+// A few species (Ditto, for one) learn no supported damaging move. That is real
+// data, so keep them; every battle engine gives them only Struggle.
+const moveless = species.filter((s) => !s.teamMoves.length).map((s) => s.key);
+if (moveless.length) console.warn(`No supported damaging moves (engines use Struggle): ${moveless.join(", ")}`);
 species.sort((a, b) => a.dex - b.dex || a.key.localeCompare(b.key));
 
 const dataset = {
