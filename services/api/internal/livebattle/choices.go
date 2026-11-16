@@ -46,9 +46,8 @@ func (b *Battle) forcedSwitch(side string, choice Choice) error {
 	if choice.Kind != "switch" || !b.validSwitch(b.sides[side], choice.TeamIndex) {
 		return fmt.Errorf("%w: must switch in a healthy creature", ErrInvalidChoice)
 	}
-	b.sides[side].ActiveIndex = choice.TeamIndex
 	b.switchQueue = b.switchQueue[1:]
-	b.record(evResolving(), evSwitch(side, choice.TeamIndex))
+	b.record(evResolving(), b.switchIn(side, choice.TeamIndex))
 	b.record(b.nextDecision()...)
 	return nil
 }
@@ -121,10 +120,8 @@ func (b *Battle) validateChoice(side *SideState, choice Choice) error {
 		if choice.MoveIndex < 0 || choice.MoveIndex >= len(moves) {
 			return ErrInvalidChoice
 		}
-		// A spent move is only allowed once every move is spent, so a creature
-		// that has run out of PP can still fight (a stand-in for "Struggle")
-		// instead of leaving the battle stuck.
-		if moves[choice.MoveIndex].PP <= 0 && hasPP(moves) {
+		// Exhaustion installs the explicit Struggle move; spent attacks cannot execute.
+		if moves[choice.MoveIndex].PP <= 0 {
 			return ErrInvalidChoice
 		}
 	default:

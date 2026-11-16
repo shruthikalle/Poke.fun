@@ -58,7 +58,7 @@ export class ServerBattleStream implements BattleStreamSource {
   private token = "";
   private feed: BattleFeed | null = null;
   private joinedAt = 0;
-  // Single player with the server unreachable: play the offline simulation.
+  // Retained compatibility for explicitly enabled offline demos only.
   private offline: MockBattleStream | null = null;
   private offlineUnsub: Unsubscribe | null = null;
 
@@ -72,7 +72,8 @@ export class ServerBattleStream implements BattleStreamSource {
   private optimistic = false; // whether we showed a lock-in for pendingChoice
 
   private commitTimer: ReturnType<typeof setTimeout> | null = null;
-  private tick: ReturnType<typeof setInterval> | null = null;
+  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private connected = false;
   private timerEnabled = false;
   private secondsLeft = TURN_SECONDS;
   private lastChat = 0;
@@ -95,39 +96,42 @@ export class ServerBattleStream implements BattleStreamSource {
 
   private async start() {
     try {
-      if (this.opts.mode === "ai") {
+      if (this.opts.mode === "ai" && !this.id) {
         const { mode, you, opponent, teams, format, seed } = this.opts;
         const r = await apiRequest("POST", "/api/battles", { mode, you, opponent, teams, format, seed: seed ?? 0 });
         Object.assign(this, { id: r.id, token: r.token, side: r.side });
-      } else {
+      } else if (this.opts.mode === "pvp") {
         Object.assign(this, { id: this.opts.battleId, token: this.opts.token, side: this.opts.side });
         await this.submitTeam();
       }
       if (!this.listener) return; // disconnected while starting
       this.joinedAt = Date.now();
-      this.feed = new BattleFeed(this.id, this.token, this.side, (batch) => this.receive(batch));
+      this.feed = new BattleFeed(this.id, this.token, this.side, (batch) => this.receive(batch), (state, message) => {
+        this.connected = state === "online";
+        this.opts.onStatus?.(state === "online" ? "" : state === "expired" ? `${message ?? "Battle session expired"}. Return to loadout to find a match.` : message ?? "Connecting to your battle…");
+      });
       this.feed.start();
-      this.startTicker();
-    } catch {
-      if (this.opts.mode === "ai" && this.listener) {
+    } catch (error) {
+      if (process.env.NEXT_PUBLIC_LIVE_BATTLE === "0" && this.opts.mode === "ai" && this.listener) {
         const { you, opponent, teams, format } = this.opts;
         this.offline = new MockBattleStream({ you, opponent, teams, format, speed: this.speed });
         this.offlineUnsub = this.offline.connect(this.listener);
         return;
       }
-      this.opts.onStatus?.("Couldn't reach the battle server. Start the Go API on :8080 and reopen the match.");
+      if (this.listener && !(error instanceof ApiError && [401, 403, 404, 410].includes(error.status)) && (this.opts.mode === "pvp" || this.id)) {
+        this.opts.onStatus?.("Connection interrupted. Reconnecting to your saved battle…");
+        this.reconnectTimer = setTimeout(() => { if (this.listener) void this.start(); }, 1500);
+        return;
+      }
+      this.opts.onStatus?.(`Couldn't connect to the battle server: ${error instanceof Error ? error.message : "network error"}. Reopen the match to retry.`);
     }
   }
 
   /** Two-player only: send our team. After a refresh the team is already locked, which is fine. */
   private async submitTeam() {
     if (this.opts.mode !== "pvp") return;
-    try {
-      await apiRequest("POST", `/api/battles/${this.id}/team`, { team: this.opts.team, format: this.opts.format }, this.token);
-    } catch (e) {
-      if (!(e instanceof ApiError) || e.status >= 500) throw e;
-    }
-    this.opts.onStatus?.("Waiting for your opponent to bring their team…");
+    await apiRequest("POST", `/api/battles/${this.id}/team`, { team: this.opts.team, format: this.opts.format }, this.token);
+    this.opts.onStatus?.("Connecting to your matched battle…");
   }
 
   private receive({ instant, paced, started }: FeedBatch) {
@@ -140,7 +144,7 @@ export class ServerBattleStream implements BattleStreamSource {
 
   choose(choice: BattleChoice): void {
     if (this.offline) return this.offline.choose(choice);
-    if (this.over || this.pendingChoice || !this.awaiting) return;
+    if (!this.connected || this.over || this.pendingChoice || !this.awaiting) return;
     this.pendingChoice = choice;
     this.awaiting = false;
     // A forced switch is sent at once: no lock-in banner, nothing to cancel.
@@ -225,6 +229,7 @@ export class ServerBattleStream implements BattleStreamSource {
   private apply(event: BattleEvent) {
     switch (event.type) {
       case "init": // a new battle or a rematch
+        this.opts.onStatus?.("");
         this.over = false;
         this.awaiting = false;
         this.needsSwitch = false;
@@ -249,24 +254,15 @@ export class ServerBattleStream implements BattleStreamSource {
     this.emit(event);
   }
 
-  /**
-   * Counts the turn clock down for display. The server enforces the deadline
-   * (it auto-plays a stalled side on the next poll), so the client never has to.
-   */
-  private startTicker() {
-    this.tick = setInterval(() => {
-      if (!this.timerEnabled || this.over) return;
-      this.secondsLeft = Math.max(0, this.secondsLeft - 1);
-      this.emit({ type: "timer", enabled: true, secondsLeft: this.secondsLeft });
-    }, 1000);
-  }
-
+  // Timer display is updated only by server events. An interrupted connection
+  // must not continue counting down or invent battle progress.
   private clearAll() {
     this.pacer.clear();
     this.feed?.stop();
     if (this.commitTimer) clearTimeout(this.commitTimer);
-    if (this.tick) clearInterval(this.tick);
-    this.commitTimer = this.tick = null;
+    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+    this.commitTimer = this.reconnectTimer = null;
+    this.connected = false;
   }
 
   /** Emit immediately, outside the pacer (optimistic feedback, notes and the timer). */

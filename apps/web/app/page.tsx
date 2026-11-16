@@ -2,15 +2,15 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { preload } from "react-dom";
 import { AccountChip } from "../components/AccountChip";
 import { Emblem } from "../components/Emblem";
 import { PixelAvatar } from "../components/PixelAvatar";
-import { FORMAT_LABEL } from "../lib/cards/mapping";
+import { useLobby } from "../lib/lobby/useLobby";
 import { useMotionPreference } from "../lib/motion";
 import { speciesService } from "../lib/pokemon/SpeciesService";
-import { tierFor } from "../lib/rank/RankService";
+import { getLeaderboard, tierFor, type Leaderboard } from "../lib/rank/RankService";
 import { useWallet } from "../lib/wallet/WalletProvider";
 import styles from "./landing.module.css";
 
@@ -22,17 +22,11 @@ const NAV = [
 
 const SOCIALS = [
   { href: "https://github.com/shruthikalle/Poke.fun", label: "GitHub" },
-  { href: "https://discord.com", label: "Discord" },
-  { href: "https://x.com", label: "X" },
+  { href: process.env.NEXT_PUBLIC_DISCORD_URL, label: "Discord" },
+  { href: process.env.NEXT_PUBLIC_X_URL, label: "X" },
 ];
 
 const SPRITE = (dex: number) => `https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/${dex}.png`;
-
-const LIVE_BATTLES = [
-  { a: { trainer: "thar07", mon: "Gengar", dex: 94 }, b: { trainer: "mossy_mo", mon: "Kangaskhan", dex: 115 }, turn: 7, format: FORMAT_LABEL.champion },
-  { a: { trainer: "kiwi.k", mon: "Pikachu", dex: 25 }, b: { trainer: "drillbit", mon: "Charizard", dex: 6 }, turn: 3, format: FORMAT_LABEL.squad },
-  { a: { trainer: "pyrefly", mon: "Mewtwo", dex: 150 }, b: { trainer: "ottergirl", mon: "Blastoise", dex: 9 }, turn: 12, format: FORMAT_LABEL.champion },
-];
 
 const SCREEN_ROSTER = ["pikachu", "charizard", "gengar", "mewtwo", "eevee", "blastoise"];
 
@@ -41,14 +35,6 @@ const FLOODLIGHTS = [
   { x: 22.8, y: 11.8, tilt: 9 },
   { x: 77.2, y: 11.8, tilt: -9 },
   { x: 91.2, y: 8.6, tilt: -18 },
-];
-
-const LEADERS = [
-  { name: "pyrefly", rating: 1842, record: "128–41" },
-  { name: "ottergirl", rating: 1797, record: "102–39" },
-  { name: "thar07", rating: 1765, record: "88–35" },
-  { name: "kiwi.k", rating: 1720, record: "140–77" },
-  { name: "drillbit", rating: 1688, record: "64–30" },
 ];
 
 const MOTES = Array.from({ length: 14 }, (_, i) => i);
@@ -169,6 +155,22 @@ function SocialIcon({ name }: { name: string }) {
 export default function Landing() {
   const router = useRouter();
   const { playerName, signIn } = useWallet();
+  const lobby = useLobby();
+  const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
+  const [leaderboardError, setLeaderboardError] = useState(false);
+  useEffect(() => {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        const result = await getLeaderboard();
+        if (active) { setLeaderboard(result); setLeaderboardError(false); }
+      } catch { if (active) { setLeaderboard(null); setLeaderboardError(true); } }
+      if (active) timer = setTimeout(() => void poll(), 10000);
+    };
+    void poll();
+    return () => { active = false; clearTimeout(timer); };
+  }, []);
   const motion = useMotionPreference();
   const paused = motion.reduced;
 
@@ -193,6 +195,7 @@ export default function Landing() {
             {NAV.map((n) => <a key={n.href} href={n.href}>{n.label}</a>)}
             <Link href="/market">Marketplace</Link>
             <Link href="/collection">My Cards</Link>
+            <Link href="/history">History</Link>
             <Link href="/loadout">Play</Link>
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
@@ -216,7 +219,7 @@ export default function Landing() {
         <div className={styles.corner}>
           <ul className={styles.rail} aria-label="Social links">
             {SOCIALS.map((s) => (
-              <li key={s.label}><a href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label}><SocialIcon name={s.label} />{s.label.length > 1 && <span>{s.label}</span>}</a></li>
+              <li key={s.label}>{s.href ? <a href={s.href} target="_blank" rel="noreferrer" aria-label={s.label} title={s.label}><SocialIcon name={s.label} />{s.label.length > 1 && <span>{s.label}</span>}</a> : <span title={`${s.label} account has not been configured`}><SocialIcon name={s.label} /> {s.label}</span>}</li>
             ))}
           </ul>
           <button className={styles.pause} onClick={() => motion.setPaused(!paused)} aria-pressed={paused}>
@@ -258,16 +261,18 @@ export default function Landing() {
         <section id="battles" className={styles.section}>
           <p className="pf-eyebrow">Happening now</p>
           <h2>Live battles</h2>
+          {!lobby ? <p role="status">Live server data unavailable. Reconnecting…</p> : <p>{lobby.usersOnline} online · {lobby.activeBattles} active battles</p>}
+          {lobby && lobby.liveBattles.length === 0 && <p>No active battles yet. Find a rival to start one.</p>}
           <ul className={styles.live}>
-            {LIVE_BATTLES.map((b) => (
-              <li key={b.a.trainer}>
+            {(lobby?.liveBattles ?? []).map((b) => (
+              <li key={b.roomId ?? b.id}>
                 <span className={styles.dot} />
-                <img src={SPRITE(b.a.dex)} alt="" width={48} height={48} className={styles.flip} />
-                <span className={styles.side}><strong>{b.a.mon}</strong><small>{b.a.trainer}</small></span>
+                <img src={`/trainers/${b.trainers[0].avatar}.png`} alt="" width={48} height={48} />
+                <span className={styles.side}><strong>{b.trainers[0].name}</strong></span>
                 <b className={styles.vsSmall}>vs</b>
-                <img src={SPRITE(b.b.dex)} alt="" width={48} height={48} />
-                <span className={styles.side}><strong>{b.b.mon}</strong><small>{b.b.trainer}</small></span>
-                <em>{b.format} · Turn {b.turn}</em>
+                <img src={`/trainers/${b.trainers[1].avatar}.png`} alt="" width={48} height={48} />
+                <span className={styles.side}><strong>{b.trainers[1].name}</strong></span>
+                <em>{b.format} · {b.kind === "arena" ? `${b.turn}s elapsed` : `Turn ${b.turn}`}</em>
                 <Link href="/loadout">Play</Link>
               </li>
             ))}
@@ -275,14 +280,18 @@ export default function Landing() {
         </section>
 
         <section id="leaderboard" className={styles.section}>
-          <p className="pf-eyebrow">This season</p>
+          <p className="pf-eyebrow">This server</p>
           <h2>Leaderboard</h2>
+          <p>{leaderboard?.namespace ?? "Public demo names on this server; names are not verified accounts."}</p>
           <table className={styles.table}>
             <thead><tr><th>#</th><th>Trainer</th><th>Rank</th><th>Rating</th><th>W–L</th></tr></thead>
             <tbody>
-              {LEADERS.map((l, i) => <tr key={l.name}><td>{i + 1}</td><td>{l.name}</td><td><span className={styles.tier} data-tier={tierFor(l.rating)}>{tierFor(l.rating)}</span></td><td>{l.rating}</td><td>{l.record}</td></tr>)}
+              {!leaderboard && <tr><td colSpan={5} role="status">{leaderboardError ? "Leaderboard unavailable. Reconnecting…" : "Loading server rankings…"}</td></tr>}
+              {leaderboard?.entries.length === 0 && <tr><td colSpan={5}>No completed PvP battles yet.</td></tr>}
+              {leaderboard?.entries.map((l, i) => <tr key={l.name}><td>{i + 1}</td><td>{l.name}</td><td><span className={styles.tier} data-tier={tierFor(l.rating)}>{tierFor(l.rating)}</span></td><td>{l.rating}</td><td>{l.wins}–{l.losses}{l.draws ? ` · ${l.draws} draws` : ""}</td></tr>)}
             </tbody>
           </table>
+          <p><Link href="/history">Browse match history and replays →</Link></p>
         </section>
 
         <footer className={styles.footer}>

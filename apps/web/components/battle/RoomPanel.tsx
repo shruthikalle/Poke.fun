@@ -8,7 +8,7 @@ import { nameColor } from "./format";
 import styles from "./battle.module.css";
 
 export function RoomPanel({ room, playerName }: { room: ChatRoom; playerName: string }) {
-  const { messages, send } = useRoomChat(room.id);
+  const { messages, send, error, users } = useRoomChat(room.id);
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
     ref.current?.scrollTo({ top: ref.current.scrollHeight, behavior: "smooth" });
@@ -16,11 +16,13 @@ export function RoomPanel({ room, playerName }: { room: ChatRoom; playerName: st
   return (
     <section className={styles.logPanel} aria-label={`${room.name} chat`}>
       <div className={styles.logHead}>
-        <span className={styles.usersTab}>{room.users} users</span>
+        <span className={styles.usersTab}>{error ? "—" : users ?? room.users} users</span>
         <strong className={styles.roomTitle}>{room.name}</strong>
       </div>
       <div ref={ref} className={styles.log} role="log" aria-live="polite">
         <div className={styles.formatBlock}><em>{room.description}</em></div>
+        <p>Public demo names · chat is shared on this server.</p>
+        {error ? <p role="status">{error}</p> : messages.length === 0 ? <p>No messages yet.</p> : null}
         {messages.map((m) => (
           <div key={m.id} className={styles.logChat}>
             <small className={styles.time}>[{new Date(m.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}]</small>{" "}

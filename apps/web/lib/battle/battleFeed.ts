@@ -1,7 +1,9 @@
-import { apiRequest } from "./battleApi";
+import { ApiError, apiRequest } from "./battleApi";
 import type { BattleEvent, Side } from "./types";
 
 const POLL_MS = 600;
+
+export type BattleConnection = "connecting" | "online" | "reconnecting" | "expired";
 
 export interface FeedBatch {
   /** Events to apply at once: the backlog when (re)joining mid-battle. */
@@ -21,6 +23,7 @@ export interface FeedBatch {
 export class BattleFeed {
   private cursor = 0;
   private inflight = false;
+  private interrupted = false;
   private timer: ReturnType<typeof setInterval> | null = null;
 
   constructor(
@@ -28,9 +31,12 @@ export class BattleFeed {
     private readonly token: string,
     private readonly side: Side,
     private readonly onBatch: (batch: FeedBatch) => void,
+    private readonly onConnection?: (state: BattleConnection, message?: string) => void,
   ) {}
 
   start() {
+    if (this.timer) return;
+    this.onConnection?.("connecting");
     this.timer = setInterval(() => void this.poll(), POLL_MS);
     void this.poll();
   }
@@ -47,12 +53,20 @@ export class BattleFeed {
     try {
       const r = await apiRequest("GET", `/api/battles/${this.battleId}/events?since=${this.cursor}`, undefined, this.token);
       if (!this.timer) return; // stopped while the request was in flight
+      this.onConnection?.("online");
+      if (r.cursor < this.cursor) { this.cursor = 0; this.interrupted = true; return; }
       const firstFetch = this.cursor === 0;
       this.cursor = r.cursor;
       const events = (r.events as BattleEvent[]).map((e) => this.localize(e));
-      this.onBatch({ ...(firstFetch ? catchUp(events) : { instant: [], paced: events }), started: r.started });
-    } catch {
-      /* transient network error: the next poll retries from the same cursor */
+      this.onBatch({ ...((firstFetch || this.interrupted) ? catchUp(events) : { instant: [], paced: events }), started: r.started });
+      this.interrupted = false;
+    } catch (cause) {
+      if (!this.timer) return;
+      this.interrupted = true;
+      if (cause instanceof ApiError && [401, 403, 404, 410].includes(cause.status)) {
+        this.stop();
+        this.onConnection?.("expired", cause.message);
+      } else this.onConnection?.("reconnecting", "Connection interrupted. Reconnecting to your saved battle…");
     } finally {
       this.inflight = false;
     }

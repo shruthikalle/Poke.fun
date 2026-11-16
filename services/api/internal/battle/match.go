@@ -3,10 +3,15 @@ package battle
 import (
 	"errors"
 	"math"
+	"slices"
+	"strings"
 	"time"
+	"unicode"
 )
 
 var (
+	ErrInvalidName   = errors.New("name must be 1–24 characters without control characters")
+	ErrSameName      = errors.New("opponent must use a different player name")
 	ErrInvalidCard   = errors.New("unknown card")
 	ErrMatchFull     = errors.New("match is full")
 	ErrNotReady      = errors.New("waiting for a second player")
@@ -70,6 +75,10 @@ type View struct {
 }
 
 func NewMatch(id, name, cardID, token string) (*Match, error) {
+	name = strings.TrimSpace(name)
+	if !validPlayerName(name) {
+		return nil, ErrInvalidName
+	}
 	card, ok := FindCard(cardID)
 	if !ok {
 		return nil, ErrInvalidCard
@@ -85,6 +94,13 @@ func NewMatch(id, name, cardID, token string) (*Match, error) {
 }
 
 func (m *Match) Join(name, cardID, token string) error {
+	name = strings.TrimSpace(name)
+	if !validPlayerName(name) {
+		return ErrInvalidName
+	}
+	if strings.EqualFold(name, m.Players[0].Name) {
+		return ErrSameName
+	}
 	if m.Players[1] != nil {
 		return ErrMatchFull
 	}
@@ -145,6 +161,9 @@ func (m *Match) ViewFor(index int) View {
 }
 
 func (m *Match) Submit(index int, attackID string) error {
+	if index < 0 || index >= len(m.Players) {
+		return ErrInvalidAttack
+	}
 	if m.Players[1] == nil {
 		return ErrNotReady
 	}
@@ -211,16 +230,19 @@ func availableAttack(player *Player, id string) (Attack, bool) {
 // attackDamage applies type effectiveness and same-type attack bonus (STAB).
 // A non-immune hit always deals at least 1 damage.
 func attackDamage(attacker, defender *Player, atk Attack) (int, string) {
-	element := atk.Element
-	if element == "" {
-		element = "Normal"
-	}
-	mult := TypeMultiplier(element, defender.Card.Element)
+	mult := Effectiveness(string(atk.Element), defender.Card.Types)
 	stab := 1.0
-	if element == attacker.Card.Element {
+	if slices.Contains(attacker.Card.Types, string(atk.Element)) {
 		stab = 1.5
 	}
-	damage := int(math.Round(float64(atk.Damage) * stab * mult))
+	if atk.ID == "struggle" {
+		mult, stab = 1, 1
+	}
+	def := defender.Card.Stats.Def
+	if atk.Category == "special" {
+		def = defender.Card.Stats.SpD
+	}
+	damage := int(math.Round(float64(baseDamage(attacker.Card, atk, def)) * stab * mult))
 	if mult > 0 && damage < 1 {
 		damage = 1
 	}
@@ -238,6 +260,9 @@ func (m *Match) resolve(auto [2]bool) {
 	for i := range m.Players {
 		m.Players[i].Energy += attacks[i].Gain - attacks[i].Cost
 		m.Players[i].HP -= damage[1-i]
+		if attacks[i].ID == "struggle" {
+			m.Players[i].HP -= max(1, m.Players[i].Card.MaxHP/4)
+		}
 		if m.Players[i].HP < 0 {
 			m.Players[i].HP = 0
 		}
@@ -265,4 +290,18 @@ func (m *Match) resolve(auto [2]bool) {
 	} else {
 		m.Deadline = time.Now().Add(TurnDuration)
 	}
+}
+
+// Keep the public demo namespace compatible with playerstore.ValidName.
+func validPlayerName(name string) bool {
+	n := len(name)
+	if n < 1 || n > 24 {
+		return false
+	}
+	for _, r := range name {
+		if unicode.IsControl(r) {
+			return false
+		}
+	}
+	return true
 }

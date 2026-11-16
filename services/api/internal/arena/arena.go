@@ -3,6 +3,7 @@ package arena
 import (
 	"errors"
 	"math"
+	"time"
 )
 
 const (
@@ -21,44 +22,6 @@ var (
 	ErrCard = errors.New("unknown arena card")
 	ErrFull = errors.New("arena is full")
 )
-
-type Move struct {
-	Name       string  `json:"name"`
-	Damage     int     `json:"damage"`
-	Range      float64 `json:"range"`
-	CooldownMs int     `json:"cooldownMs"`
-}
-
-type Card struct {
-	ID      string  `json:"id"`
-	Name    string  `json:"name"`
-	Type    string  `json:"type"`
-	Level   int     `json:"level"`
-	MaxHP   int     `json:"maxHp"`
-	Speed   float64 `json:"speed"`
-	Basic   Move    `json:"basic"`
-	Special Move    `json:"special"`
-}
-
-var cards = []Card{
-	{ID: "pikachu", Name: "Pikachu", Type: "Electric", Level: 50, MaxHP: 95, Speed: 250,
-		Basic:   Move{Name: "Quick Attack", Damage: 9, Range: 145, CooldownMs: 450},
-		Special: Move{Name: "Thunderbolt", Damage: 26, Range: 225, CooldownMs: 4500}},
-	{ID: "charmander", Name: "Charmander", Type: "Fire", Level: 50, MaxHP: 110, Speed: 215,
-		Basic:   Move{Name: "Scratch", Damage: 11, Range: 135, CooldownMs: 550},
-		Special: Move{Name: "Flamethrower", Damage: 29, Range: 205, CooldownMs: 5000}},
-}
-
-func Cards() []Card { return cards }
-
-func FindCard(id string) (Card, bool) {
-	for _, c := range cards {
-		if c.ID == id {
-			return c, true
-		}
-	}
-	return Card{}, false
-}
 
 type Fighter struct {
 	Name              string  `json:"name"`
@@ -108,21 +71,30 @@ type Input struct {
 }
 
 type Game struct {
-	ID       string
-	Fighters [2]*Fighter
-	Inputs   [2]Input
-	Tick     int
-	Winner   string
+	ID                 string
+	Fighters           [2]*Fighter
+	Inputs             [2]Input
+	Tick               int
+	Winner             string
+	EndReason          string
+	Running            bool
+	Connected          [2]bool
+	EverConnected      [2]bool
+	DisconnectDeadline [2]time.Time
+	Frames             []ReplayFrame
 }
 
 type View struct {
-	ID         string      `json:"id"`
-	Status     string      `json:"status"`
-	You        int         `json:"you"`
-	Fighters   [2]*Fighter `json:"fighters"`
-	Tick       int         `json:"tick"`
-	TimeLeftMs int         `json:"timeLeftMs"`
-	Winner     string      `json:"winner,omitempty"`
+	ID                 string       `json:"id"`
+	Status             string       `json:"status"`
+	You                int          `json:"you"`
+	Fighters           [2]*Fighter  `json:"fighters"`
+	Tick               int          `json:"tick"`
+	TimeLeftMs         int          `json:"timeLeftMs"`
+	Winner             string       `json:"winner,omitempty"`
+	EndReason          string       `json:"endReason,omitempty"`
+	Connected          [2]bool      `json:"connected"`
+	DisconnectDeadline [2]time.Time `json:"disconnectDeadline"`
 }
 
 func New(id, name, cardID, token string) (*Game, error) {
@@ -142,6 +114,7 @@ func (g *Game) Join(name, cardID, token string) error {
 		return ErrCard
 	}
 	g.Fighters[1] = &Fighter{Name: name, Card: card, HP: card.MaxHP, X: Width - 120, Y: Height / 2, Token: token}
+	g.Frames = []ReplayFrame{g.ReplayFrame()}
 	return nil
 }
 
@@ -177,7 +150,7 @@ func (g *Game) ViewFor(index int) View {
 		fighters[i] = &copy
 	}
 	return View{ID: g.ID, Status: status, You: index, Fighters: fighters, Tick: g.Tick,
-		TimeLeftMs: max(0, (MatchTicks-g.Tick)*TickMs), Winner: g.Winner}
+		TimeLeftMs: max(0, (MatchTicks-g.Tick)*TickMs), Winner: g.Winner, EndReason: g.ResultReason(), Connected: g.Connected, DisconnectDeadline: g.DisconnectDeadline}
 }
 
 func (g *Game) SetInput(index int, input Input) {
@@ -205,135 +178,16 @@ func (g *Game) SetInput(index int, input Input) {
 	g.Inputs[index] = input
 }
 
-func (g *Game) Step() {
-	if g.Fighters[1] == nil || g.Winner != "" {
-		return
+func (g *Game) Forfeit(index int) error {
+	if index < 0 || index > 1 || g.Fighters[1] == nil || g.Winner != "" {
+		return errors.New("only a player in an active match can forfeit")
 	}
-	g.Tick++
-	for i, f := range g.Fighters {
-		if f.pendingSpecial {
-			continue
-		}
-		in := g.Inputs[i]
-		length := math.Hypot(in.DX, in.DY)
-		if length > 1 {
-			in.DX /= length
-			in.DY /= length
-		}
-		if in.Dodge && !f.dodgeHeld && g.Tick >= f.dodgeReady {
-			if length < 0.01 {
-				awayX, awayY := f.X-g.Fighters[1-i].X, f.Y-g.Fighters[1-i].Y
-				awayLength := math.Hypot(awayX, awayY)
-				if awayLength > 0 {
-					in.DX, in.DY = awayX/awayLength, awayY/awayLength
-				} else {
-					in.DX = 1
-				}
-			}
-			f.X += in.DX * 90
-			f.Y += in.DY * 90
-			f.dodgeUntil = g.Tick + DodgeInvulnerableTicks
-			f.dodgeReady = g.Tick + DodgeCooldownTicks
-		}
-		f.dodgeHeld = in.Dodge
-		f.X = math.Max(28, math.Min(Width-28, f.X+in.DX*f.Card.Speed*TickMs/1000))
-		f.Y = math.Max(28, math.Min(Height-28, f.Y+in.DY*f.Card.Speed*TickMs/1000))
-	}
-	var damage [2]int
-	for i, f := range g.Fighters {
-		if f.HP <= 0 {
-			continue
-		}
-		in := g.Inputs[i]
-		move := Move{}
-		kind := ""
-		if f.pendingSpecial {
-			if g.Tick < f.chargeEndTick {
-				f.specialHeld = in.Special
-				continue
-			}
-			move, kind = f.Card.Special, "special"
-			f.pendingSpecial = false
-		} else if in.Special && !f.specialHeld && f.Energy >= SpecialCost && g.Tick >= f.specialReady {
-			f.pendingSpecial = true
-			f.chargeEndTick = g.Tick + SpecialWindupTicks
-			f.ChargeX, f.ChargeY = f.X, f.Y
-			target := g.Fighters[1-i]
-			f.ChargeDX, f.ChargeDY = aimDirection(in, f.X, f.Y, target.X, target.Y)
-			f.specialReady = g.Tick + (f.Card.Special.CooldownMs+TickMs-1)/TickMs
-			f.Energy -= SpecialCost
-			f.specialHeld = true
-			continue
-		} else if in.Basic && g.Tick >= f.basicReady {
-			move, kind = f.Card.Basic, "basic"
-			f.basicReady = g.Tick + (move.CooldownMs+TickMs-1)/TickMs
-		}
-		f.specialHeld = in.Special
-		if kind == "" {
-			continue
-		}
-		target := g.Fighters[1-i]
-		sourceX, sourceY := f.X, f.Y
-		if kind == "special" {
-			sourceX, sourceY = f.ChargeX, f.ChargeY
-		}
-		targetDX, targetDY := target.X-sourceX, target.Y-sourceY
-		distance := math.Hypot(targetDX, targetDY)
-		aimX, aimY := aimDirection(in, sourceX, sourceY, target.X, target.Y)
-		if kind == "special" {
-			aimX, aimY = f.ChargeDX, f.ChargeDY
-		}
-		hit := distance <= move.Range
-		if f.Card.ID == "charmander" && kind == "special" && distance > 0 {
-			// Flamethrower covers a 52-degree cone in the aimed direction.
-			hit = hit && (aimX*targetDX+aimY*targetDY)/distance >= math.Cos(26*math.Pi/180)
-		}
-		f.LastAttack, f.LastAttackTick = kind, g.Tick
-		f.AttackX, f.AttackY = sourceX, sourceY
-		f.AttackDX, f.AttackDY = aimX, aimY
-		f.AttackTargetX, f.AttackTargetY = target.X, target.Y
-		f.LastAttackHit = hit
-		if hit && g.Tick >= target.dodgeUntil {
-			damage[1-i] += move.Damage
-			if kind == "basic" {
-				f.Energy = min(MaxEnergy, f.Energy+1)
-			}
-		} else if hit {
-			f.LastAttackHit = false
-		}
-	}
-	for i, f := range g.Fighters {
-		f.HP = max(0, f.HP-damage[i])
-	}
-	if g.Fighters[0].HP == 0 && g.Fighters[1].HP == 0 {
-		g.Winner = "draw"
-	}
-	if g.Fighters[0].HP == 0 && g.Fighters[1].HP > 0 {
+	if index == 0 {
 		g.Winner = "player2"
-	}
-	if g.Fighters[1].HP == 0 && g.Fighters[0].HP > 0 {
+	} else {
 		g.Winner = "player1"
 	}
-	if g.Tick >= MatchTicks && g.Winner == "" {
-		a, b := g.Fighters[0], g.Fighters[1]
-		difference := a.HP*b.Card.MaxHP - b.HP*a.Card.MaxHP
-		if difference > 0 {
-			g.Winner = "player1"
-		} else if difference < 0 {
-			g.Winner = "player2"
-		} else {
-			g.Winner = "draw"
-		}
-	}
-}
-
-func aimDirection(in Input, sourceX, sourceY, targetX, targetY float64) (float64, float64) {
-	if length := math.Hypot(in.AimX, in.AimY); length > 0.01 {
-		return in.AimX / length, in.AimY / length
-	}
-	dx, dy := targetX-sourceX, targetY-sourceY
-	if length := math.Hypot(dx, dy); length > 0 {
-		return dx / length, dy / length
-	}
-	return 1, 0
+	g.EndReason = "forfeit"
+	g.Inputs = [2]Input{}
+	return nil
 }

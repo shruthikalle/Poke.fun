@@ -5,12 +5,12 @@ import type { BattleState, Side, Unsubscribe } from "../battle/types";
 
 export interface MarketOdds {
   matchId: string;
-  /** Win probability per side, 0–1, summing to 1. */
+  /** Share of current normalized team HP. This is not a win probability. */
   probability: Record<Side, number>;
   /** Change since the previous update, in probability points. */
   delta: Record<Side, number>;
   updatedAt: number;
-  source: "mock" | "gemini";
+  source: "mock" | "gemini" | "hp-heuristic";
 }
 
 export interface OddsSnapshot {
@@ -29,7 +29,7 @@ export function snapshotFromState(state: BattleState): OddsSnapshot {
   const side = (s: Side) => {
     const team = state.sides[s].team;
     return {
-      hp: team.reduce((sum, c) => sum + c.hp / c.maxHp, 0) / team.length,
+      hp: team.length ? team.reduce((sum, c) => sum + (c.maxHp > 0 ? Math.max(0, c.hp) / c.maxHp : 0), 0) / team.length : 0,
       remaining: team.filter((c) => !c.fainted).length,
     };
   };
@@ -73,12 +73,31 @@ export class MockOddsProvider implements OddsProvider {
   }
 }
 
-export const defaultOddsProvider: OddsProvider = new MockOddsProvider();
+/** Battle-state HP share only; no market or prediction feed is connected. */
+export class HpShareProvider implements OddsProvider {
+  private listeners = new Map<string, Set<(odds: MarketOdds) => void>>();
+
+  subscribe(matchId: string, onOdds: (odds: MarketOdds) => void): Unsubscribe {
+    const listeners = this.listeners.get(matchId) ?? new Set();
+    listeners.add(onOdds);
+    this.listeners.set(matchId, listeners);
+    return () => { listeners.delete(onOdds); if (!listeners.size) this.listeners.delete(matchId); };
+  }
+
+  reportSnapshot(matchId: string, snapshot: OddsSnapshot) {
+    const total = snapshot.hpFraction.p1 + snapshot.hpFraction.p2;
+    if (total <= 0) return;
+    const p1 = snapshot.hpFraction.p1 / total;
+    const value: MarketOdds = { matchId, probability: { p1, p2: 1 - p1 }, delta: { p1: 0, p2: 0 }, updatedAt: Date.now(), source: "hp-heuristic" };
+    this.listeners.get(matchId)?.forEach((listener) => listener(value));
+  }
+}
+
+export const defaultOddsProvider: OddsProvider = new HpShareProvider();
 
 /**
- * Live win-probability for a match.
- * TODO(markets): back this with a Gemini prediction-markets OddsProvider
- * (subscribe to the market for matchId). Components don't change.
+ * Current normalized team HP share. The provider interface and explicit mock
+ * remain compatible with earlier views; the default makes no win forecast.
  */
 export function useOdds(state: BattleState | null, provider: OddsProvider = defaultOddsProvider): MarketOdds | null {
   const [odds, setOdds] = useState<MarketOdds | null>(null);
@@ -91,8 +110,12 @@ export function useOdds(state: BattleState | null, provider: OddsProvider = defa
   }, [matchId, provider]);
 
   useEffect(() => {
-    if (state && provider.reportSnapshot) provider.reportSnapshot(state.id, snapshotFromState(state));
+    if (state && provider.reportSnapshot) {
+      const snapshot = snapshotFromState(state);
+      if (provider instanceof HpShareProvider && snapshot.hpFraction.p1 + snapshot.hpFraction.p2 <= 0) setOdds(null);
+      else provider.reportSnapshot(state.id, snapshot);
+    }
   }, [state, provider]);
 
-  return odds;
+  return odds?.matchId === matchId ? odds : null;
 }

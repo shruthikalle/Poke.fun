@@ -61,6 +61,17 @@ func TypeMultiplier(attack, defender Element) float64 {
 	}
 }
 
+// Effectiveness is the multiplier of an attack type against a defender with one
+// or more types: the per-type multipliers stack, so a dual-typed defender can
+// take 4x or 0.25x, and any immunity makes it 0. Shared by every battle engine.
+func Effectiveness(attack string, defender []string) float64 {
+	mult := 1.0
+	for _, t := range defender {
+		mult *= TypeMultiplier(Element(attack), Element(t))
+	}
+	return mult
+}
+
 // EffectivenessLabel labels a type multiplier for the turn log, so both clients
 // show the same "super effective" message the frontend renders. Shared with the
 // livebattle engine so the two rulesets describe effectiveness identically.

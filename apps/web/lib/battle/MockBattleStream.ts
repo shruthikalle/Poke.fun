@@ -1,4 +1,4 @@
-import { makeFormat } from "./roster";
+import { createStruggleMove, makeFormat } from "./roster";
 import { chooseAiMove, computeDamage, effectiveSpeed } from "./rules";
 import {
   otherSide,
@@ -16,6 +16,8 @@ export interface MockBattleOptions {
   format?: BattleFormat;
   /** Multiplier for every delay; tests can pass a small value. */
   speed?: number;
+  /** Reports a team that the offline Pokédex rejects. */
+  onStatus?: (note: string | null) => void;
 }
 
 /**
@@ -39,13 +41,17 @@ export class MockBattleStream implements BattleStreamSource {
   private readonly opponent: Trainer;
   private readonly teams: Record<Side, Creature[]>;
   private readonly format: BattleFormat;
+  private readonly onStatus?: (note: string | null) => void;
+  private generation = 0;
 
   constructor(options: MockBattleOptions) {
     this.teams = options.teams;
-    this.format = options.format ?? makeFormat("Champion 1v1", []);
+    this.format = makeFormat(options.format?.name ?? "Champion 1v1", []);
+    this.format.rated = false;
     this.you = options.you;
     this.opponent = options.opponent ?? { id: "thar07", name: "thar07", avatar: "kai" };
     this.speed = options.speed ?? 1;
+    this.onStatus = options.onStatus;
   }
 
   connect(listener: (event: BattleEvent) => void): Unsubscribe {
@@ -122,16 +128,29 @@ export class MockBattleStream implements BattleStreamSource {
     this.start();
   }
 
+  // The 1.3 MB offline Pokédex is a separate chunk, fetched only when an
+  // explicitly selected simulation starts, never in online bundles.
   private start() {
+    const generation = ++this.generation;
+    this.awaiting = false;
+    void import("../pokemon/embeddedSpecies")
+      .then(({ canonicalOfflineTeam }) => {
+        if (generation !== this.generation || !this.listener) return;
+        this.begin({
+          p1: { side: "p1", trainer: this.you, team: canonicalOfflineTeam(this.teams.p1, "p1"), activeIndex: 0 },
+          p2: { side: "p2", trainer: this.opponent, team: canonicalOfflineTeam(this.teams.p2, "p2"), activeIndex: 0 },
+        });
+      })
+      .catch((error: unknown) => this.onStatus?.(error instanceof Error ? error.message : "Offline team could not be built"));
+  }
+
+  private begin(sides: Record<Side, SideState>) {
     this.turn = 1;
     this.pending = null;
     this.needsSwitch = false;
     this.awaiting = false;
     this.over = false;
-    this.sides = {
-      p1: { side: "p1", trainer: this.you, team: structuredClone(this.teams.p1), activeIndex: 0 },
-      p2: { side: "p2", trainer: this.opponent, team: structuredClone(this.teams.p2), activeIndex: 0 },
-    };
+    this.sides = sides;
     this.emit({
       type: "init",
       state: {
@@ -186,7 +205,7 @@ export class MockBattleStream implements BattleStreamSource {
     const order: Array<{ side: Side; moveIndex: number }> = [];
     if (choice.kind === "move") order.push({ side: "p1", moveIndex: choice.moveIndex });
     order.push({ side: "p2", moveIndex: opponentMove });
-    order.sort((a, b) => this.speedOf(b.side) - this.speedOf(a.side));
+    if (order.length === 2 && this.speedOf(order[1].side) > this.speedOf(order[0].side)) order.reverse();
 
     for (const action of order) {
       steps.push(() => this.performMove(action.side, action.moveIndex));
@@ -225,25 +244,49 @@ export class MockBattleStream implements BattleStreamSource {
     const defender = this.active(defenderSide);
     if (attacker.fainted || defender.fainted) return;
     const m = attacker.moves[moveIndex];
-    m.pp = Math.max(0, m.pp - 1);
+    const struggle = m.id === "struggle";
+    if (!struggle) m.pp = Math.max(0, m.pp - 1);
     this.emit({ type: "move", side, moveIndex, ppLeft: m.pp });
 
     this.later(450, () => {
+      const fainted: Side[] = [];
       if (Math.random() * 100 >= m.accuracy) {
         this.emit({ type: "miss", side: defenderSide });
-        return;
+      } else {
+        const { damage, effectiveness, crit } = computeDamage(attacker, defender, m);
+        defender.hp = Math.max(0, defender.hp - damage);
+        this.emit({ type: "damage", side: defenderSide, hp: defender.hp, effectiveness, crit });
+        if (defender.hp === 0) { defender.fainted = true; fainted.push(defenderSide); }
       }
-      const { damage, effectiveness, crit } = computeDamage(attacker, defender, m);
-      defender.hp = Math.max(0, defender.hp - damage);
-      this.emit({ type: "damage", side: defenderSide, hp: defender.hp, effectiveness, crit });
-      if (defender.hp === 0) {
-        defender.fainted = true;
-        this.later(500, () => {
-          this.emit({ type: "faint", side: defenderSide });
-          this.checkWinner();
-        });
-      }
+      // Same order as the Go engine: target faint, then recoil, then the attacker.
+      if (this.finishMove(side, struggle)) fainted.push(side);
+      if (fainted.length) this.later(500, () => {
+        fainted.forEach((s) => this.emit({ type: "faint", side: s }));
+        this.checkWinner();
+      });
     });
+  }
+
+  /** Applies Struggle recoil and installs Struggle; returns true if recoil caused a faint. */
+  private finishMove(side: Side, struggle: boolean): boolean {
+    const attacker = this.active(side);
+    let fainted = false;
+    if (struggle) {
+      attacker.hp = Math.max(0, attacker.hp - Math.max(1, Math.floor(attacker.maxHp / 4)));
+      this.emit({ type: "chat", user: "", text: `${attacker.species} was hurt by Struggle recoil.` });
+      this.emit({ type: "damage", side, hp: attacker.hp, effectiveness: "normal", crit: false });
+      fainted = attacker.hp === 0;
+      if (fainted) attacker.fainted = true;
+    }
+    this.prepareStruggle(side);
+    return fainted;
+  }
+
+  private prepareStruggle(side: Side) {
+    const attacker = this.active(side);
+    if (attacker.moves.some((m) => m.pp > 0)) return;
+    attacker.moves = [createStruggleMove()];
+    this.emit({ type: "moves", side, moves: structuredClone(attacker.moves) });
   }
 
   private checkWinner() {

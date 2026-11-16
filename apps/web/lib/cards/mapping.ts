@@ -1,6 +1,7 @@
 import type { DasAsset } from "./collection";
 
 import catalogJson from "./catalog.generated.json";
+import { speciesForCardName } from "./cardNames";
 
 export type PowerTier = 1 | 2 | 3;
 
@@ -70,8 +71,8 @@ export function resolveCard(asset: DasAsset): CardResolution {
   if (category === "Energy") return { eligible: false, reason: "Energy cards can't battle" };
   if (category !== "Pokemon") return { eligible: false, reason: "Not a creature card" };
   const entry = findCatalogEntry(attr(asset, "Set"), attr(asset, "Card Number"));
-  if (!entry) return { eligible: false, reason: "Not supported yet" };
   const grade = attr(asset, "Grade");
+  if (!entry) return resolveByName(asset, grade);
   return {
     eligible: true,
     pick: {
@@ -84,6 +85,31 @@ export function resolveCard(asset: DasAsset): CardResolution {
       tier: entry.tier,
       rental: false,
       artWindow: entry.artWindow,
+    },
+  };
+}
+
+/**
+ * A card outside the catalog: any Pokémon card still battles, as the Pokémon its
+ * printed name identifies ("Dark Charizard" → Charizard). Its tier is the
+ * species' tier, which is also what live-arena matchmaking uses.
+ */
+function resolveByName(asset: DasAsset, grade: string | undefined): CardResolution {
+  const cardName = attr(asset, "Card Name") ?? asset.content.metadata.name;
+  const named = cardName ? speciesForCardName(cardName) : null;
+  if (!named) return { eligible: false, reason: "Not a recognised Pokémon" };
+  return {
+    eligible: true,
+    pick: {
+      key: asset.id,
+      species: named.key,
+      label: cardName ?? named.name,
+      image: asset.content.links.image || null,
+      grade: grade ? `${attr(asset, "Grading Company") ?? ""} ${grade}`.trim() : null,
+      level: 50,
+      tier: named.tier as PowerTier,
+      rental: false,
+      artWindow: FAUX_ART_WINDOW, // no art window on file; use the standard card layout
     },
   };
 }

@@ -69,7 +69,7 @@ Spectators, voice commentary, and prediction markets are outside the first relea
 ### Later releases
 
 - Public matchmaking by battle format/power tier, then MMR band and stake band.
-- Ratings, match history, replays, and leaderboards.
+- Ratings, match history, replays, and leaderboards (implemented for public demo names; wallet identity remains separate).
 - Optional larger-team formats for people who own two or more cards; one-card play remains available.
 - Voice commentary if it improves the battle experience and can be delivered reliably.
 
@@ -104,7 +104,7 @@ Spectators, voice commentary, and prediction markets are outside the first relea
 | S-03 | P2 | Failed setup refund | No match can strand the first player's deposit when the second player fails to fund. |
 | M-01 | P2 | Skill matchmaking | Queue pairs players in the same format/power tier, then uses rating and stake band. |
 
-P0 is required for a playable demo, P1 is the recommended hackathon extension, and P2 is conditional on time and review. The existing starter meets B-01 through B-06 for local free matches, with in-memory state only. It also now implements R-02 (a 60-second turn deadline that auto-plays the player's quick attack) and the rules/catalog version locking described in §8. The `/battle` team battle now meets B-01 to B-05 for two real players: hidden simultaneous choices, server-only state, a shared event log so both screens match, and M-01-style matchmaking by format, power tier and entry (with an AI fallback). A refresh rejoins a live match while the server is running; persistence across restarts (R-01), rating bands, and the wallet/NFT/stake requirements remain open.
+P0 is required for a playable demo, P1 is the recommended hackathon extension, and P2 is conditional on time and review. Status: the one-card duel, the `/battle` team battle and the live arena meet B-01 through B-06 for free matches between real players. N-02 is met: every card resolves to a versioned Pokédex fighter. R-01 is met on a single API process: refreshes rejoin the same seat, and matches, queues and match terms survive restarts (see [game-mechanics.md](game-mechanics.md#persistence)). R-02 is met: missed duel and team deadlines auto-play, and arena disconnects forfeit after a grace period. M-01 is met: matchmaking pairs by format, power tier and exact entry (stricter than a stake band, so stakes never mix), then within a rating band that widens with waiting time, with no bot opponent. Each final result is signed and records the agreed entry and verified cards. Still open: W-01 wallet login, N-01 enforcement that ties an NFT entry to a proven wallet session, and S-01 to S-03 escrow.
 
 ## 8. Initial game rules
 
@@ -117,7 +117,7 @@ P0 is required for a playable demo, P1 is the recommended hackathon extension, a
 - The combat catalog is versioned. A match locks its card definitions and rules version when it starts, so later balance changes cannot alter an active match.
 - The final supported-card list and any use of printed TCG moves need explicit data mapping and rights review. Marketplace NFT metadata alone is not a complete rules source.
 
-The existing sample cards are fictional. Their stats are for engineering tests, not the final balance design.
+Duel cards are now built from the embedded Pokédex (level 50 stats and actual damaging moves); the original fictional sample cards survive only as a test fixture.
 
 ## 9. Architecture and data
 

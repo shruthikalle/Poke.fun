@@ -1,32 +1,74 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/collectibles"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/gamestore"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/playerstore"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/resultstore"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/server"
 )
 
+func env(name, fallback string) string {
+	if value := os.Getenv(name); value != "" {
+		return value
+	}
+	return fallback
+}
+
 func main() {
-	addr := os.Getenv("API_ADDR")
-	if addr == "" {
-		addr = ":8080"
+	addr := env("API_ADDR", ":8080")
+	origin := env("WEB_ORIGIN", "http://localhost:3000")
+	players, err := playerstore.Open(env("PLAYER_STORE_PATH", "data/players.json"))
+	if err != nil {
+		log.Fatalf("open player store: %v", err)
 	}
-	origin := os.Getenv("WEB_ORIGIN")
-	if origin == "" {
-		origin = "http://localhost:3000"
+	// Matches, queues and their entry terms survive restarts in one checkpoint.
+	games, err := gamestore.Open(env("GAME_STORE_PATH", "data/games.json"))
+	if err != nil {
+		log.Fatalf("open game store: %v", err)
 	}
-	var handler http.Handler = server.New(origin)
+	// Sealed results are signed with a persistent referee key so receipts
+	// issued before a restart still verify against GET /api/referee.
+	results, err := resultstore.Open(env("RESULT_STORE_PATH", "data/results.json"), env("REFEREE_KEY_PATH", "data/referee.key"))
+	if err != nil {
+		log.Fatalf("open result store: %v", err)
+	}
+	cfg := server.Config{Origin: origin, Players: players, Games: games, Results: results}
 	if collection := os.Getenv("DEVNET_TEST_COLLECTION_ID"); collection != "" {
-		rpcURL := os.Getenv("DEVNET_RPC_URL")
-		if rpcURL == "" {
-			rpcURL = "https://api.devnet.solana.com"
-		}
-		handler = server.NewWithCollectibles(origin, collectibles.NewReader(rpcURL, collection))
+		cfg.Collectibles = collectibles.NewReader(env("DEVNET_RPC_URL", "https://api.devnet.solana.com"), collection)
 		log.Printf("Metaplex Core NFT reader enabled for collection %s", collection)
 	}
-	log.Printf("API listening on %s", addr)
-	log.Fatal(http.ListenAndServe(addr, handler))
+	handler, err := server.NewWithConfig(cfg)
+	if err != nil {
+		log.Fatalf("restore games: %v", err)
+	}
+
+	httpServer := &http.Server{Addr: addr, Handler: handler}
+	stop, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	go func() {
+		log.Printf("API listening on %s", addr)
+		if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+	<-stop.Done()
+	shutdown, done := context.WithTimeout(context.Background(), 10*time.Second)
+	defer done()
+	if err := httpServer.Shutdown(shutdown); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
+	if err := handler.Close(); err != nil {
+		log.Fatalf("final game checkpoint: %v", err)
+	}
+	log.Print("API stopped; games checkpointed")
 }

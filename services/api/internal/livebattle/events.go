@@ -33,6 +33,24 @@ func evDamage(side string, hp int, effectiveness string, crit bool) Event {
 	return Event{"type": "damage", "side": side, "hp": hp, "effectiveness": effectiveness, "crit": crit}
 }
 func evWin(winner string) Event { return Event{"type": "win", "winner": winner} }
+
+// Move-effect events. Status "" means cured; residual damage names its cause
+// (burn, poison, toxic, sand, hail, recoil, confusion, cost).
+func evStatus(side, status string) Event { return Event{"type": "status", "side": side, "status": status} }
+func evVolatile(side, volatile string, active bool) Event {
+	return Event{"type": "volatile", "side": side, "volatile": volatile, "active": active}
+}
+func evBoost(side, stat string, change, stage int) Event {
+	return Event{"type": "boost", "side": side, "stat": stat, "change": change, "stage": stage}
+}
+func evHeal(side string, hp int) Event          { return Event{"type": "heal", "side": side, "hp": hp} }
+func evCant(side, reason string) Event          { return Event{"type": "cant", "side": side, "reason": reason} }
+func evHits(side string, count int) Event       { return Event{"type": "hits", "side": side, "count": count} }
+func evFail(side string) Event                  { return Event{"type": "fail", "side": side} }
+func evWeather(weather string, turns int) Event { return Event{"type": "weather", "weather": weather, "turns": turns} }
+func evResidual(side string, hp int, cause string) Event {
+	return Event{"type": "damage", "side": side, "hp": hp, "effectiveness": "normal", "crit": false, "cause": cause}
+}
 func evChat(user, text string) Event {
 	return Event{"type": "chat", "user": user, "text": text}
 }
@@ -45,6 +63,18 @@ func evTimer(enabled bool, secondsLeft any) Event {
 // client replaces it with its own side. The server is authoritative over every
 // mutation recorded after this.
 func evInit(id string, format Format, sides map[string]*SideState, users []string, timerEnabled bool) Event {
+	snapshot := make(map[string]*SideState, len(sides))
+	for key, side := range sides {
+		copy := *side
+		copy.Team = make([]*Creature, len(side.Team))
+		for i, c := range side.Team {
+			creature := *c
+			creature.Moves = append([]Move(nil), c.Moves...)
+			creature.Types = append([]string(nil), c.Types...)
+			copy.Team[i] = &creature
+		}
+		snapshot[key] = &copy
+	}
 	var secondsLeft any
 	if timerEnabled {
 		secondsLeft = turnSeconds
@@ -56,7 +86,7 @@ func evInit(id string, format Format, sides map[string]*SideState, users []strin
 			"format":        format,
 			"turn":          1,
 			"you":           "p1",
-			"sides":         sides,
+			"sides":         snapshot,
 			"users":         users,
 			"pendingChoice": nil,
 			"winner":        nil,

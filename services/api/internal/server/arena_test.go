@@ -78,3 +78,28 @@ func TestTwoClientsShareLiveArena(t *testing.T) {
 	}
 	t.Fatal("Bob never saw Alice move")
 }
+
+func TestArenaCardsCanBeFilteredByID(t *testing.T) {
+	s := httptest.NewServer(New("http://localhost:3000"))
+	defer s.Close()
+	get := func(query string) []map[string]any {
+		t.Helper()
+		res, err := http.Get(s.URL + "/api/arena-cards" + query)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer res.Body.Close()
+		var cards []map[string]any
+		if err := json.NewDecoder(res.Body).Decode(&cards); err != nil {
+			t.Fatal(err)
+		}
+		return cards
+	}
+	if all := get(""); len(all) < 1025 {
+		t.Fatalf("expected every Pokémon, got %d fighters", len(all))
+	}
+	some := get("?ids=pikachu,charizard-mega-x,missingno")
+	if len(some) != 2 || some[0]["id"] != "pikachu" || some[1]["id"] != "charizard-mega-x" {
+		t.Fatalf("filtered list = %v", some)
+	}
+}

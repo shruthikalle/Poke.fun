@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import type { Unsubscribe } from "../battle/types";
+import { useWallet } from "../wallet/WalletProvider";
+import { communityRequest, heartbeat } from "./communityApi";
 
 export interface ChatRoom {
   id: string;
@@ -16,6 +18,8 @@ export interface LiveTrainer { name: string; avatar: string }
 
 export interface LiveBattle {
   id: string;
+  kind?: "arena" | "team";
+  roomId?: string;
   format: string;
   turn: number;
   trainers: [LiveTrainer, LiveTrainer];
@@ -29,7 +33,7 @@ export interface LobbySnapshot {
 }
 
 export interface LobbyService {
-  subscribe(onUpdate: (snapshot: LobbySnapshot) => void): Unsubscribe;
+  subscribe(onUpdate: (snapshot: LobbySnapshot | null) => void, player?: string | null): Unsubscribe;
 }
 
 const ROOMS: ChatRoom[] = [
@@ -65,11 +69,28 @@ export class MockLobbyService implements LobbyService {
   }
 }
 
-const defaultLobby = new MockLobbyService();
+export class ApiLobbyService implements LobbyService {
+  subscribe(onUpdate: (snapshot: LobbySnapshot | null) => void, player?: string | null): Unsubscribe {
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const poll = async () => {
+      try {
+        if (player) await heartbeat(player);
+        const snapshot = await communityRequest<LobbySnapshot>("/api/community");
+        if (active) onUpdate(snapshot);
+      } catch { if (active) onUpdate(null); }
+      if (active) timer = setTimeout(() => void poll(), 5000);
+    };
+    void poll();
+    return () => { active = false; clearTimeout(timer); };
+  }
+}
 
-/** TODO(api): replace MockLobbyService with the real presence/rooms feed. */
+const defaultLobby = new ApiLobbyService();
+
 export function useLobby(service: LobbyService = defaultLobby): LobbySnapshot | null {
+  const { playerName } = useWallet();
   const [snapshot, setSnapshot] = useState<LobbySnapshot | null>(null);
-  useEffect(() => service.subscribe(setSnapshot), [service]);
+  useEffect(() => service.subscribe(setSnapshot, playerName), [service, playerName]);
   return snapshot;
 }

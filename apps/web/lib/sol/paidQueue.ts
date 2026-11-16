@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { AnchorProvider, Program, type Idl, type Wallet } from "@coral-xyz/anchor";
 import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "./pokefun_wager.json";
+import { findCatalogEntry } from "../cards/mapping";
+import { speciesForCardName } from "../cards/cardNames";
 
 const DEVNET_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 
@@ -10,7 +12,7 @@ const API = process.env.ARENA_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "htt
 const CONFIG = new PublicKey("8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S");
 type Stage = "waiting" | "open_required" | "awaiting_open" | "join_required" | "awaiting_join" | "cancel_required" | "matched" | "cancelled";
 export type PaidTicket = { id: string; token: string; status: Stage; stakeLamports: number; opponent?: string; wager?: string; openTx?: string; joinTx?: string; settlementTx?: string; arena?: { id: string; token: string; stakeLamports: number; wager: string; makerAddress: string; opponentAddress: string; expiresAt: number } };
-type Entry = PaidTicket & { address: string; name: string; cardId: string; assetId: string; rating: number; created: number; peer?: string; maker?: boolean; busy?: boolean };
+type Entry = PaidTicket & { address: string; name: string; cardId: string; assetId: string; rating: number; tier: number; created: number; peer?: string; maker?: boolean; busy?: boolean };
 const globalState = globalThis as typeof globalThis & { pokeFunPaidQueue?: Map<string, Entry>; pokeFunPaidWorkers?: Set<string> };
 const entries = globalState.pokeFunPaidQueue ??= new Map<string, Entry>();
 const workers = globalState.pokeFunPaidWorkers ??= new Set<string>();
@@ -35,7 +37,18 @@ async function verifiedCard(entry: Pick<Entry, "address" | "cardId" | "assetId">
   if (!response.ok) throw new Error("Could not verify this card is still owned by your wallet");
   const card = await response.json() as { attributes?: { trait_type: string; value: string }[] };
   const attribute = (name: string) => card.attributes?.find((a) => a.trait_type === name)?.value;
-  if (attribute("Category") !== "Pokemon" || attribute("Card Name")?.toLowerCase() !== entry.cardId) throw new Error("Card does not match selected fighter");
+  const species = findCatalogEntry(attribute("Set"), attribute("Card Number"))?.species
+    ?? speciesForCardName(attribute("Card Name") ?? "")?.key;
+  if (attribute("Category") !== "Pokemon" || species !== entry.cardId) throw new Error("Card does not match selected fighter");
+}
+
+async function fighterTier(cardId: string) {
+  const response = await fetch(`${API}/api/arena-cards?ids=${encodeURIComponent(cardId)}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("Could not verify this fighter with the arena server");
+  const cards = await response.json() as { id: string; tier: number }[];
+  const fighter = cards.find((card) => card.id === cardId);
+  if (!fighter || ![1, 2, 3].includes(fighter.tier)) throw new Error("This Pokémon is not supported in the live arena");
+  return fighter.tier;
 }
 
 async function readWager(address: string) {
@@ -58,15 +71,16 @@ async function arenaCall<T>(path: string, body: unknown) {
 
 export async function enterPaidQueue(address: string, input: { name: string; cardId: string; assetId: string; rating: number; stakeLamports: number }): Promise<PaidTicket> {
   refereeProgram();
-  if (!/^[\w .-]{1,24}$/.test(input.name) || !["pikachu", "charmander"].includes(input.cardId) || !Number.isInteger(input.rating) || input.rating < 0 || input.rating > 5000 || !Number.isInteger(input.stakeLamports) || input.stakeLamports < 1_000_000 || input.stakeLamports > 1_000_000_000) throw new Error("Invalid paid match request");
+  if (!input.name?.trim() || input.name.length > 24 || /[\x00-\x1f\x7f]/.test(input.name) || !/^[a-z0-9-]{1,80}$/.test(input.cardId) || !Number.isInteger(input.rating) || input.rating < 0 || input.rating > 5000 || !Number.isInteger(input.stakeLamports) || input.stakeLamports < 1_000_000 || input.stakeLamports > 1_000_000_000) throw new Error("Invalid paid match request");
   new PublicKey(address);
   new PublicKey(input.assetId);
   if ([...entries.values()].some((e) => e.address === address && e.status !== "cancelled" && !(e.status === "matched" && e.settlementTx))) throw new Error("This wallet already has an active SOL match");
   await verifiedCard({ address, cardId: input.cardId, assetId: input.assetId });
+  const tier = await fighterTier(input.cardId);
   const id = randomBytes(12).toString("hex");
-  const entry: Entry = { ...input, id, token: randomBytes(32).toString("base64url"), address, status: "waiting", created: Date.now() };
+  const entry: Entry = { ...input, tier, id, token: randomBytes(32).toString("base64url"), address, status: "waiting", created: Date.now() };
   entries.set(id, entry);
-  const candidates = [...entries.values()].filter((e) => e.id !== id && e.status === "waiting" && e.address !== address && e.stakeLamports === entry.stakeLamports);
+  const candidates = [...entries.values()].filter((e) => e.id !== id && e.status === "waiting" && e.address !== address && e.name.toLowerCase() !== entry.name.toLowerCase() && e.tier === tier && e.stakeLamports === entry.stakeLamports);
   candidates.sort((a, b) => Math.abs(a.rating - entry.rating) - Math.abs(b.rating - entry.rating) || a.created - b.created);
   const maker = candidates[0];
   if (maker) {
@@ -126,8 +140,8 @@ export async function confirmJoin(entry: Entry, signature: string) {
     if (!transaction || transaction.meta?.err || !transaction.transaction.message.getAccountKeys().staticAccountKeys.some((key: PublicKey) => key.equals(new PublicKey(entry.wager!)))) throw new Error("Join transaction is not confirmed");
     await verifiedCard(maker);
     await verifiedCard(entry);
-    const first = await arenaCall<{ id: string; token: string }>("/api/arenas", { name: maker.name, cardId: maker.cardId });
-    const second = await arenaCall<{ id: string; token: string }>(`/api/arenas/${first.id}/join`, { name: entry.name, cardId: entry.cardId });
+    const first = await arenaCall<{ id: string; token: string }>("/api/arenas", { name: maker.name, cardId: maker.cardId, assetId: maker.assetId, walletAddress: maker.address, rental: false });
+    const second = await arenaCall<{ id: string; token: string }>(`/api/arenas/${first.id}/join`, { name: entry.name, cardId: entry.cardId, assetId: entry.assetId, walletAddress: entry.address, rental: false });
     const paidArena = { stakeLamports: maker.stakeLamports, wager: entry.wager, makerAddress: maker.address, opponentAddress: entry.address, expiresAt: wager.deadline.toNumber() * 1000 };
     maker.arena = { ...first, ...paidArena };
     entry.arena = { ...second, ...paidArena };

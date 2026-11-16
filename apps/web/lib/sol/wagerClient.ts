@@ -93,7 +93,7 @@ async function paidRequest<T>(path: string, authToken: string, ticketToken?: str
 
 export const paidQueueApi = {
   enqueue: (auth: string, input: { name: string; cardId: string; assetId: string; rating: number; stakeLamports: number }) => paidRequest<PaidTicket>("", auth, undefined, { method: "POST", body: JSON.stringify(input) }),
-  status: (auth: string, ticket: PaidTicket) => paidRequest<PaidTicket>(`/${ticket.id}`, auth, ticket.token),
+  status: (auth: string, ticket: Pick<PaidTicket, "id" | "token">) => paidRequest<PaidTicket>(`/${ticket.id}`, auth, ticket.token),
   action: (auth: string, ticket: PaidTicket, body: Record<string, string>) => paidRequest<PaidTicket>(`/${ticket.id}`, auth, ticket.token, { method: "POST", body: JSON.stringify(body) }),
   cancel: (auth: string, ticket: PaidTicket) => paidRequest<PaidTicket>(`/${ticket.id}`, auth, ticket.token, { method: "DELETE" }),
 };

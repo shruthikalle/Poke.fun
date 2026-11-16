@@ -6,8 +6,11 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
+    "test:battle": "node scripts/build-offline-dex.mjs --check && node --test lib/battle/authority.test.cjs",
     "catalog": "node scripts/build-card-catalog.mjs",
-    "catalog:check": "node scripts/check-species.mjs"
+    "catalog:check": "node scripts/check-species.mjs",
+    "offline-dex": "node scripts/build-offline-dex.mjs",
+    "offline-dex:check": "node scripts/build-offline-dex.mjs --check"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

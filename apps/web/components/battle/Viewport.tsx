@@ -17,6 +17,8 @@ function HpBar({ creature, role }: { creature: Creature; role: "foe" | "me" }) {
         <strong>{creature.species}</strong>
         {creature.gender && <span className={creature.gender === "M" ? styles.male : styles.female}>{creature.gender === "M" ? "♂" : "♀"}</span>}
         <small>L{creature.level}</small>
+        {creature.status && <small title="Status condition">{creature.status.toUpperCase()}</small>}
+        {!!creature.confused && <small title="Confused">CONFUSED</small>}
       </div>
       <div className={styles.hpRow}>
         <span className={styles.hpText}>{pct}%</span>
