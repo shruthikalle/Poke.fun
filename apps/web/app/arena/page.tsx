@@ -6,6 +6,8 @@ import { useEffect, useRef, useState } from "react";
 import { arenaApi, ARENA_QUEUE_STORAGE_KEY, ARENA_SESSION_STORAGE_KEY, type ArenaCard, type ArenaQueueTicket, type ArenaSession, type ArenaView, type Fighter } from "../../lib/arena";
 import { collectionService } from "../../lib/cards/collection";
 import { session as tabStorage } from "../../lib/storage";
+import { expireSolWager, explorerTx, paidQueueApi } from "../../lib/sol/wagerClient";
+import type { PaidTicket } from "../../lib/sol/paidQueue";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "./arena.module.css";
 
@@ -69,7 +71,7 @@ export default function ArenaPage() {
   const pathname = usePathname();
   const router = useRouter();
   const liveBattleRoute = pathname === "/battle/live";
-  const { session: wallet, playerName } = useWallet();
+  const { session: wallet, playerName, walletAuthToken } = useWallet();
   const [cards, setCards] = useState<ArenaCard[]>([]);
   const [owned, setOwned] = useState<string[]>([]);
   const [name, setName] = useState("");
@@ -78,6 +80,9 @@ export default function ArenaPage() {
   const [session, setSession] = useState<ArenaSession | null>(null);
   const [view, setView] = useState<ArenaView | null>(null);
   const [connection, setConnection] = useState("offline");
+  const [settlementTx, setSettlementTx] = useState<string | null>(null);
+  const [recoveryError, setRecoveryError] = useState<string | null>(null);
+  const [clock, setClock] = useState(Date.now());
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const socket = useRef<WebSocket | null>(null);
@@ -186,6 +191,22 @@ export default function ArenaPage() {
     return () => { active = false; window.clearInterval(inputTimer); window.clearTimeout(reconnect); socket.current?.close(); socket.current = null; };
   }, [session]);
 
+  useEffect(() => {
+    if (!session?.paidQueue || !walletAuthToken || !view || view.status !== "finished" || settlementTx) return;
+    const check = () => void paidQueueApi.status(walletAuthToken, { ...session.paidQueue } as PaidTicket)
+      .then((ticket) => { if (ticket.settlementTx) setSettlementTx(ticket.settlementTx); })
+      .catch(() => {});
+    check();
+    const timer = window.setInterval(check, 2000);
+    return () => window.clearInterval(timer);
+  }, [session, walletAuthToken, view?.status, settlementTx]);
+
+  useEffect(() => {
+    if (!session?.wager || settlementTx) return;
+    const timer = window.setInterval(() => setClock(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, [session?.wager, settlementTx]);
+
   const findMatch = async () => {
     if (!name.trim() || !cardId) { setError("Enter a name and choose a fighter."); return; }
     setBusy(true); setError("");
@@ -217,6 +238,14 @@ export default function ArenaPage() {
   const me = view?.fighters[view.you];
   const them = view?.fighters[1 - view.you];
   const outcome = view?.winner === "draw" ? "Draw" : view?.winner ? (view.winner === `player${view.you + 1}` ? "You win!" : "You lose") : "";
+  const recoverExpired = async () => {
+    if (!session?.wager || !session.makerAddress || !session.opponentAddress || !wallet) return;
+    try {
+      setRecoveryError(null);
+      const signature = await expireSolWager(wallet.address, session.makerAddress, session.opponentAddress, session.wager);
+      setSettlementTx(signature);
+    } catch (cause) { setRecoveryError((cause as Error).message); }
+  };
   const pointAim = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "mouse" || !me) return;
     const bounds = event.currentTarget.getBoundingClientRect();
@@ -236,10 +265,10 @@ export default function ArenaPage() {
       </section>
       <section className={styles.panel}><h2>Find a real opponent</h2><p className={styles.note}>One click enters the free live queue. When another player is waiting, the match starts automatically.</p><button className={styles.primary} disabled={busy || !cards.length} onClick={() => void findMatch()}>Find match</button><p className={styles.note}>Play from two different browsers or devices to test with a friend. No room code needed.</p></section>
     </div> : <section className={styles.game}>
-      <div className={styles.room}><span>LIVE MATCH <strong>{session.id}</strong>{session.entryCents ? ` · Demo $${(session.entryCents / 100).toFixed(2)} entry, no transfer` : " · Free"}</span><button onClick={leave}>{liveBattleRoute ? "Back to loadout" : "Leave view"}</button></div>
+      <div className={styles.room}><span>LIVE MATCH <strong>{session.id}</strong>{session.stakeLamports ? ` · ${session.stakeLamports / 1_000_000_000} Devnet SOL each` : session.entryCents ? ` · Demo $${(session.entryCents / 100).toFixed(2)} entry, no transfer` : " · Free"}{session.wager && <> · <a href={`https://explorer.solana.com/address/${session.wager}?cluster=devnet`} target="_blank" rel="noopener noreferrer">View escrow ↗</a></>}{settlementTx && <> · <a href={explorerTx(settlementTx)} target="_blank" rel="noopener noreferrer">View payout ↗</a></>}</span><button onClick={leave}>{liveBattleRoute ? "Back to loadout" : "Leave view"}</button></div>
       {!view || view.status === "waiting" ? <div className={styles.waiting}><h2>Connecting to arena</h2><p>Loading the match state…</p></div> : <>
         <div className={styles.score}>{[view?.fighters[0], view?.fighters[1]].map((fighter, i) => fighter ? <div key={i}><strong>{fighter.name} · {fighter.card.name}</strong><span>Lv. 50 · {fighter.hp}/{fighter.card.maxHp} HP · {fighter.energy}/3 energy</span><div className={styles.hp}><span style={{ width: `${fighter.hp / fighter.card.maxHp * 100}%` }} /></div><div className={styles.energy} aria-label={`${fighter.energy} of 3 energy`}>{[0, 1, 2].map((slot) => <i key={slot} data-filled={slot < fighter.energy || undefined} />)}</div></div> : null)}<div className={styles.timer}>{Math.ceil((view?.timeLeftMs ?? 0) / 1000)}s</div></div>
-        <div className={styles.stage} onPointerMove={pointAim} onPointerLeave={() => { aim.current = null; }}><svg className={styles.effects} viewBox="0 0 960 540" preserveAspectRatio="none" aria-hidden="true">{view.fighters.map((fighter, i) => fighter ? <ChargeEffect key={`charge-${i}`} fighter={fighter} /> : null)}{view.fighters.map((fighter, i) => fighter ? <AttackEffect key={i} fighter={fighter} tick={view.tick} index={i} /> : null)}</svg>{view.fighters.map((fighter, i) => fighter ? <FighterToken key={i} fighter={fighter} index={i} tick={view.tick} you={view.you} /> : null)}{view.status === "finished" && <div className={styles.overlay}><h2>{outcome}</h2><p>{view.winner === "draw" ? "Both fighters are even." : "The arena has a winner."}</p><button onClick={leave}>Play again</button></div>}</div>
+        <div className={styles.stage} onPointerMove={pointAim} onPointerLeave={() => { aim.current = null; }}><svg className={styles.effects} viewBox="0 0 960 540" preserveAspectRatio="none" aria-hidden="true">{view.fighters.map((fighter, i) => fighter ? <ChargeEffect key={`charge-${i}`} fighter={fighter} /> : null)}{view.fighters.map((fighter, i) => fighter ? <AttackEffect key={i} fighter={fighter} tick={view.tick} index={i} /> : null)}</svg>{view.fighters.map((fighter, i) => fighter ? <FighterToken key={i} fighter={fighter} index={i} tick={view.tick} you={view.you} /> : null)}{view.status === "finished" && <div className={styles.overlay}><h2>{outcome}</h2><p>{view.winner === "draw" ? "Both fighters are even." : "The arena has a winner."}</p>{session.wager && <p>{settlementTx ? <a href={explorerTx(settlementTx)} target="_blank" rel="noopener noreferrer">Payout confirmed on Devnet ↗</a> : "Settling the Devnet SOL pot…"}</p>}{session.wager && !settlementTx && session.expiresAt && clock >= session.expiresAt && <button onClick={() => void recoverExpired()}>Refund expired escrow in Phantom</button>}{recoveryError && <p role="alert">{recoveryError}</p>}<button onClick={leave}>Play again</button></div>}</div>
         <div className={styles.controls}><div className={styles.dpad}><span /><button aria-label="Move up" {...hold("w")}>↑</button><span /><button aria-label="Move left" {...hold("a")}>←</button><button aria-label="Move down" {...hold("s")}>↓</button><button aria-label="Move right" {...hold("d")}>→</button></div><div className={styles.moves}><button {...hold("j")} disabled={view?.status !== "playing" || !!me?.charging}>J / Space<br /><strong>{me?.card.basic.name ?? "Basic"}</strong><small>{me?.card.basic.damage} dmg · +1 energy on hit</small></button><button {...hold("k")} disabled={view?.status !== "playing" || !!me?.charging || (me?.energy ?? 0) < 2}>K<br /><strong>{me?.card.special.name ?? "Special"}</strong><small>{me?.card.special.damage} dmg · 2 energy · {me?.specialCooldownMs ? `${(me.specialCooldownMs / 1000).toFixed(1)}s` : "ready"}</small></button><button {...hold("shift")} disabled={view?.status !== "playing" || !!me?.charging || !!me?.dodgeCooldownMs}>Shift<br /><strong>Dodge</strong><small>{me?.dodgeCooldownMs ? `${(me.dodgeCooldownMs / 1000).toFixed(1)}s` : "ready"}</small></button></div></div>
         <p className={styles.note}>Move: WASD or arrows. Basic: hold J or Space to build energy on hits. Special: press K with 2 energy, then watch its 0.4-second warning area. Dodge: press Shift to dash out or avoid the impact. Hover over the arena to aim Flamethrower; otherwise it auto-aims.</p>
       </>}

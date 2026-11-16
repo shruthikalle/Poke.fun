@@ -20,6 +20,7 @@ export interface WalletContextValue {
   address: string | null;
   email: string | null;
   linkedAddress: string | null;
+  walletAuthToken: string | null;
   session: PlayerSession | null;
   /** Name shown in battles: email name, guest name, or null. */
   playerName: string | null;
@@ -90,6 +91,7 @@ function WalletState({ backend, children }: { backend: AuthBackend; children: Re
       address: user?.address ?? null,
       email: user?.email ?? null,
       linkedAddress: user?.linkedAddress ?? null,
+      walletAuthToken: user?.walletAuthToken ?? null,
       session: user?.address ? { address: user.address, displayName: playerName ?? "", token: user.id } : null,
       playerName,
       provider: backend.kind,

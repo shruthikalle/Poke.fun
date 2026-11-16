@@ -1,6 +1,7 @@
 import { createPublicKey, randomBytes, verify } from "node:crypto";
 import { getBase58Encoder } from "@solana/kit";
 import { NextRequest, NextResponse } from "next/server";
+import { sessionAddress, walletSessions } from "../../../lib/wallet/serverSessions";
 
 export const runtime = "nodejs";
 
@@ -8,9 +9,7 @@ const CHALLENGE_TTL_MS = 5 * 60_000;
 const SESSION_TTL_MS = 24 * 60 * 60_000;
 const ED25519_SPKI_PREFIX = Buffer.from("302a300506032b6570032100", "hex");
 type Challenge = { address: string; message: string; expiresAt: number };
-type WalletSession = { address: string; expiresAt: number };
 const challenges = new Map<string, Challenge>();
-const sessions = new Map<string, WalletSession>();
 
 function error(message: string, status: number) {
   return NextResponse.json({ error: message }, { status });
@@ -31,9 +30,9 @@ export async function GET(request: NextRequest) {
   const address = request.nextUrl.searchParams.get("address");
   if (!address) {
     const token = bearer(request);
-    const saved = token ? sessions.get(token) : null;
+    const saved = token && sessionAddress(token) ? walletSessions.get(token) : null;
     if (!saved || saved.expiresAt <= Date.now()) {
-      if (token) sessions.delete(token);
+      if (token) walletSessions.delete(token);
       return error("Session expired", 401);
     }
     return NextResponse.json(saved);
@@ -61,12 +60,12 @@ export async function POST(request: NextRequest) {
   } catch { return error("Invalid wallet signature", 401); }
   const token = randomBytes(32).toString("base64url");
   const saved = { address, expiresAt: Date.now() + SESSION_TTL_MS };
-  sessions.set(token, saved);
+  walletSessions.set(token, saved);
   return NextResponse.json({ ...saved, token });
 }
 
 export async function DELETE(request: NextRequest) {
   const token = bearer(request);
-  if (token) sessions.delete(token);
+  if (token) walletSessions.delete(token);
   return NextResponse.json({ ok: true });
 }

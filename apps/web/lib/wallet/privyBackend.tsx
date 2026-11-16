@@ -69,7 +69,7 @@ function usePrivyBackend(): AuthBackend {
     kind: "privy",
     ready: walletReady && ready,
     user: walletSession
-      ? { id: `wallet-${walletSession.address}`, email: null, address: walletSession.address, linkedAddress: walletSession.address }
+      ? { id: `wallet-${walletSession.address}`, email: null, address: walletSession.address, linkedAddress: walletSession.address, walletAuthToken: walletSession.token }
       : authenticated ? toAuthUser(user) : null,
     sendCode: (email) => sendCode({ email }),
     verifyCode: (code) => loginWithCode({ code }),

@@ -1,4 +1,5 @@
 import { address, type Address } from "@solana/kit";
+import type { Transaction } from "@solana/web3.js";
 
 interface PhantomPublicKey { toString(): string }
 
@@ -8,6 +9,7 @@ export interface PhantomProvider {
   connect(options?: { onlyIfTrusted?: boolean }): Promise<{ publicKey: PhantomPublicKey }>;
   disconnect(): Promise<void>;
   signMessage?(message: Uint8Array, display?: "utf8" | "hex"): Promise<{ signature: Uint8Array }>;
+  signAndSendTransaction?(transaction: Transaction): Promise<{ signature: string }>;
   on?(event: "accountChanged" | "disconnect" | "connect", handler: (arg?: PhantomPublicKey | null) => void): void;
   removeListener?(event: string, handler: (arg?: PhantomPublicKey | null) => void): void;
 }

@@ -6,6 +6,8 @@ export interface AuthUser {
   address: string | null;
   /** External wallet the person linked themselves, e.g. Phantom. */
   linkedAddress: string | null;
+  /** Server-issued session after a Phantom Devnet message signature. */
+  walletAuthToken?: string;
 }
 
 /**

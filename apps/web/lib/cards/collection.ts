@@ -136,9 +136,8 @@ export class MockCollectionService implements CollectionService {
     const which = scenario();
     if (which !== "default") return mockCollection(owner, which);
     const [onChain, demo] = await Promise.all([devnetCollection(owner), Promise.resolve(marketCollection(owner))]);
-    const byId = new Map(demo.map((a) => [a.id, a]));
-    for (const a of onChain) byId.set(a.id, a);
-    return [...byId.values()];
+    const onChainIds = new Set(onChain.map((a) => a.id));
+    return [...onChain, ...demo.filter((a) => !onChainIds.has(a.id))];
   }
 }
 

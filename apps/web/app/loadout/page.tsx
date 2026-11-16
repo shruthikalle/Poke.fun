@@ -16,13 +16,17 @@ import { collectionService, DEVNET_TEST_COLLECTION_ADDRESS, type DasAsset } from
 import { FAUX_ART_WINDOW, resolveCard, type CardPick } from "../../lib/cards/mapping";
 import { speciesService, type SpeciesData } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
-import { useCurrency } from "../../lib/market/currency";
-import { ENTRY_PRESETS, MAX_ENTRY } from "../../lib/stake/StakeService";
+import { cancelSolWager, explorerTx, joinSolWager, openSolWager, paidQueueApi, recoverExpiredWager } from "../../lib/sol/wagerClient";
+import type { PaidTicket } from "../../lib/sol/paidQueue";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import styles from "./loadout.module.css";
 
 interface CardRow { asset: DasAsset | null; pick: CardPick | null; label: string; image: string | null; grade: string | null; reason: string | null }
-type QueueState = { status: "idle" } | { status: "searching"; ticket: ArenaQueueTicket; since: number } | { status: "found"; ticket: ArenaQueueTicket };
+type QueueTicket = ArenaQueueTicket | PaidTicket;
+type QueueState = { status: "idle" } | { status: "searching"; ticket: QueueTicket; since: number } | { status: "found"; ticket: QueueTicket };
+const SOL_ENTRIES = [0, 0.01, 0.05, 0.1, 0.25] as const;
+const formatEntry = (value: number) => value === 0 ? "Free" : `${value} SOL`;
+const isPaid = (ticket: QueueTicket): ticket is PaidTicket => "stakeLamports" in ticket;
 
 function devnetExplorerUrl(asset: DasAsset | null): string | null {
   if (!asset || asset.interface !== "MplCoreAsset" ||
@@ -72,8 +76,7 @@ function RankBadge({ rank }: { rank: { tier: string; rating: number } }) {
 
 export default function LoadoutPage() {
   const router = useRouter();
-  const { ready, playerName, session, status, playAsGuest, signIn } = useWallet();
-  const { formatUsd: formatDollars } = useCurrency();
+  const { ready, playerName, session, status, walletAuthToken, playAsGuest, signIn } = useWallet();
   const [assets, setAssets] = useState<DasAsset[] | null>(null);
   const [collectionError, setCollectionError] = useState<string | null>(null);
   const [rank, setRank] = useState<RankInfo | null>(null);
@@ -83,7 +86,9 @@ export default function LoadoutPage() {
   const [entryError, setEntryError] = useState<string | null>(null);
   const [finding, setFinding] = useState(false);
   const [queue, setQueue] = useState<QueueState>({ status: "idle" });
+  const [queueStale, setQueueStale] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [recoveryTx, setRecoveryTx] = useState<string | null>(null);
   const overlayRef = useRef<HTMLDivElement>(null);
   const [summon, setSummon] = useState<{ key: string; n: number } | null>(null);
   const motion = useMotionPreference();
@@ -95,34 +100,49 @@ export default function LoadoutPage() {
     const saved = tabStorage.get(ARENA_QUEUE_STORAGE_KEY);
     if (!saved) return;
     try {
-      const ticket = JSON.parse(saved) as ArenaQueueTicket;
+      const ticket = JSON.parse(saved) as QueueTicket;
       if (ticket.id && ticket.token) setQueue(ticket.status === "matched" ? { status: "found", ticket } : { status: "searching", ticket, since: Date.now() });
     } catch { tabStorage.remove(ARENA_QUEUE_STORAGE_KEY); }
   }, []);
 
   useEffect(() => {
     if (queue.status !== "searching") return;
+    if (queueStale) return;
+    if (isPaid(queue.ticket) && !walletAuthToken && !ready) return;
     let live = true;
     const check = async () => {
       try {
-        const latest = await arenaApi.queueStatus(queue.ticket);
+        const latest = isPaid(queue.ticket)
+          ? await paidQueueApi.status(walletAuthToken ?? "", queue.ticket)
+          : await arenaApi.queueStatus(queue.ticket);
         if (live && latest.status === "matched" && latest.arena) setQueue({ status: "found", ticket: latest });
+        else if (live && latest.status === "cancelled") { tabStorage.remove(ARENA_QUEUE_STORAGE_KEY); setQueue({ status: "idle" }); }
+        else if (live) setQueue((current) => current.status === "searching" && current.ticket.id === latest.id ? { ...current, ticket: latest } : current);
       } catch (cause) {
         if (!live) return;
-        setNotice((cause as Error).message);
-        tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
-        setQueue({ status: "idle" });
+        if (isPaid(queue.ticket)) {
+          setQueueStale(true);
+          setNotice("The match server lost this queue. If you deposited SOL, cancel and refund it with Phantom.");
+        } else {
+          setNotice((cause as Error).message);
+          tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
+          setQueue({ status: "idle" });
+        }
       }
     };
     void check();
     const timer = window.setInterval(() => void check(), 700);
     return () => { live = false; window.clearInterval(timer); };
+  }, [queue.status, queue.status === "searching" ? queue.ticket.id : "", walletAuthToken, ready, queueStale]);
+
+  useEffect(() => {
+    if (queue.status === "searching" && isPaid(queue.ticket)) tabStorage.set(ARENA_QUEUE_STORAGE_KEY, JSON.stringify(queue.ticket));
   }, [queue]);
 
   useEffect(() => {
     if (queue.status !== "found" || !queue.ticket.arena) return;
     const timer = window.setTimeout(() => {
-      tabStorage.set(ARENA_SESSION_STORAGE_KEY, JSON.stringify(queue.ticket.arena));
+      tabStorage.set(ARENA_SESSION_STORAGE_KEY, JSON.stringify({ ...queue.ticket.arena, ...(isPaid(queue.ticket) ? { paidQueue: { id: queue.ticket.id, token: queue.ticket.token } } : {}) }));
       tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
       router.push("/battle/live");
     }, 1000);
@@ -164,6 +184,7 @@ export default function LoadoutPage() {
   }, [eligible, selected]);
 
   const lead = eligible.find((p) => p.key === selected) ?? null;
+  const paidCardValid = !!lead && rows.some((row) => row.pick?.key === lead.key && !!devnetExplorerUrl(row.asset));
   const leadSpecies = useSpecies(lead?.species ?? null);
   const summonCard = (key: string) => { setNotice(null); setSummon({ key, n: Date.now() }); };
 
@@ -181,8 +202,12 @@ export default function LoadoutPage() {
       const ownedAsset = process.env.NEXT_PUBLIC_COLLECTION_SOURCE === "devnet" && session && !lead.rental
         ? { assetId: lead.key, walletAddress: session.address }
         : undefined;
-      const ticket = await arenaApi.enqueue(playerName, lead.species, rank.rating, Math.round(entry * 100), ownedAsset);
+      if (entry > 0 && (!walletAuthToken || !session || !paidCardValid)) throw new Error("Sign in with Phantom and select a verified Devnet NFT to enter a SOL match.");
+      const ticket = entry > 0
+        ? await paidQueueApi.enqueue(walletAuthToken!, { name: playerName, cardId: lead.species, rating: rank.rating, assetId: lead.key, stakeLamports: Math.round(entry * 1_000_000_000) })
+        : await arenaApi.enqueue(playerName, lead.species, rank.rating, 0, ownedAsset);
       tabStorage.remove(ARENA_SESSION_STORAGE_KEY);
+      setQueueStale(false);
       tabStorage.set(ARENA_QUEUE_STORAGE_KEY, JSON.stringify(ticket));
       setQueue(ticket.status === "matched" ? { status: "found", ticket } : { status: "searching", ticket, since: Date.now() });
       setFinding(false);
@@ -196,27 +221,88 @@ export default function LoadoutPage() {
     if (queue.status !== "searching") return;
     setFinding(true);
     try {
-      await arenaApi.cancelQueue(queue.ticket);
+      if (isPaid(queue.ticket)) {
+        const pendingJoin = tabStorage.get(`pf:wager-join:${queue.ticket.id}`);
+        if (pendingJoin) {
+          if (queueStale) throw new Error("Your second deposit may already be on-chain. Recover it after the escrow deadline below.");
+          const latest = await paidQueueApi.action(walletAuthToken ?? "", queue.ticket, { action: "join", signature: pendingJoin });
+          if (latest.status === "matched") { tabStorage.remove(`pf:wager-join:${queue.ticket.id}`); setQueue({ status: "found", ticket: latest }); return; }
+          throw new Error("Second deposit is pending confirmation; retry in a moment.");
+        }
+        const pendingKey = `pf:wager-open:${queue.ticket.id}`;
+        const pending = tabStorage.get(pendingKey);
+        const wager = queue.ticket.wager ?? (pending ? (JSON.parse(pending) as { wager: string }).wager : null);
+        if (wager && session && ["awaiting_join", "cancel_required", "open_required"].includes(queue.ticket.status)) {
+          await cancelSolWager(session.address, wager);
+          if (queue.ticket.wager) await paidQueueApi.action(walletAuthToken ?? "", queue.ticket, { action: "cancel_onchain" }).catch(() => null);
+          else await paidQueueApi.cancel(walletAuthToken ?? "", queue.ticket).catch(() => null);
+          tabStorage.remove(pendingKey);
+        } else if (!queueStale) await paidQueueApi.cancel(walletAuthToken ?? "", queue.ticket);
+      } else await arenaApi.cancelQueue(queue.ticket);
       tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
       setQueue({ status: "idle" });
+      setQueueStale(false);
     } catch (cause) {
-      const latest = await arenaApi.queueStatus(queue.ticket).catch(() => null);
+      const latest = isPaid(queue.ticket)
+        ? await paidQueueApi.status(walletAuthToken ?? "", queue.ticket).catch(() => null)
+        : await arenaApi.queueStatus(queue.ticket).catch(() => null);
       if (latest?.status === "matched" && latest.arena) setQueue({ status: "found", ticket: latest });
       else setNotice((cause as Error).message);
     } finally { setFinding(false); }
   };
 
+  const recoverExpired = async () => {
+    if (queue.status !== "searching" || !isPaid(queue.ticket) || !queue.ticket.wager || !session) return;
+    setFinding(true);
+    try {
+      const signature = await recoverExpiredWager(session.address, queue.ticket.wager);
+      setNotice("Refund confirmed on Devnet.");
+      setRecoveryTx(signature);
+      tabStorage.remove(`pf:wager-join:${queue.ticket.id}`);
+      tabStorage.remove(ARENA_QUEUE_STORAGE_KEY);
+      setQueue({ status: "idle" });
+      setQueueStale(false);
+    } catch (cause) { setNotice((cause as Error).message); }
+    finally { setFinding(false); }
+  };
+
+  const approveDeposit = async () => {
+    if (queue.status !== "searching" || !isPaid(queue.ticket) || !session || !walletAuthToken) return;
+    setFinding(true);
+    setNotice(null);
+    try {
+      const ticket = queue.ticket;
+      if (ticket.status === "open_required") {
+        const pendingKey = `pf:wager-open:${ticket.id}`;
+        const pending = tabStorage.get(pendingKey);
+        const opened = pending ? JSON.parse(pending) as { wager: string; signature: string } : await openSolWager(session.address, ticket.stakeLamports);
+        tabStorage.set(pendingKey, JSON.stringify(opened));
+        const latest = await paidQueueApi.action(walletAuthToken, ticket, { action: "open", ...opened });
+        tabStorage.remove(pendingKey);
+        setQueue({ status: "searching", ticket: latest, since: Date.now() });
+      } else if (ticket.status === "join_required" && ticket.wager) {
+        const pendingKey = `pf:wager-join:${ticket.id}`;
+        const signature = tabStorage.get(pendingKey) ?? await joinSolWager(session.address, ticket.wager);
+        tabStorage.set(pendingKey, signature);
+        const latest = await paidQueueApi.action(walletAuthToken, ticket, { action: "join", signature });
+        tabStorage.remove(pendingKey);
+        setQueue(latest.status === "matched" ? { status: "found", ticket: latest } : { status: "searching", ticket: latest, since: Date.now() });
+      }
+    } catch (cause) { setNotice((cause as Error).message); }
+    finally { setFinding(false); }
+  };
+
   const setCustomEntry = (raw: string) => {
     const cleaned = raw.replace(/[^0-9.]/g, "");
     const [whole, ...rest] = cleaned.split(".");
-    const value = rest.length ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
+    const value = rest.length ? `${whole}.${rest.join("").slice(0, 3)}` : whole;
     setCustom(value);
     if (!value) { setEntryError(null); setEntry(0); return; }
     const amount = Number(value);
-    if (!Number.isFinite(amount) || amount < 1) { setEntryError("Minimum demo entry is $1"); return; }
-    if (amount > MAX_ENTRY) { setEntryError(`Maximum demo entry is $${MAX_ENTRY}`); return; }
+    if (!Number.isFinite(amount) || amount < 0.001) { setEntryError("Minimum entry is 0.001 Devnet SOL"); return; }
+    if (amount > 1) { setEntryError("Maximum entry is 1 Devnet SOL"); return; }
     setEntryError(null);
-    setEntry(Math.round(amount * 100) / 100);
+    setEntry(Math.round(amount * 1000) / 1000);
   };
 
   return (
@@ -290,6 +376,7 @@ export default function LoadoutPage() {
             </div>
           </div>
           {notice && <p className={styles.warn} role="alert">{notice}</p>}
+          {recoveryTx && <a href={explorerTx(recoveryTx)} target="_blank" rel="noopener noreferrer">View refund on Solana ↗</a>}
           {leadSpecies?.failed && !notice && <p className={styles.warn}>Couldn&apos;t load this creature&apos;s moves. Check your connection.</p>}
           <ul className={styles.moves}>
             {(leadSpecies?.species?.moves ?? [null, null, null, null]).map((m, i) => (
@@ -305,16 +392,16 @@ export default function LoadoutPage() {
 
           <p className={styles.label}>Entry</p>
           <div className={styles.chips}>
-            {ENTRY_PRESETS.map((amount) => <button key={amount} className="pf-chip" data-on={entry === amount && !custom || undefined} onClick={() => { setCustom(""); setEntryError(null); setEntry(amount); }}>{formatDollars(amount)}</button>)}
+            {SOL_ENTRIES.map((amount) => <button key={amount} className="pf-chip" data-on={entry === amount && !custom || undefined} onClick={() => { setCustom(""); setEntryError(null); setEntry(amount); }}>{formatEntry(amount)}</button>)}
             <label className={`pf-input ${styles.custom}`} data-on={!!custom || undefined}>
-              <span>$</span>
-              <input inputMode="decimal" placeholder="0.00" value={custom} aria-label="Custom demo entry in dollars" onChange={(event) => setCustomEntry(event.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
+              <span>SOL</span>
+              <input inputMode="decimal" placeholder="0.000" value={custom} aria-label="Custom entry in Devnet SOL" onChange={(event) => setCustomEntry(event.target.value)} aria-invalid={!!entryError || undefined} aria-describedby={entryError ? "entry-error" : undefined} />
             </label>
           </div>
           {entryError && <p id="entry-error" className={styles.warn} role="alert">{entryError}</p>}
           <div className={styles.pot} hidden={!!entryError}>
-            <span>{entry ? <>Demo entry <strong>{formatDollars(entry)}</strong> per player</> : "Free live match"}</span>
-            <em>Demo only · no money or NFT transfers</em>
+            <span>{entry ? <><strong>{formatEntry(entry)}</strong> per player · {formatEntry(entry * 2)} pot</> : "Free live match"}</span>
+            <em>{entry ? "Devnet test SOL · Phantom approval required" : "Free match · no transfers"}</em>
           </div>
 
           <p className={styles.label}>Demo rating</p>
@@ -326,7 +413,8 @@ export default function LoadoutPage() {
           ) : <span className={styles.moveSkeleton} />}
 
           {lead && lead.species !== "pikachu" && lead.species !== "charmander" && <p className={styles.warn}>Live matchmaking currently supports Pikachu and Charmander.</p>}
-          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !!entryError || finding || queue.status !== "idle" || (lead.species !== "pikachu" && lead.species !== "charmander")} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
+          {entry > 0 && lead && !paidCardValid && <p className={styles.warn}>Select an on-chain Devnet NFT for a SOL match. Demo marketplace cards play for free.</p>}
+          <button className={`pf-btn ${styles.find}`} data-variant="primary" data-size="lg" disabled={!lead || !rank || !!entryError || finding || queue.status !== "idle" || (entry > 0 && (!paidCardValid || !walletAuthToken)) || (lead.species !== "pikachu" && lead.species !== "charmander")} onClick={() => void findMatch()}>{finding ? "Entering queue…" : "Find match"}</button>
         </aside>
       </main>
 
@@ -334,9 +422,14 @@ export default function LoadoutPage() {
         <div className={`pf-panel ${styles.matchBox}`}>
           <div className={styles.radar}><Emblem size={56} /></div>
           <p className="pf-eyebrow">{queue.status === "found" ? "Match found" : "Finding a match"}</p>
-          <h2>{queue.status === "found" ? `Matched with ${queue.ticket.opponent ?? "another player"}` : "Waiting for another player…"}</h2>
-          <p className={styles.hint}>{queue.status === "found" ? "Opening the live battle now." : `Searching for ${formatDollars(queue.ticket.entryCents / 100)} demo entry · closest available demo rating first.`}</p>
-          {queue.status === "searching" && <button className="pf-btn" data-variant="ghost" disabled={finding} onClick={() => void cancelSearch()}>Cancel search</button>}
+          <h2>{queue.status === "found" ? `Matched with ${queue.ticket.opponent ?? "another player"}` : isPaid(queue.ticket) && queue.ticket.status === "open_required" ? "Opponent found · deposit your SOL" : isPaid(queue.ticket) && queue.ticket.status === "join_required" ? "Join the funded match" : isPaid(queue.ticket) && queue.ticket.status === "cancel_required" ? "Opponent left · refund your deposit" : "Waiting for another player…"}</h2>
+          <p className={styles.hint}>{queue.status === "found" ? "Both Devnet SOL deposits are confirmed. Opening battle." : isPaid(queue.ticket) ? `${formatEntry(queue.ticket.stakeLamports / 1_000_000_000)} per player · ${queue.ticket.status === "awaiting_open" ? "waiting for opponent's deposit" : queue.ticket.status === "awaiting_join" ? "waiting for opponent's deposit" : "closest available rating first"}` : "Searching for a free match · closest available rating first."}</p>
+          {queue.status === "searching" && isPaid(queue.ticket) && ["open_required", "join_required"].includes(queue.ticket.status) && <button className="pf-btn" data-variant="primary" disabled={finding} onClick={() => void approveDeposit()}>{finding ? "Confirming on Solana…" : `Approve ${formatEntry(queue.ticket.stakeLamports / 1_000_000_000)} in Phantom`}</button>}
+          {queue.status === "searching" && isPaid(queue.ticket) && queue.ticket.openTx && <a href={explorerTx(queue.ticket.openTx)} target="_blank" rel="noopener noreferrer">View first deposit on Solana ↗</a>}
+          {queue.status === "searching" && isPaid(queue.ticket) && queue.ticket.joinTx && <a href={explorerTx(queue.ticket.joinTx)} target="_blank" rel="noopener noreferrer">View second deposit on Solana ↗</a>}
+          {notice && <p className={styles.warn} role="alert">{notice}</p>}
+          {queue.status === "searching" && isPaid(queue.ticket) && queue.ticket.wager && <button className="pf-btn" data-variant="ghost" disabled={finding} onClick={() => void recoverExpired()}>Recover after escrow deadline</button>}
+          {queue.status === "searching" && <button className="pf-btn" data-variant="ghost" disabled={finding} onClick={() => void cancelSearch()}>{isPaid(queue.ticket) && queue.ticket.wager ? "Cancel and refund" : "Cancel search"}</button>}
         </div>
       </div>}
 
