@@ -66,7 +66,7 @@ export function usePaidLoadoutQueue(player: string | null, authToken: string | n
 
   useEffect(() => {
     if (queue.status !== "found") return;
-    const timer = setTimeout(() => router.push("/battle/live"), 750);
+    const timer = setTimeout(() => router.push("/arena"), 750);
     return () => clearTimeout(timer);
   }, [queue, router]);
 

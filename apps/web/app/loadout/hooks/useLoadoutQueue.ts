@@ -12,9 +12,8 @@ import { errorMessage } from "./useLoadoutResource";
 export type LoadoutQueue =
   | { status: "idle" }
   | { status: "joining"; format: MatchFormat }
-  | { status: "searching"; format: "champion"; ticket: ArenaQueueTicket }
-  | { status: "searching"; format: "squad" }
-  | { status: "found"; format: MatchFormat; opponent: string };
+  | { status: "searching"; format: MatchFormat; ticket?: ArenaQueueTicket }
+  | { status: "found"; format: MatchFormat; opponent: string; legacyArena?: boolean };
 
 interface QueueRequest {
   format: MatchFormat;
@@ -61,7 +60,7 @@ export function useLoadoutQueue(player: string | null) {
     if (ticket.status === "matched" && ticket.arena) {
       storage.set(ARENA_SESSION_STORAGE_KEY, JSON.stringify({ ...ticket.arena, player: owner }));
       storage.remove(ARENA_QUEUE_STORAGE_KEY);
-      setQueue({ status: "found", format: "champion", opponent: ticket.opponent ?? "another player" });
+      setQueue({ status: "found", format: "champion", opponent: ticket.opponent ?? "another player", legacyArena: true });
     } else {
       setQueue({ status: "searching", format: "champion", ticket });
     }
@@ -83,7 +82,7 @@ export function useLoadoutQueue(player: string | null) {
       if (saved?.id && saved.token && (!saved.player || saved.player === owner)) {
         try {
           const view = await arenaApi.view(saved);
-          if (view.status !== "finished") return "/battle/live";
+          if (view.status !== "finished") return "/arena";
           storage.remove(ARENA_SESSION_STORAGE_KEY);
         } catch (cause) {
           if (!arenaSessionExpired(cause)) throw cause;
@@ -97,7 +96,7 @@ export function useLoadoutQueue(player: string | null) {
         const feed = await apiRequest("GET", `/api/battles/${encodeURIComponent(ticket.live.battleId)}/events?since=0`, undefined, ticket.live.token);
         const events = feed.events as { type: string }[];
         const lastInit = events.map((event) => event.type).lastIndexOf("init");
-        if (!events.slice(Math.max(0, lastInit)).some((event) => event.type === "win")) return "/battle";
+        if (!events.slice(Math.max(0, lastInit)).some((event) => event.type === "win")) return ticket.format === "champion" ? "/battle/live" : "/battle";
       } catch (cause) { if (!arenaSessionExpired(cause)) throw cause; }
     }
     return null;
@@ -139,12 +138,12 @@ export function useLoadoutQueue(player: string | null) {
   }, [player, acceptArena]);
 
   useEffect(() => {
-    if (queue.status !== "searching" || queue.format !== "champion" || pollError || !player) return;
+    if (queue.status !== "searching" || !queue.ticket || pollError || !player) return;
     let active = true;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const check = async () => {
       try {
-        const latest = await refreshArenaTicket(queue.ticket);
+        const latest = await refreshArenaTicket(queue.ticket!);
         validateArenaTicket(latest);
         if (!active) return;
         if (latest.status === "matched") acceptArena(latest, player);
@@ -164,7 +163,7 @@ export function useLoadoutQueue(player: string | null) {
 
   useEffect(() => {
     if (queue.status !== "found") return;
-    const timer = setTimeout(() => router.push(queue.format === "champion" ? "/battle/live" : "/battle"), 750);
+    const timer = setTimeout(() => router.push(queue.legacyArena ? "/arena" : queue.format === "champion" ? "/battle/live" : "/battle"), 750);
     return () => clearTimeout(timer);
   }, [queue, router]);
 
@@ -182,33 +181,21 @@ export function useLoadoutQueue(player: string | null) {
     try {
       const path = await existingSession(owner);
       if (path) { setResume({ path }); setQueue({ status: "idle" }); router.push(path); return; }
-      if (format === "champion") {
-        const lead = team[0];
-        const ownedAsset = walletAddress && !lead.rental
-          ? { assetId: lead.key, walletAddress } : undefined;
-        const ticket = await arenaApi.enqueue(owner, lead.species, rating, Math.round(entry * 100), ownedAsset);
-        if (!mounted.current || identity.current !== owner) {
-          if (ticket.status === "waiting") await arenaApi.cancelQueue(ticket);
-          return;
-        }
-        storage.remove(ARENA_SESSION_STORAGE_KEY);
-        acceptArena(ticket, owner);
-      } else {
-        const pending = matchmakingService.find({
+      const pending = matchmakingService.find({
           player: owner, rating, format, entry, team: team.map((pick) => !pick.rental && walletAddress ? { ...pick, assetId: pick.key, walletAddress } : pick),
           tier: Math.max(...team.map((pick) => pick.tier)) as PowerTier,
         });
-        search.current = pending;
-        setQueue({ status: "searching", format });
-        const ticket = await pending.result;
-        if (!mounted.current || identity.current !== owner) return;
-        if (!ticket.live?.battleId || !ticket.live.token || ticket.format !== "squad"
-          || ticket.you.team.length !== 3 || ticket.opponent.team.length !== 3) {
-          throw new Error("No live squad match was returned. Please try the server queue again.");
-        }
-        saveTicket(ticket);
-        setQueue({ status: "found", format, opponent: ticket.opponent.trainer.name });
+      search.current = pending;
+      setQueue({ status: "searching", format });
+      const ticket = await pending.result;
+      if (!mounted.current || identity.current !== owner) return;
+      const size = format === "champion" ? 1 : 3;
+      if (!ticket.live?.battleId || !ticket.live.token || ticket.format !== format
+        || ticket.you.team.length !== size || ticket.opponent.team.length !== size) {
+        throw new Error("No live match was returned. Please try the server queue again.");
       }
+      saveTicket(ticket);
+      setQueue({ status: "found", format, opponent: ticket.opponent.trainer.name });
     } catch (cause) {
       if (!mounted.current || identity.current !== owner) return;
       setQueue({ status: "idle" });
@@ -225,7 +212,7 @@ export function useLoadoutQueue(player: string | null) {
   const cancel = async () => {
     if (queue.status !== "searching" || cancelling) return;
     setCancelling(true);
-    if (queue.format === "squad") {
+    if (!queue.ticket) {
       // Keep the dialog until the service confirms cancellation or a match.
       search.current?.cancel();
       return;

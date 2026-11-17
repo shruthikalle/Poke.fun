@@ -22,7 +22,7 @@ export function QueueDialog({ queue, entry, error, cancelling, onCancel, onRetry
   useFocusTrap(ref, queue.status !== "idle");
   if (queue.status === "idle") return null;
   const found = queue.status === "found";
-  const amount = queue.status === "searching" && queue.format === "champion"
+  const amount = queue.status === "searching" && queue.ticket
     ? queue.ticket.entryCents / 100 : entry;
 
   return (
