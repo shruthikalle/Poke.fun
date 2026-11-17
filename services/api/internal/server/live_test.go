@@ -77,6 +77,11 @@ func TestLiveBattleAgainstAI(t *testing.T) {
 	if !strings.HasPrefix(types(open), "init,") {
 		t.Fatalf("feed should open with init, got %s", types(open))
 	}
+	if code, out := h.call("GET", "/api/battles/"+id+"/events?since="+itoa(cursor), "", token); code != http.StatusOK {
+		t.Fatalf("empty feed: %d %v", code, out)
+	} else if _, ok := out["events"].([]any); !ok {
+		t.Fatalf("empty feed must encode events as [], got %v", out["events"])
+	}
 	if code, _ := h.call("GET", "/api/battles/"+id+"/events", "", "nope"); code != http.StatusUnauthorized {
 		t.Fatalf("expected 401 for a bad token, got %d", code)
 	}

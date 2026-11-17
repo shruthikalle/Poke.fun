@@ -162,7 +162,7 @@ func (b *Battle) EventsSince(since int) ([]Event, int) {
 	if since < 0 || since > len(b.log) {
 		since = len(b.log)
 	}
-	return append([]Event(nil), b.log[since:]...), len(b.log)
+	return append([]Event{}, b.log[since:]...), len(b.log)
 }
 
 func (b *Battle) record(events ...Event) { b.log = append(b.log, events...) }

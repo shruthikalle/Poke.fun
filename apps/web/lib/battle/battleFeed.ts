@@ -57,7 +57,7 @@ export class BattleFeed {
       if (r.cursor < this.cursor) { this.cursor = 0; this.interrupted = true; return; }
       const firstFetch = this.cursor === 0;
       this.cursor = r.cursor;
-      const events = (r.events as BattleEvent[]).map((e) => this.localize(e));
+      const events = (Array.isArray(r.events) ? r.events as BattleEvent[] : []).map((e) => this.localize(e));
       this.onBatch({ ...((firstFetch || this.interrupted) ? catchUp(events) : { instant: [], paced: events }), started: r.started });
       this.interrupted = false;
     } catch (cause) {
