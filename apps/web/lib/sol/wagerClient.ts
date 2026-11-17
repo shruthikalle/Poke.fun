@@ -1,6 +1,6 @@
 import { Connection, PublicKey, SystemProgram, Transaction, TransactionInstruction } from "@solana/web3.js";
 import { Buffer } from "buffer";
-import { getPhantomProvider } from "../wallet/phantom";
+import { connectPhantom, getPhantomProvider, truncateAddress } from "../wallet/phantom";
 import type { PaidTicket } from "./paidQueue";
 
 export const WAGER_PROGRAM = new PublicKey("FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J");
@@ -18,8 +18,12 @@ export function wagerAddress(maker: PublicKey, nonce: bigint) {
 
 async function send(ix: TransactionInstruction, expectedAddress: string) {
   const provider = getPhantomProvider();
-  if (!provider?.publicKey || !provider.signAndSendTransaction || provider.publicKey.toString() !== expectedAddress) {
-    throw new Error("Connect the same Devnet Phantom wallet used to sign in, then try again.");
+  if (!provider?.signAndSendTransaction) {
+    throw new Error("Open this page in the browser with Phantom installed to approve the Devnet SOL deposit.");
+  }
+  const connectedAddress = await connectPhantom(provider);
+  if (connectedAddress !== expectedAddress) {
+    throw new Error(`Phantom is using ${truncateAddress(connectedAddress)}, but you signed in as ${truncateAddress(expectedAddress)}. Switch Phantom to that account, then retry.`);
   }
   const connection = new Connection(DEVNET_RPC, "confirmed");
   const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash("confirmed");
