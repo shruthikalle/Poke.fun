@@ -12,7 +12,7 @@ interface Props {
   choose: (choice: BattleChoice) => void;
   cancel: () => void;
   toggleTimer: () => void;
-  rematch: () => void;
+  rematch?: () => void;
   /** Extra content for the ended state, e.g. winnings and rank change. */
   summary?: ReactNode;
 }
@@ -38,7 +38,7 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary
         <p className={styles.prompt}><strong>{state.winner === "draw" ? "The battle ended in a draw." : state.winner === state.you ? "You won the battle!" : `${state.sides[state.winner === "p1" ? "p1" : "p2"].trainer.name} won the battle.`}</strong></p>
         {summary}
         <div className={styles.endRow}>
-          <button className="pf-btn" data-variant="primary" data-size="sm" onClick={rematch}>Battle again</button>
+          {rematch && <button className="pf-btn" data-variant="primary" data-size="sm" onClick={rematch}>Battle again</button>}
           <Link className="pf-btn" data-size="sm" href="/loadout">Change loadout</Link>
           <Link className="pf-btn" data-size="sm" data-variant="ghost" href="/collection">View My Cards</Link>
         </div>

@@ -39,6 +39,8 @@ export interface MatchTicket {
   opponent: MatchOpponent;
   /** Present for a real two-player match; absent when battling the AI. */
   live?: LiveMatch;
+  /** Devnet SOL escrow attached by the paid queue after both deposits. */
+  paidWager?: { id: string; token: string; wager: string; stakeLamports: number };
 }
 
 export interface MatchSearch {
@@ -119,7 +121,9 @@ export function isTicket(t: unknown): t is MatchTicket {
   const x = t as MatchTicket;
   return !!x && typeof x.matchId === "string" && (x.format === "champion" || x.format === "squad") && typeof x.entry === "number" && x.entry >= 0
     && !!x.you && isTeam(x.you.team) && typeof x.you.rating === "number" && !!x.opponent && isTeam(x.opponent.team) && !!x.opponent.trainer?.name && typeof x.opponent.rating === "number"
-    && (x.live === undefined || isLive(x.live));
+    && (x.live === undefined || isLive(x.live))
+    && (x.paidWager === undefined || !!x.live && typeof x.paidWager.id === "string" && typeof x.paidWager.token === "string"
+      && typeof x.paidWager.wager === "string" && Number.isInteger(x.paidWager.stakeLamports) && x.paidWager.stakeLamports > 0);
 }
 
 export function loadTicket(): MatchTicket | null {

@@ -89,6 +89,26 @@ func TestQueueReturnsRealRecordsAndRetryableMatchedTicket(t *testing.T) {
 	}
 }
 
+func TestFundedPairKeyIsolatesMatchFromFreeAndOtherEscrows(t *testing.T) {
+	h := harness{t, New("http://localhost:3000")}
+	join := func(name, pairKey string) (int, map[string]any) {
+		req := queueRequest{Format: "champion", Tier: 1, PairKey: pairKey, Team: []queuePick{{Species: "pikachu", Level: 50}}}
+		req.Trainer.Name = name
+		raw, _ := json.Marshal(req)
+		return h.call("POST", "/api/queue", string(raw), "")
+	}
+	firstKey := "11111111111111111111111111111111"
+	secondKey := "22222222222222222222222222222222"
+	for _, player := range []struct{ name, key string }{{"FundedMaker", firstKey}, {"FreePlayer", ""}, {"OtherEscrow", secondKey}} {
+		if code, reply := join(player.name, player.key); code != http.StatusAccepted || reply["status"] != "searching" {
+			t.Fatalf("%s unexpectedly paired: %d %v", player.name, code, reply)
+		}
+	}
+	if code, reply := join("FundedOpponent", firstKey); code != http.StatusOK || reply["status"] != "matched" || reply["opponent"].(map[string]any)["trainer"].(map[string]any)["name"] != "FundedMaker" {
+		t.Fatalf("funded pair did not match each other: %d %v", code, reply)
+	}
+}
+
 func TestSpeciesEndpointSharesBattleMoves(t *testing.T) {
 	h := harness{t, New("http://localhost:3000")}
 	code, ditto := h.call("GET", "/api/species/ditto", "", "")

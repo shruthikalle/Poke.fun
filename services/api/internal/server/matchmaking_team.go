@@ -3,10 +3,13 @@ package server
 import (
 	"fmt"
 	"math"
+	"regexp"
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/livebattle"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/pokedex"
 )
+
+var pairKeyPattern = regexp.MustCompile(`^[1-9A-HJ-NP-Za-km-z]{32,44}$`)
 
 // queuePick preserves the card-pick wire shape. Only species is a combat
 // selection; all combat and display metadata is resolved from the server dex.
@@ -42,6 +45,9 @@ func (q *queueRequest) validate() error {
 	}
 	if q.Entry < 0 || math.IsNaN(q.Entry) || math.IsInf(q.Entry, 0) || math.Abs(q.Entry*100-math.Round(q.Entry*100)) > 0.000001 {
 		return fmt.Errorf("entry must be a nonnegative amount in whole cents")
+	}
+	if q.PairKey != "" && !pairKeyPattern.MatchString(q.PairKey) {
+		return fmt.Errorf("pair key must be a private base58 match key")
 	}
 	if len(q.Team) != size {
 		return fmt.Errorf("%s requires exactly %d creatures", q.Format, size)

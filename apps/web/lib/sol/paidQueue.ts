@@ -1,18 +1,20 @@
-import { randomBytes } from "node:crypto";
+import { createPublicKey, randomBytes, verify } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { AnchorProvider, Program, type Idl, type Wallet } from "@coral-xyz/anchor";
 import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } from "@solana/web3.js";
 import idl from "./pokefun_wager.json";
-import { findCatalogEntry } from "../cards/mapping";
+import { FAUX_ART_WINDOW, findCatalogEntry, type CardPick, type PowerTier } from "../cards/mapping";
 import { speciesForCardName } from "../cards/cardNames";
+import type { MatchTicket } from "../match/MatchmakingService";
+import { tierFor } from "../rank/RankService";
 
 const DEVNET_RPC = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
 
 const API = process.env.ARENA_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
 const CONFIG = new PublicKey("8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S");
 type Stage = "waiting" | "open_required" | "awaiting_open" | "join_required" | "awaiting_join" | "cancel_required" | "matched" | "cancelled";
-export type PaidTicket = { id: string; token: string; status: Stage; stakeLamports: number; opponent?: string; wager?: string; openTx?: string; joinTx?: string; settlementTx?: string; arena?: { id: string; token: string; stakeLamports: number; wager: string; makerAddress: string; opponentAddress: string; expiresAt: number } };
-type Entry = PaidTicket & { address: string; name: string; cardId: string; assetId: string; rating: number; tier: number; created: number; peer?: string; maker?: boolean; busy?: boolean };
+export type PaidTicket = { id: string; token: string; status: Stage; stakeLamports: number; opponent?: string; wager?: string; openTx?: string; joinTx?: string; settlementTx?: string; match?: MatchTicket; arena?: { id: string; token: string; stakeLamports: number; wager: string; makerAddress: string; opponentAddress: string; expiresAt: number } };
+type Entry = PaidTicket & { address: string; name: string; cardId: string; assetId: string; rating: number; tier: number; created: number; peer?: string; maker?: boolean; busy?: boolean; pairKey?: string; battleQueueTicket?: string; battleReply?: QueueMatched };
 const globalState = globalThis as typeof globalThis & { pokeFunPaidQueue?: Map<string, Entry>; pokeFunPaidWorkers?: Set<string> };
 const entries = globalState.pokeFunPaidQueue ??= new Map<string, Entry>();
 const workers = globalState.pokeFunPaidWorkers ??= new Set<string>();
@@ -35,19 +37,19 @@ function refereeProgram() {
 async function verifiedCard(entry: Pick<Entry, "address" | "cardId" | "assetId">) {
   const response = await fetch(`${API}/api/collectibles/${encodeURIComponent(entry.assetId)}?owner=${encodeURIComponent(entry.address)}`, { cache: "no-store" });
   if (!response.ok) throw new Error("Could not verify this card is still owned by your wallet");
-  const card = await response.json() as { attributes?: { trait_type: string; value: string }[] };
+  const card = await response.json() as { name?: string; image?: string; attributes?: { trait_type: string; value: string }[] };
   const attribute = (name: string) => card.attributes?.find((a) => a.trait_type === name)?.value;
   const species = findCatalogEntry(attribute("Set"), attribute("Card Number"))?.species
     ?? speciesForCardName(attribute("Card Name") ?? "")?.key;
   if (attribute("Category") !== "Pokemon" || species !== entry.cardId) throw new Error("Card does not match selected fighter");
+  return card;
 }
 
 async function fighterTier(cardId: string) {
-  const response = await fetch(`${API}/api/arena-cards?ids=${encodeURIComponent(cardId)}`, { cache: "no-store" });
-  if (!response.ok) throw new Error("Could not verify this fighter with the arena server");
-  const cards = await response.json() as { id: string; tier: number }[];
-  const fighter = cards.find((card) => card.id === cardId);
-  if (!fighter || ![1, 2, 3].includes(fighter.tier)) throw new Error("This Pokémon is not supported in the live arena");
+  const response = await fetch(`${API}/api/species/${encodeURIComponent(cardId)}`, { cache: "no-store" });
+  if (!response.ok) throw new Error("This Pokémon is not supported in the turn-based battle");
+  const fighter = await response.json() as { tier: number };
+  if (![1, 2, 3].includes(fighter.tier)) throw new Error("This Pokémon has no valid battle tier");
   return fighter.tier;
 }
 
@@ -62,11 +64,62 @@ async function readWager(address: string) {
   return account;
 }
 
-async function arenaCall<T>(path: string, body: unknown) {
-  const response = await fetch(`${API}${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), cache: "no-store" });
+async function battleCall<T>(method: "GET" | "POST", path: string, body?: unknown) {
+  const response = await fetch(`${API}${path}`, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), cache: "no-store" });
   const result = await response.json();
-  if (!response.ok) throw new Error(result.error ?? "Arena server rejected match");
+  if (!response.ok) throw new Error(result.error ?? "Battle server rejected match");
   return result as T;
+}
+
+type QueuePlayer = { trainer: { id: string; name: string; avatar: string }; rating: number; wins: number; losses: number; team: CardPick[] };
+type QueueMatched = { status: "matched"; id: string; token: string; side: "p1" | "p2"; you: QueuePlayer; opponent: QueuePlayer };
+type QueueReply = QueueMatched | { status: "searching"; ticket: string };
+
+function battlePick(entry: Entry, card: Awaited<ReturnType<typeof verifiedCard>>) {
+  const attribute = (name: string) => card.attributes?.find((a) => a.trait_type === name)?.value;
+  return {
+    key: entry.assetId, assetId: entry.assetId, walletAddress: entry.address,
+    species: entry.cardId, label: attribute("Card Name") ?? card.name ?? entry.cardId,
+    image: card.image ?? null, grade: null, level: 50, tier: entry.tier as PowerTier,
+    rental: false, artWindow: FAUX_ART_WINDOW,
+  };
+}
+
+function matchTicket(reply: QueueMatched, entry: Entry, wager: string): MatchTicket {
+  return {
+    matchId: reply.id, format: "champion", entry: 0,
+    you: { name: reply.you.trainer.name, rating: reply.you.rating, team: reply.you.team },
+    opponent: { trainer: reply.opponent.trainer, rating: reply.opponent.rating, tier: tierFor(reply.opponent.rating),
+      wins: reply.opponent.wins, losses: reply.opponent.losses, team: reply.opponent.team },
+    live: { battleId: reply.id, token: reply.token, side: reply.side },
+    paidWager: { id: entry.id, token: entry.token, wager, stakeLamports: entry.stakeLamports },
+  };
+}
+
+async function createPaidBattle(maker: Entry, opponent: Entry, wager: string) {
+  if (!maker.pairKey || maker.pairKey !== opponent.pairKey) throw new Error("Funded match pairing key is missing");
+  const [makerCard, opponentCard] = await Promise.all([verifiedCard(maker), verifiedCard(opponent)]);
+  const request = (entry: Entry, card: typeof makerCard) => ({
+    trainer: { id: entry.name, name: entry.name, avatar: "maya" },
+    rating: entry.rating, format: "champion", tier: entry.tier, entry: 0,
+    pairKey: maker.pairKey, team: [battlePick(entry, card)],
+  });
+  if (!maker.battleQueueTicket) {
+    const queued = await battleCall<QueueReply>("POST", "/api/queue", request(maker, makerCard));
+    if (queued.status !== "searching") throw new Error("Paid match paired with the wrong opponent");
+    maker.battleQueueTicket = queued.ticket;
+  }
+  if (!opponent.battleReply) {
+    const joined = await battleCall<QueueReply>("POST", "/api/queue", request(opponent, opponentCard));
+    if (joined.status !== "matched") throw new Error("Battle server did not pair the funded wallets");
+    opponent.battleReply = joined;
+  }
+  const first = await battleCall<QueueReply>("GET", `/api/queue/${encodeURIComponent(maker.battleQueueTicket)}`);
+  const second = opponent.battleReply;
+  if (first.status !== "matched" || first.id !== second.id || first.side !== "p1" || second.side !== "p2") {
+    throw new Error("The funded players were not paired in the same battle");
+  }
+  return { maker: matchTicket(first, maker, wager), opponent: matchTicket(second, opponent, wager) };
 }
 
 export async function enterPaidQueue(address: string, input: { name: string; cardId: string; assetId: string; rating: number; stakeLamports: number }): Promise<PaidTicket> {
@@ -92,8 +145,8 @@ export async function enterPaidQueue(address: string, input: { name: string; car
 }
 
 function publicTicket(entry: Entry): PaidTicket {
-  const { id, token, status, stakeLamports, opponent, wager, openTx, joinTx, settlementTx, arena } = entry;
-  return { id, token, status, stakeLamports, opponent, wager, openTx, joinTx, settlementTx, arena };
+  const { id, token, status, stakeLamports, opponent, wager, openTx, joinTx, settlementTx, match, arena } = entry;
+  return { id, token, status, stakeLamports, opponent, wager, openTx, joinTx, settlementTx, match, arena };
 }
 
 export function getPaidTicket(id: string, token: string, address: string) {
@@ -122,6 +175,7 @@ export async function confirmOpen(entry: Entry, wagerAddress: string, signature:
     const { program, referee } = refereeProgram();
     await program.methods.reserveWager(new PublicKey(peer.address)).accountsStrict({ referee: referee.publicKey, config: CONFIG, wager: new PublicKey(wagerAddress) }).signers([referee]).rpc();
     entry.wager = peer.wager = wagerAddress;
+    entry.pairKey = peer.pairKey = Keypair.generate().publicKey.toBase58();
     entry.openTx = peer.openTx = signature;
     entry.status = "awaiting_join"; peer.status = "join_required";
     return publicTicket(entry);
@@ -138,13 +192,9 @@ export async function confirmJoin(entry: Entry, signature: string) {
     if (!wager.maker.equals(new PublicKey(maker.address)) || !wager.opponent.equals(new PublicKey(entry.address)) || wager.stake.toNumber() !== entry.stakeLamports || !("playing" in wager.state)) throw new Error("Second deposit is not confirmed in escrow");
     const transaction = await connection.getTransaction(signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
     if (!transaction || transaction.meta?.err || !transaction.transaction.message.getAccountKeys().staticAccountKeys.some((key: PublicKey) => key.equals(new PublicKey(entry.wager!)))) throw new Error("Join transaction is not confirmed");
-    await verifiedCard(maker);
-    await verifiedCard(entry);
-    const first = await arenaCall<{ id: string; token: string }>("/api/arenas", { name: maker.name, cardId: maker.cardId, assetId: maker.assetId, walletAddress: maker.address, rental: false });
-    const second = await arenaCall<{ id: string; token: string }>(`/api/arenas/${first.id}/join`, { name: entry.name, cardId: entry.cardId, assetId: entry.assetId, walletAddress: entry.address, rental: false });
-    const paidArena = { stakeLamports: maker.stakeLamports, wager: entry.wager, makerAddress: maker.address, opponentAddress: entry.address, expiresAt: wager.deadline.toNumber() * 1000 };
-    maker.arena = { ...first, ...paidArena };
-    entry.arena = { ...second, ...paidArena };
+    const battle = await createPaidBattle(maker, entry, entry.wager);
+    maker.match = battle.maker;
+    entry.match = battle.opponent;
     maker.joinTx = entry.joinTx = signature;
     maker.status = entry.status = "matched";
     void settleWhenFinished(maker.id);
@@ -175,30 +225,65 @@ export async function confirmCancel(entry: Entry) {
 async function settleWhenFinished(makerId: string) {
   if (workers.has(makerId)) return;
   const maker = entries.get(makerId);
-  if (!maker?.arena || !maker.wager || !maker.peer) return;
+  if ((!maker?.match?.live && !maker?.arena) || !maker.wager || !maker.peer) return;
   workers.add(makerId);
   try {
-    for (let attempt = 0; attempt < 120; attempt++) {
-      const response = await fetch(`${API}/api/arenas/${maker.arena.id}`, { headers: { Authorization: `Bearer ${maker.arena.token}` }, cache: "no-store" });
-      if (response.ok) {
-        const view = await response.json() as { status: string; winner?: string };
-        if (view.status === "finished") {
-          if (!["player1", "player2", "draw"].includes(view.winner ?? "")) throw new Error("Arena result has no valid winner");
-          const peer = entries.get(maker.peer);
-          if (!peer) return;
-          const { program, referee } = refereeProgram();
-          const wager = new PublicKey(maker.wager);
-          const makerKey = new PublicKey(maker.address);
-          const opponentKey = new PublicKey(peer.address);
-          const signature = view.winner === "draw"
-            ? await program.methods.settleSolDraw().accountsStrict({ referee: referee.publicKey, config: CONFIG, maker: makerKey, wager, opponent: opponentKey }).signers([referee]).rpc()
-            : await program.methods.settleSolWager(view.winner === "player1" ? makerKey : opponentKey).accountsStrict({ referee: referee.publicKey, config: CONFIG, maker: makerKey, wager, winner: view.winner === "player1" ? makerKey : opponentKey }).signers([referee]).rpc();
-          maker.settlementTx = peer.settlementTx = signature;
-          return;
-        }
+    const deadline = (await readWager(maker.wager)).deadline.toNumber() * 1000;
+    while (Date.now() < deadline && !maker.settlementTx) {
+      const peer = entries.get(maker.peer);
+      if (!peer) return;
+      const winner = maker.match?.live ? await paidBattleWinner(maker, peer) : await legacyArenaWinner(maker);
+      if (winner) {
+        const { program, referee } = refereeProgram();
+        const wager = new PublicKey(maker.wager);
+        const makerKey = new PublicKey(maker.address);
+        const opponentKey = new PublicKey(peer.address);
+        const signature = winner === "draw"
+          ? await program.methods.settleSolDraw().accountsStrict({ referee: referee.publicKey, config: CONFIG, maker: makerKey, wager, opponent: opponentKey }).signers([referee]).rpc()
+          : await program.methods.settleSolWager(winner === "p1" ? makerKey : opponentKey).accountsStrict({ referee: referee.publicKey, config: CONFIG, maker: makerKey, wager, winner: winner === "p1" ? makerKey : opponentKey }).signers([referee]).rpc();
+        maker.settlementTx = peer.settlementTx = signature;
+        return;
       }
       await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   } catch (error) { console.error("Devnet wager settlement failed", error); }
   finally { workers.delete(makerId); }
+}
+
+async function legacyArenaWinner(maker: Entry): Promise<"p1" | "p2" | "draw" | null> {
+  if (!maker.arena) return null;
+  const response = await fetch(`${API}/api/arenas/${maker.arena.id}`, { headers: { Authorization: `Bearer ${maker.arena.token}` }, cache: "no-store" });
+  if (!response.ok) return null;
+  const view = await response.json() as { status: string; winner?: string };
+  if (view.status !== "finished") return null;
+  if (view.winner === "player1") return "p1";
+  if (view.winner === "player2") return "p2";
+  if (view.winner === "draw") return "draw";
+  throw new Error("Arena result has no valid winner");
+}
+
+async function paidBattleWinner(maker: Entry, peer: Entry): Promise<"p1" | "p2" | "draw" | null> {
+  const live = maker.match?.live;
+  if (!live || !peer.match?.live || live.battleId !== peer.match.live.battleId) throw new Error("Paid battle tickets disagree");
+  const response = await fetch(`${API}/api/battles/${encodeURIComponent(live.battleId)}/result`, {
+    headers: { Authorization: `Bearer ${live.token}` }, cache: "no-store",
+  });
+  if (response.status === 404 || response.status === 409) return null;
+  if (!response.ok) throw new Error(`Could not read authoritative battle result (${response.status})`);
+  const proof = await response.json() as { payload: string; signature: string; publicKey: string; algorithm: string;
+    result: { matchId: string; mode: string; round: number; winner: string; players: { seat: string; name: string; assets?: string[]; species: string[] }[] } };
+  const payload = Buffer.from(proof.payload, "base64url");
+  const publicKey = Buffer.from(proof.publicKey, "base64url");
+  const referee = await battleCall<{ publicKey: string }>("GET", "/api/referee");
+  const key = createPublicKey({ key: Buffer.concat([Buffer.from("302a300506032b6570032100", "hex"), publicKey]), format: "der", type: "spki" });
+  if (proof.algorithm !== "Ed25519" || proof.publicKey !== referee.publicKey || publicKey.length !== 32 || !verify(null, payload, key, Buffer.from(proof.signature, "base64url"))
+    || JSON.stringify(JSON.parse(payload.toString("utf8"))) !== JSON.stringify(proof.result)) throw new Error("Battle result signature is invalid");
+  const result = proof.result;
+  if (result.matchId !== live.battleId || result.mode !== "team" || result.round !== 1
+    || result.players[0]?.seat !== "p1" || result.players[1]?.seat !== "p2"
+    || result.players[0]?.name !== maker.name || result.players[1]?.name !== peer.name
+    || result.players[0]?.assets?.[0] !== maker.assetId || result.players[1]?.assets?.[0] !== peer.assetId
+    || result.players[0]?.species?.[0] !== maker.cardId || result.players[1]?.species?.[0] !== peer.cardId
+    || !["p1", "p2", "draw"].includes(result.winner)) throw new Error("Battle result does not match funded players and cards");
+  return result.winner as "p1" | "p2" | "draw";
 }

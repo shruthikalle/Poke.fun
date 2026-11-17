@@ -27,6 +27,7 @@ import { stakeService } from "../../lib/stake/StakeService";
 import { useCurrency } from "../../lib/market/currency";
 import { useMotionPreference } from "../../lib/motion";
 import { useWallet } from "../../lib/wallet/WalletProvider";
+import { explorerTx, paidQueueApi } from "../../lib/sol/wagerClient";
 import styles from "../../components/battle/battle.module.css";
 
 type Load =
@@ -41,15 +42,15 @@ async function toCreatures(picks: CardPick[], side: Side): Promise<Creature[]> {
   return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${i}-${picks[i].key}`, picks[i].image));
 }
 
-function ResultSummary({ result, entry }: { result: MatchResult; entry: number }) {
+function ResultSummary({ result, entry, paidWager }: { result: MatchResult; entry: number; paidWager?: MatchTicket["paidWager"] }) {
   const { formatUsd: formatDollars } = useCurrency();
   const money = result.outcome === "win" ? `+${formatDollars(result.payout)}` : result.outcome === "draw" ? `${formatDollars(result.payout)} back` : entry ? `−${formatDollars(entry)}` : "$0";
   return (
     <div className={styles.result}>
       <div>
         <span>{result.practice ? "Offline practice" : "Game complete"}</span>
-        <strong>{result.practice && entry ? money : "No payout issued"}</strong>
-        <small>{entry ? `Selected demo entry ${formatDollars(entry)} · settlement deferred` : "No funds were at stake"}</small>
+        <strong>{paidWager ? "SOL settlement processing" : result.practice && entry ? money : "No payout issued"}</strong>
+        <small>{paidWager ? `${paidWager.stakeLamports / 1_000_000_000} Devnet SOL deposited by each player` : entry ? `Selected demo entry ${formatDollars(entry)} · settlement deferred` : "No funds were at stake"}</small>
       </div>
       <div>
         <span>Rank</span>
@@ -60,9 +61,33 @@ function ResultSummary({ result, entry }: { result: MatchResult; entry: number }
   );
 }
 
+function PaidSettlement({ wager, authToken }: { wager: NonNullable<MatchTicket["paidWager"]>; authToken: string | null }) {
+  const [settlementTx, setSettlementTx] = useState<string | null>(null);
+  const [note, setNote] = useState<string | null>(null);
+  useEffect(() => {
+    if (!authToken) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const status = await paidQueueApi.status(authToken, wager);
+        if (active) { setSettlementTx(status.settlementTx ?? null); setNote(null); }
+      } catch (error) {
+        if (active) setNote(error instanceof Error ? error.message : "Could not check SOL settlement.");
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 2000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [authToken, wager]);
+  return <p role="status">
+    <a href={`https://explorer.solana.com/address/${wager.wager}?cluster=devnet`} target="_blank" rel="noopener noreferrer">View Devnet SOL escrow ↗</a>
+    {settlementTx ? <> · <a href={explorerTx(settlementTx)} target="_blank" rel="noopener noreferrer">View SOL payout ↗</a></> : <> · {note ?? (authToken ? "Payout is processing…" : "Sign in to check payout status")}</>}
+  </p>;
+}
+
 export default function BattlePage() {
   const router = useRouter();
-  const { ready, playerName: signedInName, signIn } = useWallet();
+  const { ready, playerName: signedInName, walletAuthToken, signIn } = useWallet();
   const { formatUsd: formatDollars } = useCurrency();
   const formatRef = useRef(formatDollars);
   formatRef.current = formatDollars;
@@ -98,14 +123,14 @@ export default function BattlePage() {
     const formatDollars = formatRef.current;
     const format = makeFormat("[Gen 9] Random Battle", [
       { name: "Match", description: FORMAT_LABEL[t.format] },
-      { name: "Entry", description: t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
+      { name: "Entry", description: t.paidWager ? `${t.paidWager.stakeLamports / 1_000_000_000} Devnet SOL deposited by each player` : t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
       { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
     ]);
     // `teams.p1` is always our own team here, whichever side we play.
     const config = { you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format };
     // The Go server is the referee: a matched human rival (t.live) or the
     // server AI. NEXT_PUBLIC_LIVE_BATTLE=0 forces the offline simulation.
-    if (process.env.NEXT_PUBLIC_LIVE_BATTLE === "0") return new MockBattleStream({ ...config, onStatus: setConnectNote });
+    if (process.env.NEXT_PUBLIC_LIVE_BATTLE === "0" && !t.paidWager) return new MockBattleStream({ ...config, onStatus: setConnectNote });
     if (t.live) {
       const { battleId, token, side } = t.live;
       return new ServerBattleStream({ mode: "pvp", battleId, token, side, team: load.teams.p1, format, onStatus: setConnectNote });
@@ -196,7 +221,9 @@ export default function BattlePage() {
   const activeRoom = rooms.find((r) => r.id === tab);
   const title = ticket ? FORMAT_LABEL[ticket.format] : "Battle";
   const subtitle = state ? `${state.sides.p2.trainer.name} vs. ${state.sides.p1.trainer.name}` : "Connecting…";
-  const badge = ticket && (ticket.entry
+  const badge = ticket && (ticket.paidWager
+    ? <>{ticket.paidWager.stakeLamports / 1_000_000_000} Devnet SOL each · Escrow funded</>
+    : ticket.entry
     ? <>Entry <b>{formatDollars(ticket.entry)}</b> · Winner takes <b>{formatDollars(stakeService.quote(ticket.entry).winnerTakes)}</b> · Demo</>
     : <>Free match · Ranked</>);
 
@@ -219,10 +246,11 @@ export default function BattlePage() {
                 void apiRequest("POST", `/api/battles/${live.battleId}/forfeit`, {}, live.token)
                   .catch((cause: unknown) => setConnectNote(cause instanceof Error ? cause.message : "Could not forfeit the match."));
               }}>Forfeit match</button>}
-              <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={battle.rematch}
-                summary={result ? <><ResultSummary result={result} entry={ticket.entry} />
-                  {ticket.live && process.env.NEXT_PUBLIC_LIVE_BATTLE !== "0" && <OutcomeReceipt mode="battles" id={ticket.live.battleId} token={ticket.live.token} />}
+              <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={ticket.paidWager ? undefined : battle.rematch}
+                summary={result ? <><ResultSummary result={result} entry={ticket.entry} paidWager={ticket.paidWager} />
+                  {ticket.live && !ticket.paidWager && process.env.NEXT_PUBLIC_LIVE_BATTLE !== "0" && <OutcomeReceipt mode="battles" id={ticket.live.battleId} token={ticket.live.token} />}
                 </> : null} />
+              {ticket.paidWager && state.phase === "ended" && <PaidSettlement wager={ticket.paidWager} authToken={walletAuthToken} />}
             </>
           ) : (
             <ViewportFrame><div className={styles.viewport}>

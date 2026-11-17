@@ -26,13 +26,14 @@ type queueRequest struct {
 	Format  string             `json:"format"` // "champion" | "squad"
 	Tier    int                `json:"tier"`
 	Entry   float64            `json:"entry"`
+	PairKey string             `json:"pairKey,omitempty"` // shared escrow address for one funded pair
 	// Team is validated and locked before pairing; New builds canonical combat data.
 	Team []queuePick `json:"team"`
 }
 
 // key groups players who may be paired: same format, power tier and entry.
 func (q queueRequest) key() string {
-	return fmt.Sprintf("%s|%d|%.2f", q.Format, q.Tier, q.Entry)
+	return fmt.Sprintf("%s|%d|%.2f|%s", q.Format, q.Tier, q.Entry, q.PairKey)
 }
 
 type queueEntry struct {
@@ -173,7 +174,7 @@ func (s *Server) teamOpponentLocked(entry *queueEntry, now time.Time) *queueEntr
 	for _, waiter := range s.waiting {
 		if waiter != entry && waiter.req.key() == entry.req.key() &&
 			!strings.EqualFold(waiter.req.Trainer.Name, entry.req.Trainer.Name) &&
-			withinRatingBand(waiter.req.Rating, entry.req.Rating, now.Sub(waiter.created), now.Sub(entry.created)) {
+			(entry.req.PairKey != "" || withinRatingBand(waiter.req.Rating, entry.req.Rating, now.Sub(waiter.created), now.Sub(entry.created))) {
 			return waiter
 		}
 	}

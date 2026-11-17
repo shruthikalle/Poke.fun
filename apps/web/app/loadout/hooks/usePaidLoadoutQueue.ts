@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { PaidTicket } from "../../../lib/sol/paidQueue";
 import { cancelSolWager, joinSolWager, openSolWager, paidQueueApi, recoverExpiredWager } from "../../../lib/sol/wagerClient";
 import { ARENA_SESSION_STORAGE_KEY } from "../../../lib/arena";
+import { saveTicket } from "../../../lib/match/MatchmakingService";
 import { session as storage } from "../../../lib/storage";
 import { errorMessage } from "./useLoadoutResource";
 
@@ -27,7 +28,11 @@ export function usePaidLoadoutQueue(player: string | null, authToken: string | n
       return;
     }
     storage.set(PAID_QUEUE_KEY, JSON.stringify({ ...ticket, player: owner }));
-    if (ticket.status === "matched" && ticket.arena) {
+    if (ticket.status === "matched" && ticket.match?.live) {
+      saveTicket(ticket.match);
+      storage.remove(PAID_QUEUE_KEY);
+      setQueue({ status: "found", ticket });
+    } else if (ticket.status === "matched" && ticket.arena) {
       storage.set(ARENA_SESSION_STORAGE_KEY, JSON.stringify({ ...ticket.arena, player: owner, paidQueue: { id: ticket.id, token: ticket.token } }));
       storage.remove(PAID_QUEUE_KEY);
       setQueue({ status: "found", ticket });
@@ -66,7 +71,7 @@ export function usePaidLoadoutQueue(player: string | null, authToken: string | n
 
   useEffect(() => {
     if (queue.status !== "found") return;
-    const timer = setTimeout(() => router.push("/arena"), 750);
+    const timer = setTimeout(() => router.push(queue.ticket.match?.live ? "/battle/live" : "/arena"), 750);
     return () => clearTimeout(timer);
   }, [queue, router]);
 
