@@ -41,7 +41,8 @@ export async function GET(request: NextRequest) {
   try { publicKey(address); } catch { return error("Invalid Solana address", 400); }
   const nonce = randomBytes(16).toString("hex");
   const issuedAt = new Date().toISOString();
-  const message = `${request.nextUrl.host} wants you to sign in with your Solana account:\n${address}\n\nSign in to Poke.fun on Devnet. This does not send a transaction.\n\nURI: ${request.nextUrl.origin}\nVersion: 1\nChain ID: devnet\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+  const publicOrigin = new URL(process.env.POKEFUN_PUBLIC_ORIGIN ?? request.nextUrl.origin);
+  const message = `${publicOrigin.host} wants you to sign in with your Solana account:\n${address}\n\nSign in to Poke.fun on Devnet. This does not send a transaction.\n\nURI: ${publicOrigin.origin}\nVersion: 1\nChain ID: devnet\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
   challenges.set(nonce, { address, message, expiresAt: Date.now() + CHALLENGE_TTL_MS });
   return NextResponse.json({ nonce, message });
 }
