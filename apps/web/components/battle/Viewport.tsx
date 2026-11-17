@@ -31,6 +31,21 @@ function HpBar({ creature, role }: { creature: Creature; role: "foe" | "me" }) {
   );
 }
 
+/** Keep the pixel battlefield's 640×360 coordinate system while filling its panel. */
+export function ViewportFrame({ children }: { children: ReactNode }) {
+  const frame = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(640);
+  useEffect(() => {
+    if (!frame.current) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(frame.current);
+    return () => observer.disconnect();
+  }, []);
+  return <div ref={frame} className={styles.viewportFrame}>
+    <div className={styles.viewportScale} style={{ transform: `scale(${width / 640})` }}>{children}</div>
+  </div>;
+}
+
 function TeamBalls({ side, you }: { side: SideState; you: boolean }) {
   return (
     <div className={styles.balls}>
@@ -104,7 +119,7 @@ export function Viewport({ state, odds, badge, summon = false }: { state: Battle
   const foeActive = state.sides[foe].team[state.sides[foe].activeIndex];
   const started = state.log.some((l) => l.kind === "switch");
   return (
-    <div className={styles.viewport}>
+    <ViewportFrame><div className={styles.viewport}>
       <div className={styles.field} />
       {started && <div className={styles.turnBadge}>Turn {state.turn}</div>}
       {!started && (
@@ -124,6 +139,6 @@ export function Viewport({ state, odds, badge, summon = false }: { state: Battle
       {state.phase === "ended" && (
         <div className={styles.banner}>{state.winner === "draw" ? "Draw!" : state.winner === me ? "You won!" : `${state.sides[foe].trainer.name} won!`}</div>
       )}
-    </div>
+    </div></ViewportFrame>
   );
 }

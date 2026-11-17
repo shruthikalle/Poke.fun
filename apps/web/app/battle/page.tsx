@@ -1,14 +1,14 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useState, useRef } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
 import { ActionBar } from "../../components/battle/ActionBar";
 import { LogPanel, type BattleOptions } from "../../components/battle/LogPanel";
 import { RoomPanel } from "../../components/battle/RoomPanel";
 import { OutcomeReceipt } from "../../components/battle/OutcomeReceipt";
 import { Sidebar } from "../../components/battle/Sidebar";
 import { TopBar, type TabId } from "../../components/battle/TopBar";
-import { Viewport } from "../../components/battle/Viewport";
+import { Viewport, ViewportFrame } from "../../components/battle/Viewport";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { ApiError, apiRequest } from "../../lib/battle/battleApi";
@@ -121,13 +121,34 @@ export default function BattlePage() {
   const motion = useMotionPreference();
 
   const [options, setOptionsState] = useState<Omit<BattleOptions, "sound">>({ animations: true, showOdds: true });
-  const [sidebar, setSidebar] = useState(true);
+  const [sidebar, setSidebar] = useState(false);
+  const [split, setSplit] = useState(50);
+  const splitValue = useRef(50);
+  const workspace = useRef<HTMLDivElement>(null);
   const [rooms, setRooms] = useState<ChatRoom[]>([]);
   const [tab, setTab] = useState<TabId>("battle");
 
   useEffect(() => {
-    if (window.innerWidth < 1180) setSidebar(false);
+    const saved = Number(window.localStorage.getItem("pf:battle-split"));
+    if (Number.isFinite(saved) && saved >= 10 && saved <= 90) { splitValue.current = saved; setSplit(saved); }
   }, []);
+
+  const updateSplit = (clientX: number) => {
+    const bounds = workspace.current?.getBoundingClientRect();
+    if (!bounds) return;
+    const min = Math.min(45, 360 / bounds.width * 100);
+    const value = Math.round(Math.min(100 - min, Math.max(min, (clientX - bounds.left) / bounds.width * 100)));
+    splitValue.current = value;
+    setSplit(value);
+  };
+  const onDividerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
+    event.currentTarget.setPointerCapture(event.pointerId);
+    updateSplit(event.clientX);
+  };
+  const onDividerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) updateSplit(event.clientX);
+  };
+  const saveSplit = () => window.localStorage.setItem("pf:battle-split", String(splitValue.current));
 
   const { play } = audio;
   useEffect(() => battle.subscribe((event, s) => {
@@ -186,6 +207,7 @@ export default function BattlePage() {
         onNewBattle={() => router.push("/loadout")} muted={audio.muted} onToggleMute={audio.toggleMute} onSignIn={() => signIn()} />
 
       <div className={styles.body}>
+        <div ref={workspace} className={styles.workspace} style={{ "--battle-width": `${split}%` } as CSSProperties}>
         <div className={styles.left}>
           {state && connectNote ? <p role="status">{connectNote}</p> : null}
           {state && ticket ? (
@@ -203,7 +225,7 @@ export default function BattlePage() {
                 </> : null} />
             </>
           ) : (
-            <div className={styles.viewport}>
+            <ViewportFrame><div className={styles.viewport}>
               <div className={styles.field} />
               {load.status === "error" ? (
                 <div className={styles.loadError}>
@@ -213,9 +235,22 @@ export default function BattlePage() {
                     : <button className={styles.button} onClick={() => setAttempt((n) => n + 1)}>Try again</button>}
                 </div>
               ) : <div className={styles.connecting}>{connectNote ?? "Connecting…"}</div>}
-            </div>
+            </div></ViewportFrame>
           )}
         </div>
+
+        <div className={styles.divider} role="separator" aria-label="Resize battle and chat" aria-orientation="vertical"
+          aria-valuemin={10} aria-valuemax={90} aria-valuenow={split} tabIndex={0} title="Drag to resize battle and chat"
+          onPointerDown={onDividerDown} onPointerMove={onDividerMove} onPointerUp={saveSplit} onLostPointerCapture={saveSplit}
+          onKeyDown={(event) => {
+            const next = event.key === "ArrowLeft" ? split - 5 : event.key === "ArrowRight" ? split + 5 : event.key === "Home" ? 50 : null;
+            if (next === null) return;
+            event.preventDefault();
+            const value = Math.min(90, Math.max(10, next));
+            splitValue.current = value;
+            setSplit(value);
+            window.localStorage.setItem("pf:battle-split", String(value));
+          }}><span /></div>
 
         <div className={styles.center}>
           {activeRoom ? (
@@ -223,6 +258,7 @@ export default function BattlePage() {
           ) : state ? (
             <LogPanel state={state} playerName={playerName} sendChat={battle.sendChat} options={{ ...options, sound: !audio.muted }} setOptions={setOptions} />
           ) : null}
+        </div>
         </div>
 
         {sidebar ? (
