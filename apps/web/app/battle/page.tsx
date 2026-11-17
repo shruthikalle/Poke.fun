@@ -49,8 +49,8 @@ function ResultSummary({ result, entry, paidWager }: { result: MatchResult; entr
     <div className={styles.result}>
       <div>
         <span>{result.practice ? "Offline practice" : "Game complete"}</span>
-        <strong>{paidWager ? "SOL settlement processing" : result.practice && entry ? money : "No payout issued"}</strong>
-        <small>{paidWager ? `${paidWager.stakeLamports / 1_000_000_000} Devnet SOL deposited by each player` : entry ? `Selected demo entry ${formatDollars(entry)} · settlement deferred` : "No funds were at stake"}</small>
+        <strong>{paidWager ? "Devnet SOL match" : result.practice && entry ? money : "No payout issued"}</strong>
+        <small>{paidWager ? `${paidWager.stakeLamports / 1_000_000_000} Devnet SOL each · ${paidWager.stakeLamports * 2 / 1_000_000_000} SOL pot` : entry ? `Selected demo entry ${formatDollars(entry)} · settlement deferred` : "No funds were at stake"}</small>
       </div>
       <div>
         <span>Rank</span>
@@ -61,7 +61,7 @@ function ResultSummary({ result, entry, paidWager }: { result: MatchResult; entr
   );
 }
 
-function PaidSettlement({ wager, authToken }: { wager: NonNullable<MatchTicket["paidWager"]>; authToken: string | null }) {
+function PaidSettlement({ wager, authToken, outcome }: { wager: NonNullable<MatchTicket["paidWager"]>; authToken: string | null; outcome: "win" | "loss" | "draw" }) {
   const [settlementTx, setSettlementTx] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   useEffect(() => {
@@ -79,9 +79,17 @@ function PaidSettlement({ wager, authToken }: { wager: NonNullable<MatchTicket["
     const timer = window.setInterval(() => void check(), 2000);
     return () => { active = false; window.clearInterval(timer); };
   }, [authToken, wager]);
-  return <p role="status">
-    <a href={`https://explorer.solana.com/address/${wager.wager}?cluster=devnet`} target="_blank" rel="noopener noreferrer">View Devnet SOL escrow ↗</a>
-    {settlementTx ? <> · <a href={explorerTx(settlementTx)} target="_blank" rel="noopener noreferrer">View SOL payout ↗</a></> : <> · {note ?? (authToken ? "Payout is processing…" : "Sign in to check payout status")}</>}
+  const stake = wager.stakeLamports / 1_000_000_000;
+  const amount = outcome === "win" ? stake * 2 : outcome === "draw" ? stake : 0;
+  const label = outcome === "win" ? settlementTx ? "Won" : "Payout pending:" : outcome === "draw" ? settlementTx ? "Refunded" : "Refund pending:" : "Payout";
+  return <p className={styles.paidOutcome} role="status">
+    <strong>{label} {amount} Devnet SOL</strong>
+    {outcome === "win" && <span>Gross payout · {stake} SOL net gain before network fees</span>}
+    {settlementTx
+      ? <a href={explorerTx(settlementTx)} target="_blank" rel="noopener noreferrer">View settlement on Solana ↗</a>
+      : <a href={`https://explorer.solana.com/address/${wager.wager}?cluster=devnet`} target="_blank" rel="noopener noreferrer">View funded escrow on Solana ↗</a>}
+    {note && <span>{note}</span>}
+    {!authToken && <span>Sign in to check settlement status.</span>}
   </p>;
 }
 
@@ -247,10 +255,10 @@ export default function BattlePage() {
                   .catch((cause: unknown) => setConnectNote(cause instanceof Error ? cause.message : "Could not forfeit the match."));
               }}>Forfeit match</button>}
               <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={ticket.paidWager ? undefined : battle.rematch}
+                outcomeDetail={ticket.paidWager && state.phase === "ended" ? <PaidSettlement wager={ticket.paidWager} authToken={walletAuthToken} outcome={state.winner === "draw" ? "draw" : state.winner === state.you ? "win" : "loss"} /> : null}
                 summary={result ? <><ResultSummary result={result} entry={ticket.entry} paidWager={ticket.paidWager} />
                   {ticket.live && !ticket.paidWager && process.env.NEXT_PUBLIC_LIVE_BATTLE !== "0" && <OutcomeReceipt mode="battles" id={ticket.live.battleId} token={ticket.live.token} />}
                 </> : null} />
-              {ticket.paidWager && state.phase === "ended" && <PaidSettlement wager={ticket.paidWager} authToken={walletAuthToken} />}
             </>
           ) : (
             <ViewportFrame><div className={styles.viewport}>

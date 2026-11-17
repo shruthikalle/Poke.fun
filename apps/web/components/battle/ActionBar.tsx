@@ -15,6 +15,7 @@ interface Props {
   rematch?: () => void;
   /** Extra content for the ended state, e.g. winnings and rank change. */
   summary?: ReactNode;
+  outcomeDetail?: ReactNode;
 }
 
 function TimerButton({ state, toggleTimer }: Pick<Props, "state" | "toggleTimer">) {
@@ -28,7 +29,7 @@ function TimerButton({ state, toggleTimer }: Pick<Props, "state" | "toggleTimer"
   );
 }
 
-export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary }: Props) {
+export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary, outcomeDetail }: Props) {
   const mine = state.sides[state.you];
   const active = mine.team[mine.activeIndex];
 
@@ -36,6 +37,7 @@ export function ActionBar({ state, choose, cancel, toggleTimer, rematch, summary
     return (
       <div className={styles.actions}>
         <p className={styles.prompt}><strong>{state.winner === "draw" ? "The battle ended in a draw." : state.winner === state.you ? "You won the battle!" : `${state.sides[state.winner === "p1" ? "p1" : "p2"].trainer.name} won the battle.`}</strong></p>
+        {outcomeDetail}
         {summary}
         <div className={styles.endRow}>
           {rematch && <button className="pf-btn" data-variant="primary" data-size="sm" onClick={rematch}>Battle again</button>}
