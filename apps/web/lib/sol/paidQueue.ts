@@ -57,7 +57,7 @@ async function readWager(address: string) {
   const { program } = refereeProgram();
   const info = await connection.getAccountInfo(new PublicKey(address), "confirmed");
   if (!info || !info.owner.equals(program.programId)) throw new Error("Wager account not found on Devnet");
-  const account = program.coder.accounts.decode("wager", info.data) as {
+  const account = program.coder.accounts.decode("Wager", info.data) as {
     maker: PublicKey; opponent: PublicKey; mint: PublicKey; stake: { toNumber(): number }; state: Record<string, unknown>; deadline: { toNumber(): number };
   };
   if (!account.mint.equals(PublicKey.default) || account.deadline.toNumber() <= Date.now() / 1000) throw new Error("Wager is not an active Devnet SOL escrow");
