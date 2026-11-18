@@ -7,7 +7,7 @@ import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
-import { buildTeam, type CardPick, type MatchFormat, type PowerTier } from "../../lib/cards/mapping";
+import { type CardPick, type MatchFormat, type PowerTier } from "../../lib/cards/mapping";
 import speciesIndex from "../../lib/cards/species.generated.json";
 import { useMotionPreference } from "../../lib/motion";
 import { rankService } from "../../lib/rank/RankService";
@@ -37,6 +37,7 @@ export default function LoadoutPage() {
   const matchmaking = useLoadoutQueue(ready ? playerName : null);
   const paid = usePaidLoadoutQueue(ready ? playerName : null, walletAuthToken, session?.address ?? null);
   const [selected, setSelected] = useState<string | null>(null);
+  const [squadKeys, setSquadKeys] = useState<string[]>([]);
   const [format, setFormat] = useState<MatchFormat>("champion");
   const [entry, setEntry] = useState(0);
   const [entryError, setEntryError] = useState<string | null>(null);
@@ -55,7 +56,7 @@ export default function LoadoutPage() {
     setSummon(null);
   }, [cards.eligible, cards.fighters, selected]);
 
-  const lead = cards.eligible.find((pick) => pick.key === selected) ?? null;
+  const lead = cards.eligible.find((pick) => pick.key === (format === "squad" ? squadKeys[0] : selected)) ?? null;
   const fighter = lead ? cards.fighters.get(lead.species) ?? null : null;
   const team = useMemo(() => {
     if (!lead) return [];
@@ -66,28 +67,33 @@ export default function LoadoutPage() {
     });
     const canonicalLead = available.find((pick) => pick.key === lead.key);
     if (!canonicalLead) return [];
-    const used = new Set([baseSpecies.get(lead.species) ?? lead.species]);
-    const bench = available.filter((pick) => {
-      const base = baseSpecies.get(pick.species) ?? pick.species;
-      if (used.has(base)) return false;
-      used.add(base);
-      return true;
-    });
-    return buildTeam(canonicalLead, bench, format);
-  }, [lead, cards.eligible, cards.fighters, format]);
+    if (format === "champion") return [canonicalLead];
+    return squadKeys.flatMap((key) => available.find((pick) => pick.key === key) ?? []);
+  }, [lead, cards.eligible, cards.fighters, format, squadKeys]);
   const summons = useLoadoutSummons(team);
   const leadSpecies = lead ? summons.data.get(lead.species) ?? null : null;
   const unsupported = !!lead && cards.fighters.get(lead.species) === null;
   const completeTeam = team.length === (format === "squad" ? 3 : 1)
     && team.every((pick) => cards.fighters.get(pick.species));
-  const paidCardValid = !!lead && cards.rows.some((row) => row.pick?.key === lead.key
+  const paidCardValid = completeTeam && team.every((pick) => cards.rows.some((row) => row.pick?.key === pick.key
     && row.asset?.interface === "MplCoreAsset"
-    && row.asset.grouping?.some((group) => group.group_key === "collection" && group.group_value === DEVNET_TEST_COLLECTION_ADDRESS));
+    && row.asset.grouping?.some((group) => group.group_key === "collection" && group.group_value === DEVNET_TEST_COLLECTION_ADDRESS)));
   const canQueue = !matchmaking.resume && ready && !!playerName && !!rank.data && !!fighter && completeTeam
     && !cards.fightersLoading && !cards.fighterError && !entryError && matchmaking.queue.status === "idle"
-    && paid.queue.status === "idle" && !paid.busy && (entry === 0 || (format === "champion" && paidCardValid && !!walletAuthToken));
+    && paid.queue.status === "idle" && !paid.busy && (entry === 0 || (paidCardValid && !!walletAuthToken));
 
   const summonCard = (key: string) => {
+    if (format === "squad") {
+      const pick = cards.eligible.find((item) => item.key === key);
+      if (!pick) return;
+      const base = baseSpecies.get(pick.species) ?? pick.species;
+      setSquadKeys((current) => {
+        if (current.includes(key)) return current.filter((item) => item !== key);
+        if (current.length >= 3 || current.some((item) => { const p = cards.eligible.find((c) => c.key === item); return p && (baseSpecies.get(p.species) ?? p.species) === base; })) return current;
+        return [...current, key];
+      });
+      return;
+    }
     setSelected(key);
     setSummon({ key, sequence: Date.now() });
   };
@@ -95,7 +101,7 @@ export default function LoadoutPage() {
     if (!canQueue || !rank.data) return;
     setSummon(null);
     if (entry > 0) {
-      void paid.start({ name: playerName!, cardId: team[0].species, assetId: team[0].key,
+      void paid.start({ name: playerName!, cardId: team[0].species, assetId: team[0].key, format, cards: team.map((pick) => ({ cardId: pick.species, assetId: pick.key })),
         rating: rank.data.rating, stakeLamports: Math.round(entry * 1_000_000_000) });
     } else void matchmaking.start({ format, team, rating: rank.data.rating, entry: 0, walletAddress: session?.address ?? null });
   };
@@ -115,7 +121,7 @@ export default function LoadoutPage() {
 
       <main className={styles.main}>
         <section className={styles.collection}>
-          <h1>{format === "champion" ? "Choose your champion" : "Choose your squad lead"}</h1>
+          <h1>{format === "champion" ? "Choose your champion" : "Choose your squad of 3"}</h1>
           <p className={styles.lede}>
             {status === "guest" ? "Borrow a rental or sign in to use your own cards."
               : "Use wallet cards checked at entry, or choose a practice rental."}
@@ -133,7 +139,7 @@ export default function LoadoutPage() {
             </div>}
           {cards.collection.loading && <p className={styles.hint} role="status">Checking your wallet&apos;s cards…</p>}
           {cards.rows.length > 0
-            ? <CardGrid rows={cards.rows} fighters={cards.fighters} selected={selected} onSelect={summonCard} />
+            ? <CardGrid rows={cards.rows} fighters={cards.fighters} selected={selected} selectedKeys={format === "squad" ? squadKeys : undefined} onSelect={summonCard} />
             : cards.fightersLoading || cards.collection.loading
               ? <div className={styles.grid} aria-label="Loading cards" aria-busy="true">
                 {[0, 1, 2, 3].map((index) => <div key={index} className={styles.cardSkeleton} />)}
@@ -158,13 +164,13 @@ export default function LoadoutPage() {
               Champion 1v1
             </button>
             <button className="pf-chip" data-on={format === "squad" || undefined}
-              aria-pressed={format === "squad"} onClick={() => { setFormat("squad"); setEntry(0); setEntryError(null); setSummon(null); }}>
+              aria-pressed={format === "squad"} onClick={() => { setFormat("squad"); setSquadKeys([]); setEntry(0); setEntryError(null); setSummon(null); }}>
               Squad of 3
             </button>
           </div>
           <p className={styles.hint}>
             {format === "champion" ? "One card, live against another queued player."
-              : "Three different creatures in a turn-based battle against another player's squad. Your other cards fill the bench, then shared rentals."}
+              : "Select three different Pokémon. The first is your lead; select a card again to remove it."}
           </p>
           {format === "squad" && <SquadPreview team={team} fighters={cards.fighters} />}
 

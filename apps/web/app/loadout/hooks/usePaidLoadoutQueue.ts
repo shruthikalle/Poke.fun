@@ -71,11 +71,11 @@ export function usePaidLoadoutQueue(player: string | null, authToken: string | n
 
   useEffect(() => {
     if (queue.status !== "found") return;
-    const timer = setTimeout(() => router.push(queue.ticket.match?.live ? "/battle/live" : "/arena"), 750);
+    const timer = setTimeout(() => router.push(queue.ticket.match?.live ? (queue.ticket.match.format === "squad" ? "/battle" : "/battle/live") : "/arena"), 750);
     return () => clearTimeout(timer);
   }, [queue, router]);
 
-  const start = async (input: { name: string; cardId: string; assetId: string; rating: number; stakeLamports: number }) => {
+  const start = async (input: { name: string; cardId: string; assetId: string; format?: "champion" | "squad"; cards?: { cardId: string; assetId: string }[]; rating: number; stakeLamports: number }) => {
     if (!authToken || !player || !address || queue.status !== "idle" || busy) return;
     setBusy(true); setError(null);
     try { accept(await paidQueueApi.enqueue(authToken, input), player); }

@@ -33,7 +33,7 @@ export function EntryControls({ format, entry, error, onEntry, onError }: Props)
 
   return <>
     <p className={styles.label}>Entry</p>
-    {format === "champion" ? <>
+    {<>
       <div className={styles.chips}>
         {PRESETS.map((amount) => <button key={amount} className="pf-chip"
           data-on={entry === amount && !custom || undefined}
@@ -51,6 +51,6 @@ export function EntryControls({ format, entry, error, onEntry, onError }: Props)
         <span>{entry ? <><strong>{label(entry)}</strong> per player · {label(entry * 2)} pot</> : "Free live match"}</span>
         <em>{entry ? "Devnet test SOL · Phantom approval required" : "Free match · no transfers"}</em>
       </div>
-    </> : <div className={styles.pot}><span>Free squad match</span><em>No transfers</em></div>}
+    </>}
   </>;
 }

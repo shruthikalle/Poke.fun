@@ -5,6 +5,7 @@ import { Connection, Keypair, PublicKey, Transaction, VersionedTransaction } fro
 import idl from "./pokefun_wager.json";
 import { FAUX_ART_WINDOW, findCatalogEntry, type CardPick, type PowerTier } from "../cards/mapping";
 import { speciesForCardName } from "../cards/cardNames";
+import speciesIndex from "../cards/species.generated.json";
 import type { MatchTicket } from "../match/MatchmakingService";
 import { tierFor } from "../rank/RankService";
 
@@ -14,7 +15,8 @@ const API = process.env.ARENA_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? "htt
 const CONFIG = new PublicKey("8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S");
 type Stage = "waiting" | "open_required" | "awaiting_open" | "join_required" | "awaiting_join" | "cancel_required" | "matched" | "cancelled";
 export type PaidTicket = { id: string; token: string; status: Stage; stakeLamports: number; opponent?: string; wager?: string; openTx?: string; joinTx?: string; settlementTx?: string; match?: MatchTicket; arena?: { id: string; token: string; stakeLamports: number; wager: string; makerAddress: string; opponentAddress: string; expiresAt: number } };
-type Entry = PaidTicket & { address: string; name: string; cardId: string; assetId: string; rating: number; tier: number; created: number; peer?: string; maker?: boolean; busy?: boolean; pairKey?: string; battleQueueTicket?: string; battleReply?: QueueMatched };
+type PaidCard = { cardId: string; assetId: string };
+type Entry = PaidTicket & { format: "champion" | "squad"; cards: PaidCard[]; address: string; name: string; cardId: string; assetId: string; rating: number; tier: number; created: number; peer?: string; maker?: boolean; busy?: boolean; pairKey?: string; battleQueueTicket?: string; battleReply?: QueueMatched };
 const globalState = globalThis as typeof globalThis & { pokeFunPaidQueue?: Map<string, Entry>; pokeFunPaidWorkers?: Set<string> };
 const entries = globalState.pokeFunPaidQueue ??= new Map<string, Entry>();
 const workers = globalState.pokeFunPaidWorkers ??= new Set<string>();
@@ -75,11 +77,11 @@ type QueuePlayer = { trainer: { id: string; name: string; avatar: string }; rati
 type QueueMatched = { status: "matched"; id: string; token: string; side: "p1" | "p2"; you: QueuePlayer; opponent: QueuePlayer };
 type QueueReply = QueueMatched | { status: "searching"; ticket: string };
 
-function battlePick(entry: Entry, card: Awaited<ReturnType<typeof verifiedCard>>) {
+function battlePick(entry: Entry, pick: PaidCard, card: Awaited<ReturnType<typeof verifiedCard>>) {
   const attribute = (name: string) => card.attributes?.find((a) => a.trait_type === name)?.value;
   return {
-    key: entry.assetId, assetId: entry.assetId, walletAddress: entry.address,
-    species: entry.cardId, label: attribute("Card Name") ?? card.name ?? entry.cardId,
+    key: pick.assetId, assetId: pick.assetId, walletAddress: entry.address,
+    species: pick.cardId, label: attribute("Card Name") ?? card.name ?? pick.cardId,
     image: card.image ?? null, grade: null, level: 50, tier: entry.tier as PowerTier,
     rental: false, artWindow: FAUX_ART_WINDOW,
   };
@@ -87,7 +89,7 @@ function battlePick(entry: Entry, card: Awaited<ReturnType<typeof verifiedCard>>
 
 function matchTicket(reply: QueueMatched, entry: Entry, wager: string): MatchTicket {
   return {
-    matchId: reply.id, format: "champion", entry: 0,
+    matchId: reply.id, format: entry.format, entry: 0,
     you: { name: reply.you.trainer.name, rating: reply.you.rating, team: reply.you.team },
     opponent: { trainer: reply.opponent.trainer, rating: reply.opponent.rating, tier: tierFor(reply.opponent.rating),
       wins: reply.opponent.wins, losses: reply.opponent.losses, team: reply.opponent.team },
@@ -98,11 +100,12 @@ function matchTicket(reply: QueueMatched, entry: Entry, wager: string): MatchTic
 
 async function createPaidBattle(maker: Entry, opponent: Entry, wager: string) {
   if (!maker.pairKey || maker.pairKey !== opponent.pairKey) throw new Error("Funded match pairing key is missing");
-  const [makerCard, opponentCard] = await Promise.all([verifiedCard(maker), verifiedCard(opponent)]);
+  const loadCards = (entry: Entry) => Promise.all(entry.cards.map((card) => verifiedCard({ address: entry.address, ...card })));
+  const [makerCard, opponentCard] = await Promise.all([loadCards(maker), loadCards(opponent)]);
   const request = (entry: Entry, card: typeof makerCard) => ({
     trainer: { id: entry.name, name: entry.name, avatar: "maya" },
-    rating: entry.rating, format: "champion", tier: entry.tier, entry: 0,
-    pairKey: maker.pairKey, team: [battlePick(entry, card)],
+    rating: entry.rating, format: entry.format, tier: entry.tier, entry: 0,
+    pairKey: maker.pairKey, team: card.map((value, i) => battlePick(entry, entry.cards[i], value)),
   });
   if (!maker.battleQueueTicket) {
     const queued = await battleCall<QueueReply>("POST", "/api/queue", request(maker, makerCard));
@@ -122,18 +125,24 @@ async function createPaidBattle(maker: Entry, opponent: Entry, wager: string) {
   return { maker: matchTicket(first, maker, wager), opponent: matchTicket(second, opponent, wager) };
 }
 
-export async function enterPaidQueue(address: string, input: { name: string; cardId: string; assetId: string; rating: number; stakeLamports: number }): Promise<PaidTicket> {
+export async function enterPaidQueue(address: string, input: { name: string; cardId: string; assetId: string; format?: "champion" | "squad"; cards?: PaidCard[]; rating: number; stakeLamports: number }): Promise<PaidTicket> {
   refereeProgram();
   if (!input.name?.trim() || input.name.length > 24 || /[\x00-\x1f\x7f]/.test(input.name) || !/^[a-z0-9-]{1,80}$/.test(input.cardId) || !Number.isInteger(input.rating) || input.rating < 0 || input.rating > 5000 || !Number.isInteger(input.stakeLamports) || input.stakeLamports < 1_000_000 || input.stakeLamports > 1_000_000_000) throw new Error("Invalid paid match request");
   new PublicKey(address);
   new PublicKey(input.assetId);
   if ([...entries.values()].some((e) => e.address === address && e.status !== "cancelled" && !(e.status === "matched" && e.settlementTx))) throw new Error("This wallet already has an active SOL match");
-  await verifiedCard({ address, cardId: input.cardId, assetId: input.assetId });
-  const tier = await fighterTier(input.cardId);
+  const format = input.format ?? "champion";
+  const cards = input.cards ?? [{ cardId: input.cardId, assetId: input.assetId }];
+  if (!["champion", "squad"].includes(format) || !Array.isArray(cards) || cards.length !== (format === "squad" ? 3 : 1) || cards[0].cardId !== input.cardId || cards[0].assetId !== input.assetId || new Set(cards.map(c => c.assetId)).size !== cards.length) throw new Error("Invalid squad");
+  for (const card of cards) { if (!/^[a-z0-9-]{1,80}$/.test(card.cardId)) throw new Error("Invalid card"); new PublicKey(card.assetId); }
+  const bases = cards.map(card => speciesIndex.species.find(species => species.key === card.cardId)?.species);
+  if (bases.some(base => !base) || new Set(bases).size !== cards.length) throw new Error("Choose different Pokémon for your squad");
+  await Promise.all(cards.map(card => verifiedCard({ address, ...card })));
+  const tier = Math.max(...await Promise.all(cards.map(card => fighterTier(card.cardId))));
   const id = randomBytes(12).toString("hex");
-  const entry: Entry = { ...input, tier, id, token: randomBytes(32).toString("base64url"), address, status: "waiting", created: Date.now() };
+  const entry: Entry = { ...input, format, cards, tier, id, token: randomBytes(32).toString("base64url"), address, status: "waiting", created: Date.now() };
   entries.set(id, entry);
-  const candidates = [...entries.values()].filter((e) => e.id !== id && e.status === "waiting" && e.address !== address && e.name.toLowerCase() !== entry.name.toLowerCase() && e.tier === tier && e.stakeLamports === entry.stakeLamports);
+  const candidates = [...entries.values()].filter((e) => e.id !== id && e.status === "waiting" && e.address !== address && e.name.toLowerCase() !== entry.name.toLowerCase() && e.format === format && e.tier === tier && e.stakeLamports === entry.stakeLamports);
   candidates.sort((a, b) => Math.abs(a.rating - entry.rating) - Math.abs(b.rating - entry.rating) || a.created - b.created);
   const maker = candidates[0];
   if (maker) {
@@ -166,8 +175,7 @@ export async function confirmOpen(entry: Entry, wagerAddress: string, signature:
   try {
     const peer = entries.get(entry.peer);
     if (!peer || peer.status !== "awaiting_open") throw new Error("Opponent left the queue");
-    await verifiedCard(entry);
-    await verifiedCard(peer);
+    await Promise.all([entry, peer].flatMap(player => player.cards.map(card => verifiedCard({ address: player.address, ...card }))));
     const wager = await readWager(wagerAddress);
     if (!wager.maker.equals(new PublicKey(entry.address)) || wager.stake.toNumber() !== entry.stakeLamports || !("waiting" in wager.state)) throw new Error("Deposit does not match this queue ticket");
     const transaction = await connection.getTransaction(signature, { commitment: "confirmed", maxSupportedTransactionVersion: 0 });
@@ -282,8 +290,10 @@ async function paidBattleWinner(maker: Entry, peer: Entry): Promise<"p1" | "p2" 
   if (result.matchId !== live.battleId || result.mode !== "team" || result.round !== 1
     || result.players[0]?.seat !== "p1" || result.players[1]?.seat !== "p2"
     || result.players[0]?.name !== maker.name || result.players[1]?.name !== peer.name
-    || result.players[0]?.assets?.[0] !== maker.assetId || result.players[1]?.assets?.[0] !== peer.assetId
-    || result.players[0]?.species?.[0] !== maker.cardId || result.players[1]?.species?.[0] !== peer.cardId
+    || JSON.stringify(result.players[0]?.assets) !== JSON.stringify(maker.cards.map(card => card.assetId))
+    || JSON.stringify(result.players[1]?.assets) !== JSON.stringify(peer.cards.map(card => card.assetId))
+    || JSON.stringify(result.players[0]?.species) !== JSON.stringify(maker.cards.map(card => card.cardId))
+    || JSON.stringify(result.players[1]?.species) !== JSON.stringify(peer.cards.map(card => card.cardId))
     || !["p1", "p2", "draw"].includes(result.winner)) throw new Error("Battle result does not match funded players and cards");
   return result.winner as "p1" | "p2" | "draw";
 }

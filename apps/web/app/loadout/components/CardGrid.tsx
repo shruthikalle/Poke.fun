@@ -37,10 +37,11 @@ export function TierPips({ tier }: { tier: number }) {
   </span>;
 }
 
-export function CardGrid({ rows, fighters, selected, onSelect }: {
+export function CardGrid({ rows, fighters, selected, selectedKeys, onSelect }: {
   rows: CardRow[];
   fighters: Map<string, ArenaCard | null>;
   selected: string | null;
+  selectedKeys?: string[];
   onSelect: (key: string) => void;
 }) {
   return (
@@ -51,8 +52,8 @@ export function CardGrid({ rows, fighters, selected, onSelect }: {
         const explorer = devnetExplorerUrl(row.asset);
         return (
           <div key={key} className={styles.cardSlot}>
-            <button className={`pf-frame ${styles.card}`} aria-pressed={selected === row.pick?.key}
-              data-selected={selected === row.pick?.key || undefined} disabled={!row.pick}
+            <button className={`pf-frame ${styles.card}`} aria-pressed={selectedKeys ? selectedKeys.includes(row.pick?.key ?? "") : selected === row.pick?.key}
+              data-selected={(selectedKeys ? selectedKeys.includes(row.pick?.key ?? "") : selected === row.pick?.key) || undefined} disabled={!row.pick}
               title={row.reason ?? undefined} onClick={() => row.pick && onSelect(row.pick.key)}>
               <span className={styles.art}>
                 <CardArt src={row.image} fighter={fighter} />
