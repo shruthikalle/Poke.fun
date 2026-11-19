@@ -12,7 +12,7 @@ services/api/internal/livebattle/ Team battle engine (hidden choices, switching,
 services/api/internal/arena/      Real-time battle simulation; fighters derived from the Pokédex
 services/api/internal/pokedex/    Pokémon database imported from PokéAPI (species, moves, card mapping)
 services/api/internal/server/     HTTP endpoints and the two-player matchmaking queue
-contracts/                        Solana wager escrow prototype and tests
+contracts/                        Solana programs: wager escrow prototype and card marketplace, with tests
 docs/                             Product, architecture and game-mechanics docs
 ```
 
@@ -52,7 +52,7 @@ The frontend routes:
 - `/battle/live`: the real-time match opened automatically when two compatible players queue.
 - `/arena`: direct arena controls and match view.
 - `/battle`: the earlier turn-based team battle.
-- `/market` and `/collection`: the card marketplace and your card collection (mock data).
+- `/market` and `/collection`: the on-chain devnet card marketplace and your wallet's cards (needs the Go API with `MARKET_PROGRAM_ID`).
 - `/play`: the original one-card demo that talks to the Go API.
 
 To try a **two-player live arena**, open `http://localhost:3000/loadout` in two separate browser profiles. Pick Champion, fighters of the same power tier, and the same demo entry in both, then click Find match. The first player waits until the second joins; each receives a separate seat in the same arena. The Go API must be running. An active arena can be forfeited; the server awards the opponent and records the outcome once.
@@ -65,7 +65,7 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 
 ### Frontend integration seams
 
-`/loadout`, `/battle/live`, `/market` and `/collection` read data through typed interfaces in `apps/web/lib`. Online combat, player records, community presence, room chat and the landing activity feed use the Go API. Marketplace, external prediction markets, pricing and unconfigured auth integrations retain their existing demo implementations while those integrations are deferred.
+`/loadout`, `/battle/live`, `/market` and `/collection` read data through typed interfaces in `apps/web/lib`. Online combat, player records, community presence, room chat, the landing activity feed and the marketplace use the Go API. External prediction markets and unconfigured auth integrations retain their existing demo implementations while those integrations are deferred.
 
 | Seam | Interface | Current implementation | TODO |
 | --- | --- | --- | --- |
@@ -73,10 +73,10 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 | Battle HP share | `OddsProvider`, `useOdds` (`lib/markets`) | Current team HP share, explicitly labelled as a heuristic; mock provider retained as an opt-in tool | External prediction market integration |
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
 | Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | `useMockBackend` (any 6-digit code) when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
-| Marketplace | `MarketplaceService`, `useMarketplace` (`lib/market`) | `MockMarketplaceService` (seeded catalog, localStorage) | Marketplace program on devnet |
-| SOL price | `SolPriceSource`, `useSolPrice` (`lib/market`) | `MockSolPriceSource` | Real price feed |
+| Marketplace | `MarketplaceService`, `useMarketplace` (`lib/market`) | `ChainMarketplaceService`: devnet `pokefun_market` program, read through the Go index, wallet-signed writes | Deploy the program to devnet; audit before any real value |
+| SOL price | `SolPriceSource`, `useSolPrice` (`lib/market`) | Go `/api/market/sol-price` (cached CoinGecko); prices show in SOL while no quote is available | |
 | Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | Go community presence and shared room messages | Durable chat history and verified identities |
-| Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | Devnet test collection plus marketplace demo cards; optional Core verification mode | Broader verified collection support |
+| Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | Devnet test collection (includes marketplace purchases); optional Core verification mode | Broader verified collection support |
 | Card → creature | `CARD_MAPPING`, `resolveCard` (`lib/cards/mapping.ts`) | Versioned table | Reviewed card list |
 | Creature data | `SpeciesService` (`lib/pokemon`) | Go embedded Pokédex for online play; PokéAPI provider retained for explicit offline play | Abilities, held items and bespoke one-off moves |
 | Rank | `RankService` (`lib/rank`) | Go API Elo from actual multiplayer results; persistent JSON records | Verified account identities and a database for multiple servers |
@@ -107,7 +107,15 @@ The landing leaderboard and active-match list read actual server state and show 
 
 The verified card route can discover all wallet assets in approved collections when `DAS_RPC_URL` and `APPROVED_COLLECTION_IDS` are configured. This removes the two-asset limit for that configured path. Without DAS configuration, the existing Pikachu/Charmander Core lookup remains intact. See [`apps/web/app/api/devnet-cards/README.md`](apps/web/app/api/devnet-cards/README.md).
 
-Wager deployment, Collector Crypt, marketplace transactions and integrations without credentials are preserved and deferred. This project still includes their demo providers and the explicit offline battle tools; it should not be described as entirely free of mocks.
+Collector Crypt and integrations without credentials are deferred. This project still includes their demo providers and the explicit offline battle tools; it should not be described as entirely free of mocks.
+
+### On-chain marketplace
+
+`contracts/programs/pokefun_market` lists, sells, takes offers and swaps Metaplex Core cards for native SOL. A listed or traded card never leaves its owner's wallet: the program freezes it with Core's FreezeDelegate and moves it with TransferDelegate, so it stays battle-eligible until it sells. Offers and trade SOL are escrowed in program accounts; the fee (2.5%) goes to a treasury. See [`contracts/README.md`](contracts/README.md).
+
+The Go API indexes it read-only when `MARKET_PROGRAM_ID` is set (`services/api/internal/market`): `GET /api/market` (snapshot of cards, listings, offers, trades, sales), `POST /api/market/refresh`, `GET /api/market/sol-price`. It holds no keys; users sign every transaction. History is kept in `MARKET_STORE_PATH` (default `data/market.json`).
+
+The marketplace has no mock mode: without the API it shows an unavailable notice. Signing works with a Privy wallet or with "Continue with Phantom" (also offered in demo sign-in mode); demo email accounts can browse but not sign.
 
 ### Card catalog and summon gallery
 

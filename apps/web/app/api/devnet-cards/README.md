@@ -12,4 +12,4 @@ Discovery reads all pages, deduplicates asset IDs, and includes only supported N
 
 Without `DAS_RPC_URL`, the existing Core lookup remains active using `DEVNET_RPC_URL`, `DEVNET_TEST_COLLECTION_ID`, `DEVNET_TEST_PIKACHU_ASSET`, and `DEVNET_TEST_CHARMANDER_ASSET`. No asset IDs need to be configured for the DAS path.
 
-The mock collection scenarios and existing provider selection are preserved. Marketplace features, Collector Crypt, wagering and paid demo entries, auth fallback, and the price provider are unchanged; missing integration credentials are intentionally skipped.
+The mock collection scenarios and existing provider selection are preserved. Collector Crypt, wagering and paid demo entries, auth fallback, and the price provider are unchanged; missing integration credentials are intentionally skipped.
