@@ -77,10 +77,14 @@ export interface MarketState {
   ready: boolean;
   /** Index problem worth showing (e.g. API or RPC unavailable). */
   warning?: string;
+  /** Devnet helpers the server offers: free card mints and a SOL faucet. */
+  onboarding?: { mint: boolean; faucet: boolean; faucetSol: number; mintsPerDay: number };
 }
 
 /** Share of the sale price the marketplace keeps. */
 export const MARKET_FEE = 0.025;
+
+export interface MintedCard { mint: string; name: string; signature: string }
 
 export type OfferAnswer = { action: "accept" } | { action: "decline" } | { action: "counter"; priceSol: number };
 
@@ -105,8 +109,10 @@ export interface MarketplaceService {
   setDisplayName(address: string, name: string): void;
   /** Real sales only. */
   priceHistory(mint: string, days?: number): PricePoint[];
-  /** Devnet faucet airdrop to the wallet; returns the new balance. */
-  addFunds(address: string, priceSol: number): Promise<MarketResult<number>>;
+  /** Devnet SOL from the server faucet; returns the new balance. */
+  addFunds(address: string, priceSol?: number): Promise<MarketResult<number>>;
+  /** Mints a free devnet test card into the wallet. */
+  claimFreeCard(address: string): Promise<MarketResult<MintedCard>>;
   buy(listingId: string, buyer: string): Promise<MarketResult<Listing>>;
   list(mint: string, seller: string, priceSol: number): Promise<MarketResult<Listing>>;
   updatePrice(listingId: string, by: string, priceSol: number): Promise<MarketResult<Listing>>;

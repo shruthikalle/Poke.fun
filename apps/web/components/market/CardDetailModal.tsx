@@ -118,7 +118,7 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
             <div className={styles.confirm}>
               <p>Buy <b>{card.name}</b> ({card.grade}) from {listing.seller.name} for <b>{format(listing.priceSol)}</b>?</p>
               <p className={styles.mutedNote}>Paid from your wallet ({format(market.balanceSol)} devnet SOL). The seller receives 97.5%; 2.5% goes to the marketplace. Your wallet will ask you to approve.</p>
-              {market.balanceSol < listing.priceSol && (
+              {market.balanceSol < listing.priceSol && market.state.onboarding?.faucet && (
                 <button className="pf-btn" data-size="sm" disabled={busy} onClick={() => void act(() => market.addFunds(listing.priceSol - market.balanceSol), "Devnet SOL added to your wallet.")}>Get devnet SOL</button>
               )}
               <div className={styles.actionsRow}>

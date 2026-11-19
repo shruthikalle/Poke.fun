@@ -3,7 +3,7 @@
 import { address, type Address, type Instruction } from "@solana/kit";
 import { findCatalogEntry } from "../cards/mapping";
 import {
-  approvedPda, authorityPda, computeLimitIx, configPda, coreAccounts, CORE_PROGRAM, LAMPORTS_PER_SOL, listingPda, marketIx, offerPda, rpc,
+  approvedPda, authorityPda, computeLimitIx, configPda, coreAccounts, CORE_PROGRAM, listingPda, marketIx, offerPda, rpc,
   sendAndConfirm, SYSTEM_PROGRAM, toLamports, toSolNumber, tradePda, type TransactionSender,
 } from "./program";
 import { BALANCE_EVENT } from "./useWalletSolBalance";
@@ -19,8 +19,9 @@ interface IndexedListing { id: string; mint: string; seller: string; price: numb
 interface IndexedOffer { id: string; listingId: string; mint: string; buyer: string; amount: number; counter?: number; status: Offer["status"]; createdAt: number }
 interface IndexedTrade { id: string; proposer: string; counterparty: string; give: string[]; want: string[]; addLamports: number; status: Trade["status"]; createdAt: number }
 interface IndexedSale { mint: string; seller: string; buyer: string; price: number; at: number }
+export interface Onboarding { mint: boolean; faucet: boolean; faucetLamports?: number; collection?: string; mintsPerDay?: number }
 export interface MarketIndex {
-  ready: boolean; warning?: string; programId: string;
+  ready: boolean; warning?: string; programId: string; onboarding?: Onboarding;
   config: { admin: string; treasury: string; feeBps: number; paused: boolean } | null;
   collections: string[]; cards: IndexedCard[]; listings: IndexedListing[]; offers: IndexedOffer[]; trades: IndexedTrade[]; sales: IndexedSale[];
 }
@@ -71,7 +72,10 @@ export function toMarketState(index: MarketIndex, names: Record<string, string>)
     seller(t.proposer); seller(t.counterparty);
     return { id: t.id, from: t.proposer, to: t.counterparty, give: t.give, want: t.want, addSol: toSolNumber(t.addLamports), status: t.status, createdAt: t.createdAt };
   });
-  return { cards, owners, listings, offers, trades, sellers, ready: index.ready, warning: index.warning };
+  return {
+    cards, owners, listings, offers, trades, sellers, ready: index.ready, warning: index.warning,
+    onboarding: { mint: !!index.onboarding?.mint, faucet: !!index.onboarding?.faucet, faucetSol: toSolNumber(index.onboarding?.faucetLamports ?? 0), mintsPerDay: index.onboarding?.mintsPerDay ?? 0 },
+  };
 }
 
 const fail = (error: unknown, fallback = "Something went wrong. Try again."): { ok: false; error: string } => {
@@ -194,22 +198,35 @@ export class ChainMarketplaceService implements MarketplaceService {
 
   // ------------------------------------------------------------ actions
 
-  /** Devnet only: requests a faucet airdrop so test wallets can pay. */
-  async addFunds(owner: string, priceSol: number): Promise<MarketResult<number>> {
+  /** POSTs to an onboarding endpoint; errors carry the server's message (e.g. a daily limit). */
+  private async onboard<T>(path: "mint" | "faucet", owner: string): Promise<T> {
+    const response = await fetch(`${API_URL}/api/market/${path}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ owner }) });
+    const body = await response.json().catch(() => ({})) as T & { error?: string };
+    if (!response.ok) throw new Error(body.error ?? `Request failed (${response.status})`);
+    return body;
+  }
+
+  /** Devnet SOL from the server's faucet wallet (the public RPC faucet is closed). Returns the new balance. */
+  async addFunds(owner: string, _priceSol?: number): Promise<MarketResult<number>> {
     try {
-      const lamports = BigInt(Math.min(2, Math.max(0.5, Math.ceil(priceSol))) * LAMPORTS_PER_SOL);
-      const signature = await rpc.requestAirdrop(address(owner), lamports as never).send();
-      for (let i = 0; i < 30; i++) {
-        const { value } = await rpc.getSignatureStatuses([signature]).send();
-        if (value[0]?.confirmationStatus === "confirmed" || value[0]?.confirmationStatus === "finalized") break;
-        await new Promise((r) => setTimeout(r, 1000));
-      }
+      await this.onboard<{ lamports: number; signature: string }>("faucet", owner);
       window.dispatchEvent(new Event(BALANCE_EVENT));
-      const { value } = await rpc.getBalance(address(owner)).send();
+      const { value } = await rpc.getBalance(address(owner), { commitment: "confirmed" }).send();
       return { ok: true, value: toSolNumber(value) };
-    } catch {
-      return { ok: false, error: "The devnet faucet is busy. Get test SOL at faucet.solana.com and try again." };
+    } catch (e) {
+      return fail(e, "The devnet faucet is unavailable. Get test SOL at faucet.solana.com.");
     }
+  }
+
+  /** Mints a free devnet test card into the wallet (a few per day). */
+  async claimFreeCard(owner: string): Promise<MarketResult<import("./types").MintedCard>> {
+    try {
+      const minted = await this.onboard<import("./types").MintedCard>("mint", owner);
+      // Minting has already confirmed. A lagging index must not turn a successful
+      // mint into an error that encourages the person to mint again.
+      await this.load("POST").catch(() => {});
+      return { ok: true, value: minted };
+    } catch (e) { return fail(e, "Couldn't mint a card right now."); }
   }
 
   async buy(listingId: string, buyer: string): Promise<MarketResult<Listing>> {

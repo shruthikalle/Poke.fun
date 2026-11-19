@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { CardTile, type TileBadge } from "../../components/market/CardTile";
+import { FreeCardButton } from "../../components/market/FreeCardButton";
 import { MarketShell, useShell } from "../../components/market/MarketShell";
 import { useMarketModals } from "../../components/market/useMarketModals";
 import styles from "../../components/market/market.module.css";
@@ -82,7 +83,7 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
           <p>The cards in your devnet wallet. Listing keeps a card in your wallet, frozen until it sells, so it can still battle.</p>
         </div>
         <div className={styles.heroActions}>
-          <button className="pf-btn" data-variant="primary" onClick={shell.openImport}>Add your cards</button>
+          <FreeCardButton market={market} />
           <Link href="/market" className="pf-btn">Browse marketplace</Link>
         </div>
       </div>
@@ -91,7 +92,7 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
         <div className={`pf-panel ${styles.stat}`}><span>Cards</span><strong>{market.myCards.length}</strong><small>In your wallet</small></div>
         <div className={`pf-panel ${styles.stat}`} data-tone="gold"><span>Collection value</span><strong>{format(worth, { compact: true })}</strong><small>Based on recent sales</small></div>
         <div className={`pf-panel ${styles.stat}`}><span>For sale</span><strong>{market.myListings.length}</strong><small>{market.sales.length ? `${market.sales.length} sold · ${format(earned, { compact: true })} earned` : "Nothing sold yet"}</small></div>
-        <div className={`pf-panel ${styles.stat}`}><span>Wallet SOL · Devnet</span><strong>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</strong><small><button className={styles.linkButton} onClick={async () => { const r = await market.addFunds(1); shell.toast(r.ok ? "Added devnet SOL to your wallet." : r.error); }}>Get devnet SOL</button></small></div>
+        <div className={`pf-panel ${styles.stat}`}><span>Wallet SOL · Devnet</span><strong>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</strong><small>{market.state.onboarding?.faucet ? <button className={styles.linkButton} onClick={async () => { const r = await market.addFunds(); shell.toast(r.ok ? `Sent ${market.state.onboarding?.faucetSol} devnet SOL to your wallet.` : r.error); }}>Get {market.state.onboarding.faucetSol} devnet SOL</button> : <a className={styles.linkButton} href="https://faucet.solana.com" target="_blank" rel="noreferrer">Get devnet SOL ↗</a>}</small></div>
       </div>
 
       <aside className={`pf-panel ${styles.filters}`} aria-label="Activity">
@@ -145,8 +146,8 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
             <b>Your binder is empty</b>
             <p>Pick up your first card in the Marketplace. Cards in approved collections that your wallet already holds appear here on their own.</p>
             <div className={styles.emptyActions}>
-              <Link href="/market" className="pf-btn" data-variant="primary">Browse the marketplace</Link>
-              <button className="pf-btn" onClick={shell.openImport}>Add your cards</button>
+              <FreeCardButton market={market} label="Get your first card free" />
+              <Link href="/market" className="pf-btn">Browse the marketplace</Link>
             </div>
           </div>
         )}
