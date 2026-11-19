@@ -226,3 +226,6 @@ await ownerTransfer(A7, alice, carol);
 ok("proposer can cancel; card is free again");
 
 console.log(`\n${passed} checks passed`);
+
+const { verifyOnboarding } = await import("./onboarding.mjs");
+await verifyOnboarding({ admin, program, collection, treasury, connection, RPC, BN });
