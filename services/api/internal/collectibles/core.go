@@ -69,9 +69,20 @@ func NewReader(rpcURL, collection string) *Reader {
 	}
 }
 
+// collections parses Collection: one or more comma/space-separated collection addresses.
+func (r *Reader) collections() map[string]bool {
+	out := map[string]bool{}
+	for _, c := range strings.FieldsFunc(r.Collection, func(c rune) bool { return c == ',' || c == ' ' || c == '\n' || c == '\t' }) {
+		if validAddress(c) {
+			out[c] = true
+		}
+	}
+	return out
+}
+
 // Read checks the on-chain Core program, owner and collection before using off-chain display metadata.
 func (r *Reader) Read(ctx context.Context, assetID, expectedOwner string) (Card, error) {
-	if !validAddress(assetID) || !validAddress(expectedOwner) || !validAddress(r.Collection) {
+	if !validAddress(assetID) || !validAddress(expectedOwner) || len(r.collections()) == 0 {
 		return Card{}, ErrInvalidAddress
 	}
 	query := struct {
@@ -133,7 +144,7 @@ func (r *Reader) Read(ctx context.Context, assetID, expectedOwner string) (Card,
 	if card.Owner != expectedOwner {
 		return Card{}, ErrWrongOwner
 	}
-	if card.Collection != r.Collection {
+	if !r.collections()[card.Collection] {
 		return Card{}, ErrWrongCollection
 	}
 	uri, err := url.Parse(card.URI)

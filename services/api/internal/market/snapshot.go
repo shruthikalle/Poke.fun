@@ -21,6 +21,16 @@ type Snapshot struct {
 	Offers      []Offer        `json:"offers"`
 	Trades      []Trade        `json:"trades"`
 	Sales       []Sale         `json:"sales"`
+	Onboarding  Onboarding     `json:"onboarding"`
+}
+
+// Onboarding says which devnet helpers the server offers.
+type Onboarding struct {
+	Mint           bool   `json:"mint"`
+	Faucet         bool   `json:"faucet"`
+	FaucetLamports uint64 `json:"faucetLamports,omitempty"`
+	Collection     string `json:"collection,omitempty"`
+	MintsPerDay    int    `json:"mintsPerDay,omitempty"`
 }
 
 type Card struct {

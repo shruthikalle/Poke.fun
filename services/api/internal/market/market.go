@@ -2,7 +2,7 @@
 // snapshot for the web app. The chain is the source of truth: live listings,
 // offers and trades come from program accounts on every sync, card ownership
 // from Metaplex Core accounts, and history from program events. The service
-// holds no keys and never signs; users sign every marketplace transaction.
+// uses a separate optional devnet minter for onboarding; users sign every trade.
 package market
 
 import (
@@ -28,7 +28,8 @@ type Options struct {
 	Discovery     time.Duration // full card rescan interval, default 60s
 	MetadataHosts map[string]bool
 	HTTP          *http.Client
-	PriceURL      string // SOL/USD source; "" disables
+	PriceURL      string  // SOL/USD source; "" disables
+	Minter        *Minter // devnet card minting and SOL faucet; nil disables
 }
 
 type Service struct {
@@ -36,6 +37,7 @@ type Service struct {
 	rpc     *rpcClient
 	refresh chan chan struct{}
 
+	grantMu       sync.Mutex // serialize grants to protect faucet balance and quota rollback
 	syncMu        sync.Mutex // one sync at a time
 	lastDiscovery time.Time
 	metadata      map[string]collectibles.Metadata // by URI
@@ -53,6 +55,8 @@ type Service struct {
 type storeData struct {
 	Cursor string  `json:"cursor"`
 	Events []Event `json:"events"`
+	// Grants holds recent mint/faucet timestamps (unix ms) by rate-limit key.
+	Grants map[string][]int64 `json:"grants,omitempty"`
 }
 
 func New(opts Options) (*Service, error) {
@@ -87,6 +91,7 @@ func New(opts Options) (*Service, error) {
 		}
 	}
 	s.snapshot = build(opts.ProgramID, programState{}, nil, s.store.Events)
+	s.snapshot.Onboarding = s.onboarding()
 	return s, nil
 }
 
@@ -176,6 +181,7 @@ func (s *Service) Sync(ctx context.Context, discover bool) error {
 	s.state, s.cards = state, cards
 	s.snapshot = build(s.opts.ProgramID, state, cards, s.store.Events)
 	s.snapshot.Ready = true
+	s.snapshot.Onboarding = s.onboarding()
 	s.snapshot.UpdatedAt = time.Now().UnixMilli()
 	s.lastErr = ""
 	if err := errors.Join(eventErr, cardErr); err != nil {
@@ -322,4 +328,12 @@ func (s *Service) saveLocked() error {
 		return err
 	}
 	return os.Rename(tmp, s.opts.StorePath)
+}
+
+func (s *Service) onboarding() Onboarding {
+	m := s.opts.Minter
+	if m == nil {
+		return Onboarding{}
+	}
+	return Onboarding{Mint: len(m.Deck) > 0, Faucet: m.FaucetLamports > 0, FaucetLamports: m.FaucetLamports, Collection: m.Collection.String(), MintsPerDay: mintLimit.perOwner}
 }

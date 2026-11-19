@@ -6,6 +6,10 @@
 // --demo-uris <file.json> maps card names to metadata URIs (e.g. the devnet test cards' Irys
 // metadata) so demo cards show real art; its entries are dealt out to the owners in turn.
 //
+//   node scripts/setup-market.mjs --rpc https://api.devnet.solana.com --create-collection "Poke.fun Devnet Cards"
+//     creates a Core collection whose update authority is the admin keypair (the API's
+//     MARKET_MINTER_KEYPAIR, which mints free cards into it) and approves it for trading.
+//
 // Options: --admin <keypair.json> (default ~/.config/solana/id.json, also the fee treasury unless --treasury),
 // --fee-bps 250. Safe to re-run: existing config and approvals are left alone.
 import { readFileSync } from "node:fs";
@@ -38,7 +42,16 @@ if (!(await connection.getAccountInfo(config))) {
 }
 
 let collection = args.collection ? new PublicKey(args.collection) : null;
+if (args["create-collection"]) {
+  const umi = createUmi(rpc, "confirmed").use(mplCore());
+  umi.use(keypairIdentity(createSignerFromKeypair(umi, umi.eddsa.createKeypairFromSecretKey(admin.secretKey))));
+  const signer = generateSigner(umi);
+  await createCollection(umi, { collection: signer, name: args["create-collection"], uri: args["collection-uri"] ?? "https://gateway.irys.xyz/BLDDaHRTbehCarf56obFeFCWKmbBAZiaih4vahufusYm" }).sendAndConfirm(umi);
+  collection = new PublicKey(signer.publicKey);
+  console.log(`created collection ${collection.toBase58()} (update authority ${admin.publicKey.toBase58()})`);
+}
 if (args.demo) {
+  if (args["create-collection"]) throw new Error("use --demo or --create-collection, not both");
   const umi = createUmi(rpc, "confirmed").use(mplCore());
   umi.use(keypairIdentity(createSignerFromKeypair(umi, umi.eddsa.createKeypairFromSecretKey(admin.secretKey))));
   const signer = generateSigner(umi);
