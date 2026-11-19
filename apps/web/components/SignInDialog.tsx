@@ -76,16 +76,16 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
           <form className={styles.form} onSubmit={submitEmail} noValidate>
             <h2 id="signin-title" className={styles.title}>{creating ? "Create your account" : "Sign in to Poke.fun"}</h2>
             <p className={styles.body}>{provider === "privy" ? "Connect your Solana wallet to play with your cards." : creating ? "Just your email. We'll send a code to confirm it's you." : "Your cards, your rank, your battles."}</p>
-            {provider === "privy" && <button type="button" className={`pf-btn ${styles.primary}`} data-variant="primary" onClick={() => void run(async () => { await auth.loginWithPhantom?.(); }, true)} disabled={busy}>{busy ? "Signing in…" : "Continue with Phantom"}</button>}
+            {auth.loginWithPhantom && <button type="button" className={`pf-btn ${styles.primary}`} data-variant="primary" onClick={() => void run(async () => { await auth.loginWithPhantom?.(); }, true)} disabled={busy}>{busy ? "Signing in…" : "Continue with Phantom"}</button>}
             {provider === "privy" && <p className={styles.fine}>Phantom signs a Devnet login message. No transaction is sent.</p>}
-            {provider === "privy" && <p className={styles.or}>or use email</p>}
+            {auth.loginWithPhantom && <p className={styles.or}>or use email</p>}
             <label className={styles.field}>
               <span>Email</span>
               <input className="pf-input" type="email" autoComplete="email" placeholder="you@example.com" value={email}
                 onChange={(e) => setEmail(e.target.value)} autoFocus disabled={busy} />
             </label>
             {error && <p className={styles.error} role="alert">{error}</p>}
-            <button className={`pf-btn ${provider === "privy" ? styles.secondary : styles.primary}`} data-variant={provider === "privy" ? "ghost" : "primary"} disabled={busy}>
+            <button className={`pf-btn ${auth.loginWithPhantom ? styles.secondary : styles.primary}`} data-variant={auth.loginWithPhantom ? "ghost" : "primary"} disabled={busy}>
               {busy ? "Sending code…" : creating ? "Create account" : "Continue"}
             </button>
             <button type="button" className={styles.link} onClick={() => { setMode(creating ? "sign-in" : "create"); setError(null); }} disabled={busy}>

@@ -4,6 +4,7 @@ import { getBase58Decoder } from "@solana/kit";
 import { useCallback, useEffect, useState } from "react";
 import { local } from "../storage";
 import { connectPhantom, getPhantomProvider } from "./phantom";
+import { signWithStandardWallet } from "./standardWallet";
 import type { AuthBackend, AuthUser } from "./types";
 
 const USER_KEY = "pf:mock-user";
@@ -60,5 +61,17 @@ export function useMockBackend(): AuthBackend {
 
   const signOut = useCallback(async () => { save(null); }, []);
 
-  return { kind: "mock", ready, user, sendCode, verifyCode, linkPhantom, signOut };
+  /** Demo sign-in with a real Phantom address, so devnet marketplace transactions can be signed without Privy. */
+  const loginWithPhantom = useCallback(async () => {
+    const provider = getPhantomProvider();
+    if (!provider) throw new Error("Open this page in a browser with Phantom installed.");
+    const linked = await connectPhantom(provider);
+    save({ id: `phantom-${linked}`, email: null, address: linked, linkedAddress: linked });
+  }, []);
+
+  const signTransaction = user?.address && user.address === user.linkedAddress
+    ? (transaction: Uint8Array) => signWithStandardWallet(user.address!, transaction)
+    : undefined;
+
+  return { kind: "mock", ready, user, sendCode, verifyCode, linkPhantom, signOut, loginWithPhantom, signTransaction };
 }
