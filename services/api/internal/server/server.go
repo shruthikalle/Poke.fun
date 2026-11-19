@@ -35,6 +35,7 @@ type Server struct {
 	persistenceErr  error
 	persistenceGate *sync.Mutex
 	closed          bool
+	market          http.Handler
 }
 
 type collectibleReader interface {
@@ -113,6 +114,10 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/arena-queue/{id}", s.getArenaQueue)
 	mux.HandleFunc("DELETE /api/arena-queue/{id}", s.cancelArenaQueue)
 	s.registerResultRoutes(mux)
+	if s.market != nil {
+		mux.Handle("/api/market", s.market)
+		mux.Handle("/api/market/", s.market)
+	}
 	return s.withCORS(s.durableResponses(mux))
 }
 
