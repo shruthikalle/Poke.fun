@@ -12,7 +12,6 @@ import { Viewport, ViewportFrame } from "../../components/battle/Viewport";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { ApiError, apiRequest } from "../../lib/battle/battleApi";
-import { MockBattleStream } from "../../lib/battle/MockBattleStream";
 import { ServerBattleStream } from "../../lib/battle/ServerBattleStream";
 import { createCreature, makeFormat } from "../../lib/battle/roster";
 import type { BattleStreamSource, Creature, Side } from "../../lib/battle/types";
@@ -23,8 +22,6 @@ import { loadTicket, type MatchTicket } from "../../lib/match/MatchmakingService
 import { speciesService } from "../../lib/pokemon/SpeciesService";
 import { rankService, type RankInfo } from "../../lib/rank/RankService";
 import { getOutcomeProof } from "../../lib/results";
-import { stakeService } from "../../lib/stake/StakeService";
-import { useCurrency } from "../../lib/market/currency";
 import { useMotionPreference } from "../../lib/motion";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 import { explorerTx, paidQueueApi } from "../../lib/sol/wagerClient";
@@ -35,22 +32,20 @@ type Load =
   | { status: "error"; fatal: boolean }
   | { status: "ready"; ticket: MatchTicket; teams: Record<Side, Creature[]> };
 
-interface MatchResult { outcome: "win" | "loss" | "draw"; payout: number; practice: boolean; before: RankInfo; after: RankInfo; delta: number }
+interface MatchResult { outcome: "win" | "loss" | "draw"; before: RankInfo; after: RankInfo; delta: number }
 
 async function toCreatures(picks: CardPick[], side: Side): Promise<Creature[]> {
   const species = await Promise.all(picks.map((p) => speciesService.getSpecies(p.species)));
   return species.map((s, i) => createCreature(s, picks[i].level, `${side}-${i}-${picks[i].key}`, picks[i].image));
 }
 
-function ResultSummary({ result, entry, paidWager }: { result: MatchResult; entry: number; paidWager?: MatchTicket["paidWager"] }) {
-  const { formatUsd: formatDollars } = useCurrency();
-  const money = result.outcome === "win" ? `+${formatDollars(result.payout)}` : result.outcome === "draw" ? `${formatDollars(result.payout)} back` : entry ? `−${formatDollars(entry)}` : "$0";
+function ResultSummary({ result, paidWager }: { result: MatchResult; paidWager?: MatchTicket["paidWager"] }) {
   return (
     <div className={styles.result}>
       <div>
-        <span>{result.practice ? "Offline practice" : "Game complete"}</span>
-        <strong>{paidWager ? "Devnet SOL match" : result.practice && entry ? money : "No payout issued"}</strong>
-        <small>{paidWager ? `${paidWager.stakeLamports / 1_000_000_000} Devnet SOL each · ${paidWager.stakeLamports * 2 / 1_000_000_000} SOL pot` : entry ? `Selected demo entry ${formatDollars(entry)} · settlement deferred` : "No funds were at stake"}</small>
+        <span>Game complete</span>
+        <strong>{paidWager ? "Devnet SOL match" : "Free match"}</strong>
+        <small>{paidWager ? `${paidWager.stakeLamports / 1_000_000_000} Devnet SOL each · ${paidWager.stakeLamports * 2 / 1_000_000_000} SOL pot` : "No funds were at stake"}</small>
       </div>
       <div>
         <span>Rank</span>
@@ -96,9 +91,6 @@ function PaidSettlement({ wager, authToken, outcome }: { wager: NonNullable<Matc
 export default function BattlePage() {
   const router = useRouter();
   const { ready, playerName: signedInName, walletAuthToken, signIn } = useWallet();
-  const { formatUsd: formatDollars } = useCurrency();
-  const formatRef = useRef(formatDollars);
-  formatRef.current = formatDollars;
   const playerName = signedInName ?? "Guest";
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [attempt, setAttempt] = useState(0);
@@ -127,18 +119,14 @@ export default function BattlePage() {
   const source = useMemo<BattleStreamSource | null>(() => {
     if (!ready || load.status !== "ready") return null;
     const t = load.ticket;
-    const { winnerTakes } = stakeService.quote(t.entry);
-    const formatDollars = formatRef.current;
     const format = makeFormat("[Gen 9] Random Battle", [
       { name: "Match", description: FORMAT_LABEL[t.format] },
-      { name: "Entry", description: t.paidWager ? `${t.paidWager.stakeLamports / 1_000_000_000} Devnet SOL deposited by each player` : t.entry ? `${formatDollars(t.entry)} each, winner takes ${formatDollars(winnerTakes)} (demo, no real money)` : "Free match" },
+      { name: "Entry", description: t.paidWager ? `${t.paidWager.stakeLamports / 1_000_000_000} Devnet SOL deposited by each player` : "Free match" },
       { name: "Ranks", description: `${playerName} ${t.you.rating} vs. ${t.opponent.trainer.name} ${t.opponent.rating} (${t.opponent.tier})` },
     ]);
     // `teams.p1` is always our own team here, whichever side we play.
     const config = { you: { id: playerName, name: playerName, avatar: "maya" }, opponent: t.opponent.trainer, teams: load.teams, format };
-    // The Go server is the referee: a matched human rival (t.live) or the
-    // server AI. NEXT_PUBLIC_LIVE_BATTLE=0 forces the offline simulation.
-    if (process.env.NEXT_PUBLIC_LIVE_BATTLE === "0" && !t.paidWager) return new MockBattleStream({ ...config, onStatus: setConnectNote });
+    // The Go server is the referee: a matched human rival (t.live) or the server AI.
     if (t.live) {
       const { battleId, token, side } = t.live;
       return new ServerBattleStream({ mode: "pvp", battleId, token, side, team: load.teams.p1, format, onStatus: setConnectNote });
@@ -190,12 +178,10 @@ export default function BattlePage() {
     if (!ticket) return;
     if (event.type === "init") {
       setResult(null);
-      if (process.env.NEXT_PUBLIC_LIVE_BATTLE === "0") void stakeService.deposit(ticket.matchId, ticket.entry);
     }
     if (event.type === "win") {
       const outcome = event.winner === "draw" ? "draw" : event.winner === (s?.you ?? "p1") ? "win" : "loss";
-      void Promise.all([
-        ticket.live && process.env.NEXT_PUBLIC_LIVE_BATTLE !== "0"
+      void (ticket.live
           ? Promise.all([
               apiRequest<RankInfo>("GET", `/api/ranks?player=${encodeURIComponent(ticket.you.name)}`),
               getOutcomeProof("battles", ticket.live.battleId, ticket.live.token),
@@ -203,11 +189,8 @@ export default function BattlePage() {
               const delta = after.history.find((history) => history.matchId === proof.result.id)?.delta ?? 0;
               return { before: { ...after, rating: after.rating - delta }, after, delta };
             })
-          : rankService.recordResult(playerName, ticket.opponent.trainer.name, ticket.opponent.rating, outcome),
-        process.env.NEXT_PUBLIC_LIVE_BATTLE === "0"
-          ? stakeService.settle(ticket.matchId, ticket.entry, outcome)
-          : Promise.resolve({ payout: 0 }),
-      ]).then(([rank, settlement]) => setResult({ outcome, payout: settlement.payout, practice: process.env.NEXT_PUBLIC_LIVE_BATTLE === "0", ...rank }))
+          : rankService.recordResult(playerName, ticket.opponent.trainer.name, ticket.opponent.rating, outcome))
+        .then((rank) => setResult({ outcome, ...rank }))
         .catch((error: unknown) => setConnectNote(error instanceof Error ? error.message : "Could not load the battle result. Your server result is saved."));
     }
   }), [battle.subscribe, play, ticket, playerName]);
@@ -231,8 +214,6 @@ export default function BattlePage() {
   const subtitle = state ? `${state.sides.p2.trainer.name} vs. ${state.sides.p1.trainer.name}` : "Connecting…";
   const badge = ticket && (ticket.paidWager
     ? <>{ticket.paidWager.stakeLamports / 1_000_000_000} Devnet SOL each · Escrow funded</>
-    : ticket.entry
-    ? <>Entry <b>{formatDollars(ticket.entry)}</b> · Winner takes <b>{formatDollars(stakeService.quote(ticket.entry).winnerTakes)}</b> · Demo</>
     : <>Free match · Ranked</>);
 
   return (
@@ -256,8 +237,8 @@ export default function BattlePage() {
               }}>Forfeit match</button>}
               <ActionBar state={state} choose={battle.choose} cancel={battle.cancel} toggleTimer={battle.toggleTimer} rematch={ticket.paidWager ? undefined : battle.rematch}
                 outcomeDetail={ticket.paidWager && state.phase === "ended" ? <PaidSettlement wager={ticket.paidWager} authToken={walletAuthToken} outcome={state.winner === "draw" ? "draw" : state.winner === state.you ? "win" : "loss"} /> : null}
-                summary={result ? <><ResultSummary result={result} entry={ticket.entry} paidWager={ticket.paidWager} />
-                  {ticket.live && !ticket.paidWager && process.env.NEXT_PUBLIC_LIVE_BATTLE !== "0" && <OutcomeReceipt mode="battles" id={ticket.live.battleId} token={ticket.live.token} />}
+                summary={result ? <><ResultSummary result={result} paidWager={ticket.paidWager} />
+                  {ticket.live && !ticket.paidWager && <OutcomeReceipt mode="battles" id={ticket.live.battleId} token={ticket.live.token} />}
                 </> : null} />
             </>
           ) : (

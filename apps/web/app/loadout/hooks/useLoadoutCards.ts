@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { arenaApi, type ArenaCard } from "../../../lib/arena";
-import { collectionService, DEVNET_TEST_COLLECTION_ADDRESS, type DasAsset } from "../../../lib/cards/collection";
+import { collectionService, isVerifiedAsset, type DasAsset } from "../../../lib/cards/collection";
 import { FAUX_ART_WINDOW, RENTAL_POOL, resolveCard, type CardPick } from "../../../lib/cards/mapping";
 import { errorMessage, useLoadoutResource } from "./useLoadoutResource";
 
@@ -21,7 +21,7 @@ const loadCollection = (address: string) => collectionService.getOwnedCollectibl
 function ownedRow(asset: DasAsset): CardRow {
   const resolved = resolveCard(asset);
   if (resolved.eligible) return {
-    asset, pick: { ...resolved.pick, rental: !(asset.interface === "MplCoreAsset" && asset.grouping?.some((group) => group.group_value === DEVNET_TEST_COLLECTION_ADDRESS)) }, label: resolved.pick.label,
+    asset, pick: { ...resolved.pick, rental: !isVerifiedAsset(asset) }, label: resolved.pick.label,
     image: resolved.pick.image, grade: resolved.pick.grade, reason: null,
   };
   return {

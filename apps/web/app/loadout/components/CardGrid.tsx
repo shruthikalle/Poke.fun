@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import type { ArenaCard } from "../../../lib/arena";
-import { DEVNET_TEST_COLLECTION_ADDRESS, type DasAsset } from "../../../lib/cards/collection";
+import { isVerifiedAsset, type DasAsset } from "../../../lib/cards/collection";
 import type { CardRow } from "../hooks/useLoadoutCards";
 import styles from "../loadout.module.css";
 
 function devnetExplorerUrl(asset: DasAsset | null): string | null {
-  if (!asset || asset.interface !== "MplCoreAsset"
-    || !asset.grouping?.some((group) => group.group_key === "collection" && group.group_value === DEVNET_TEST_COLLECTION_ADDRESS)
+  if (!asset || !isVerifiedAsset(asset)
     || !/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(asset.id)) return null;
   return `https://explorer.solana.com/address/${asset.id}?cluster=devnet`;
 }

@@ -18,7 +18,7 @@ import { EntryControls } from "./components/EntryControls";
 import { QueueDialog } from "./components/QueueDialog";
 import { PaidQueueDialog } from "./components/PaidQueueDialog";
 import { usePaidLoadoutQueue } from "./hooks/usePaidLoadoutQueue";
-import { DEVNET_TEST_COLLECTION_ADDRESS } from "../../lib/cards/collection";
+import { isVerifiedAsset } from "../../lib/cards/collection";
 import { explorerTx } from "../../lib/sol/wagerClient";
 import { useLoadoutCards } from "./hooks/useLoadoutCards";
 import { useLoadoutQueue } from "./hooks/useLoadoutQueue";
@@ -76,8 +76,7 @@ export default function LoadoutPage() {
   const completeTeam = team.length === (format === "squad" ? 3 : 1)
     && team.every((pick) => cards.fighters.get(pick.species));
   const paidCardValid = completeTeam && team.every((pick) => cards.rows.some((row) => row.pick?.key === pick.key
-    && row.asset?.interface === "MplCoreAsset"
-    && row.asset.grouping?.some((group) => group.group_key === "collection" && group.group_value === DEVNET_TEST_COLLECTION_ADDRESS)));
+    && !!row.asset && isVerifiedAsset(row.asset)));
   const canQueue = !matchmaking.resume && ready && !!playerName && !!rank.data && !!fighter && completeTeam
     && !cards.fightersLoading && !cards.fighterError && !entryError && matchmaking.queue.status === "idle"
     && paid.queue.status === "idle" && !paid.busy && (entry === 0 || (paidCardValid && !!walletAuthToken));
