@@ -59,13 +59,14 @@ export function useMarketplace(service: MarketplaceService = chainMarketplaceSer
   return {
     state,
     me,
-    /** False when signed in with an address that can't sign transactions (demo email accounts). */
+    /** True when the connected wallet is ready to sign transactions. */
     canSign: !!sendTransaction,
     walletBalanceSol,
     ...derived,
     priceHistory: service.priceHistory.bind(service),
     valueOf: service.valueOf.bind(service),
-    addFunds: (priceSol: number) => guard((m) => service.addFunds(m, priceSol)),
+    addFunds: (priceSol?: number) => guard((m) => service.addFunds(m, priceSol)),
+    claimFreeCard: () => guard((m) => service.claimFreeCard(m)),
     buy: (listingId: string) => guard((m) => service.buy(listingId, m)),
     list: (mint: string, priceSol: number) => guard((m) => service.list(mint, m, priceSol)),
     updatePrice: (listingId: string, priceSol: number) => guard((m) => service.updatePrice(listingId, m, priceSol)),

@@ -4,7 +4,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { SignInDialog } from "../../components/SignInDialog";
 import { local } from "../storage";
 import { submitSigned, type TransactionSender } from "../market/program";
-import { useMockBackend } from "./mockBackend";
+import { usePhantomBackend } from "./phantomBackend";
 import { truncateAddress } from "./phantom";
 import { PrivyBridge } from "./privyBackend";
 import type { AuthBackend, AuthUser, PlayerSession } from "./types";
@@ -121,14 +121,14 @@ function WalletState({ backend, children }: { backend: AuthBackend; children: Re
   );
 }
 
-function MockBridge({ children }: { children: (backend: AuthBackend) => ReactNode }) {
-  return <>{children(useMockBackend())}</>;
+function PhantomBridge({ children }: { children: (backend: AuthBackend) => ReactNode }) {
+  return <>{children(usePhantomBackend())}</>;
 }
 
-/** Uses Privy when NEXT_PUBLIC_PRIVY_APP_ID is set, otherwise the mock sign-in. */
+/** Uses Privy when NEXT_PUBLIC_PRIVY_APP_ID is set, otherwise verified Phantom sign-in. */
 export function WalletProvider({ children }: { children: ReactNode }) {
   const render = (backend: AuthBackend) => <WalletState backend={backend}>{children}</WalletState>;
-  return PRIVY_APP_ID ? <PrivyBridge appId={PRIVY_APP_ID}>{render}</PrivyBridge> : <MockBridge>{render}</MockBridge>;
+  return PRIVY_APP_ID ? <PrivyBridge appId={PRIVY_APP_ID}>{render}</PrivyBridge> : <PhantomBridge>{render}</PhantomBridge>;
 }
 
 export function useWallet(): WalletContextValue {

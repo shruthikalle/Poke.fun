@@ -1,13 +1,11 @@
 "use client";
 
-import { local } from "../../../lib/storage";
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import { Emblem } from "../../../components/Emblem";
 import { CardSummon } from "../../../components/summon/CardSummon";
 import { useBattleAudio } from "../../../lib/audio/useBattleAudio";
-import { MOCK_SCENARIO_KEY, type MockScenario } from "../../../lib/cards/collection";
 import { CARD_CATALOG, type CatalogEntry } from "../../../lib/cards/mapping";
 import { useMotionPreference } from "../../../lib/motion";
 import { speciesService, type SpeciesData } from "../../../lib/pokemon/SpeciesService";
@@ -15,7 +13,6 @@ import styles from "./gallery.module.css";
 
 type Layout = "Full art" | "Vintage" | "Modern";
 const layoutOf = (e: CatalogEntry): Layout => (e.artWindow.w === 1 ? "Full art" : e.set.startsWith("base") ? "Vintage" : "Modern");
-const SCENARIOS: MockScenario[] = ["default", "one", "ineligible", "empty", "large"];
 
 interface Check { done: number; total: number; failed: string[]; staticSprite: string[]; noArtwork: string[]; noCry: string[] }
 
@@ -27,7 +24,6 @@ export function SummonGallery() {
   const [full, setFull] = useState<{ entry: CatalogEntry; species: SpeciesData | null; n: number } | null>(null);
   const [minis, setMinis] = useState<Record<string, { species: SpeciesData; n: number }>>({});
   const [check, setCheck] = useState<Check | null>(null);
-  const [scenario, setScenario] = useState<MockScenario>(() => ((local.get(MOCK_SCENARIO_KEY) as MockScenario | null) ?? "default"));
 
   const cards = useMemo(() => CARD_CATALOG.entries.filter((e) =>
     (set === "all" || e.set === set) && (!query || `${e.name} ${e.species} ${e.number}`.toLowerCase().includes(query.toLowerCase()))), [set, query]);
@@ -61,11 +57,6 @@ export function SummonGallery() {
     }
   };
 
-  const chooseScenario = (s: MockScenario) => {
-    setScenario(s);
-    local.set(MOCK_SCENARIO_KEY, s);
-  };
-
   return (
     <div className={styles.page}>
       <header className={styles.top}>
@@ -82,11 +73,6 @@ export function SummonGallery() {
         </div>
         <input className={`pf-input ${styles.search}`} placeholder="Search name or species" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search cards" />
         <button className="pf-btn" data-size="sm" onClick={checkAll} disabled={!!check && check.done < check.total}>Check all species</button>
-        <label className={styles.scenario}>Mock collection
-          <select className="pf-input" value={scenario} onChange={(e) => chooseScenario(e.target.value as MockScenario)}>
-            {SCENARIOS.map((s) => <option key={s} value={s}>{s}</option>)}
-          </select>
-        </label>
       </section>
 
       {check && (

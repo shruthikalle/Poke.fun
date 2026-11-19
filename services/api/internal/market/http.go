@@ -26,6 +26,19 @@ func (s *Service) Handler() http.Handler {
 		s.Refresh(ctx)
 		writeJSON(w, http.StatusOK, s.Snapshot())
 	})
+	// Cards a wallet holds in approved collections (the loadout's owned-card source).
+	mux.HandleFunc("GET /api/market/wallet/{owner}", func(w http.ResponseWriter, r *http.Request) {
+		owner := r.PathValue("owner")
+		snap := s.Snapshot()
+		cards := []Card{}
+		for _, c := range snap.Cards {
+			if c.Owner == owner {
+				cards = append(cards, c)
+			}
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ready": snap.Ready, "cards": cards})
+	})
+	s.registerOnboarding(mux)
 	mux.HandleFunc("GET /api/market/sol-price", func(w http.ResponseWriter, r *http.Request) {
 		quote, err := s.price.get(r.Context(), s.opts.HTTP, s.opts.PriceURL)
 		if err != nil {

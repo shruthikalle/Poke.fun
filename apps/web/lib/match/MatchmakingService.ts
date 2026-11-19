@@ -1,8 +1,7 @@
 import { session } from "../storage";
 import type { Side, Trainer } from "../battle/types";
-import { opponentAssets } from "../cards/collection";
-import { buildTeam, resolveCard, type CardPick, type MatchFormat, type PowerTier } from "../cards/mapping";
-import { tierFor, type RankTier } from "../rank/RankService";
+import type { CardPick, MatchFormat, PowerTier } from "../cards/mapping";
+import type { RankTier } from "../rank/RankService";
 import { ServerMatchmakingService } from "./ServerMatchmakingService";
 
 export interface MatchRequest {
@@ -53,54 +52,8 @@ export interface MatchmakingService {
   find(request: MatchRequest): MatchSearch;
 }
 
-const TRAINERS: Trainer[] = [
-  { id: "thar07", name: "thar07", avatar: "kai" },
-  { id: "mossy_mo", name: "mossy_mo", avatar: "theo" },
-  { id: "pyrefly", name: "pyrefly", avatar: "rook" },
-];
-
-/**
- * Offline stand-in: invents an opponent from the sample collections. Used when
- * NEXT_PUBLIC_LIVE_BATTLE=0 for explicit offline demos.
- */
-export class MockMatchmakingService implements MatchmakingService {
-  find(request: MatchRequest): MatchSearch {
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    let reject: (e: Error) => void = () => {};
-    const result = new Promise<MatchTicket>((resolve, rej) => {
-      reject = rej;
-      timer = setTimeout(() => {
-        const trainer = TRAINERS[Math.floor(Math.random() * TRAINERS.length)];
-        const cards = opponentAssets(trainer.id).map(resolveCard).flatMap((r) => (r.eligible ? [r.pick] : []));
-        const sameTier = cards.filter((c) => c.tier === request.tier);
-        const pool = sameTier.length ? sameTier : cards;
-        const lead = pool[Math.floor(Math.random() * pool.length)];
-        const rating = request.rating + Math.round((Math.random() - 0.5) * 120);
-        resolve({
-          matchId: `m-${Date.now().toString(36)}`,
-          format: request.format,
-          entry: request.entry,
-          you: { name: request.player, rating: request.rating, team: request.team },
-          opponent: {
-            trainer,
-            rating,
-            tier: tierFor(rating),
-            wins: 20 + Math.floor(Math.random() * 40),
-            losses: 10 + Math.floor(Math.random() * 30),
-            team: buildTeam(lead, cards.filter((c) => !request.team.some((t) => t.species === c.species)), request.format),
-          },
-        });
-      }, 2200 + Math.random() * 1500);
-    });
-    return { result, cancel: () => { clearTimeout(timer); reject(new Error("cancelled")); } };
-  }
-}
-
-// Real two-player matchmaking through the Go API. Offline demos require an
-// explicit NEXT_PUBLIC_LIVE_BATTLE=0 setting.
-export const matchmakingService: MatchmakingService = process.env.NEXT_PUBLIC_LIVE_BATTLE === "0"
-  ? new MockMatchmakingService()
-  : new ServerMatchmakingService();
+/** Real two-player matchmaking through the Go API. */
+export const matchmakingService: MatchmakingService = new ServerMatchmakingService();
 
 const TICKET_KEY = "pf:match:v1";
 

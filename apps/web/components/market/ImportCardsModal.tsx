@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { Marketplace } from "../../lib/market/useMarketplace";
+import { FreeCardButton } from "./FreeCardButton";
 import { Modal } from "./Modal";
 import styles from "./market.module.css";
 
@@ -15,9 +16,10 @@ export function ImportCardsModal({ market, onClose }: { market: Marketplace; onC
       <div className={styles.listForm}>
         <h3>Your wallet is your collection</h3>
         <p className={styles.mutedNote}>Cards in approved devnet collections that your signed-in wallet holds show up in My Cards on their own. Buying or trading moves them straight into your wallet.</p>
-        <p className={styles.mutedNote}>{count ? `${count} ${count === 1 ? "card" : "cards"} found in ${where}.` : `No approved cards in ${where} yet. Buy one in the Marketplace, or mint devnet test cards with tools/devnet.`}</p>
+        <p className={styles.mutedNote}>{count ? `${count} ${count === 1 ? "card" : "cards"} found in ${where}.` : `No approved cards in ${where} yet. Claim a free one below or buy one in the Marketplace.`}</p>
         <div className={styles.actionsRow}>
-          <button className="pf-btn" data-variant="primary" disabled={checking} onClick={async () => { setChecking(true); await market.refresh(); setChecking(false); }}>{checking ? "Checking…" : "Check my wallet again"}</button>
+          <FreeCardButton market={market} />
+          <button className="pf-btn" disabled={checking} onClick={async () => { setChecking(true); await market.refresh(); setChecking(false); }}>{checking ? "Checking…" : "Check my wallet again"}</button>
           <button className="pf-btn" onClick={onClose}>Done</button>
         </div>
       </div>

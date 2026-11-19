@@ -72,11 +72,11 @@ If your ports differ, set `API_ADDR` and `WEB_ORIGIN` for the Go server and `NEX
 | Battle feed | `BattleStreamSource`, `useBattleStream` (`lib/battle`) | `ServerBattleStream` → Go API shared event log (polling); `MockBattleStream` offline | Push transport (WebSocket / QuickNode Streams) instead of polling |
 | Battle HP share | `OddsProvider`, `useOdds` (`lib/markets`) | Current team HP share, explicitly labelled as a heuristic; mock provider retained as an opt-in tool | External prediction market integration |
 | Sound cues | `AudioCueProvider`, `useBattleAudio` (`lib/audio`) | `SynthAudioProvider` | ElevenLabs |
-| Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | `useMockBackend` (any 6-digit code) when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
-| Marketplace | `MarketplaceService`, `useMarketplace` (`lib/market`) | `ChainMarketplaceService`: devnet `pokefun_market` program, read through the Go index, wallet-signed writes | Deploy the program to devnet; audit before any real value |
+| Sign-in | `AuthBackend`, `useWallet` (`lib/wallet`) | Verified Phantom message-signature sessions when `NEXT_PUBLIC_PRIVY_APP_ID` is unset | Privy email code + embedded Solana wallet on devnet (`privyBackend.tsx`) |
+| Marketplace | `MarketplaceService`, `useMarketplace` (`lib/market`) | `ChainMarketplaceService`: devnet `pokefun_market` program, read through the Go index, wallet-signed writes | Configure deployed program and approved collection; audit before any real value |
 | SOL price | `SolPriceSource`, `useSolPrice` (`lib/market`) | Go `/api/market/sol-price` (cached CoinGecko); prices show in SOL while no quote is available | |
 | Lobby and chat | `LobbyService`, `RoomChatService` (`lib/lobby`) | Go community presence and shared room messages | Durable chat history and verified identities |
-| Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | Devnet test collection (includes marketplace purchases); optional Core verification mode | Broader verified collection support |
+| Owned cards | `CollectionService` (`lib/cards`), shaped like Metaplex DAS `getAssetsByOwner` | Go marketplace index of wallet-owned Core NFTs in approved collections | Broader verified collection support |
 | Card → creature | `CARD_MAPPING`, `resolveCard` (`lib/cards/mapping.ts`) | Versioned table | Reviewed card list |
 | Creature data | `SpeciesService` (`lib/pokemon`) | Go embedded Pokédex for online play; PokéAPI provider retained for explicit offline play | Abilities, held items and bespoke one-off moves |
 | Rank | `RankService` (`lib/rank`) | Go API Elo from actual multiplayer results; persistent JSON records | Verified account identities and a database for multiple servers |
@@ -103,24 +103,50 @@ New records start at 1200 Elo with zero wins, losses and draws. Only the server 
 
 The landing leaderboard and active-match list read actual server state and show empty or unavailable states when appropriate. Room chat uses shared server messages and heartbeat presence, not generated chatter. Presence and chat history remain in memory.
 
-### Optional card discovery
+### Wallet cards
 
-The verified card route can discover all wallet assets in approved collections when `DAS_RPC_URL` and `APPROVED_COLLECTION_IDS` are configured. This removes the two-asset limit for that configured path. Without DAS configuration, the existing Pikachu/Charmander Core lookup remains intact. See [`apps/web/app/api/devnet-cards/README.md`](apps/web/app/api/devnet-cards/README.md).
+Owned cards in `/collection` and `/loadout` come from the Go marketplace index of Metaplex Core accounts in approved collections. A wallet with no cards has an empty collection. API errors are shown rather than replaced with invented cards. The Go battle API independently checks ownership and collection at entry. Explicit practice rentals remain available for guest play.
 
-Collector Crypt and integrations without credentials are deferred. This project still includes their demo providers and the explicit offline battle tools; it should not be described as entirely free of mocks.
+Without a Privy app ID, sign-in requires Phantom and a server-verified message signature; email sign-in is offered only when Privy is configured. No arbitrary email codes or generated wallet addresses are accepted.
 
 ### On-chain marketplace
 
 `contracts/programs/pokefun_market` lists, sells, takes offers and swaps Metaplex Core cards for native SOL. A listed or traded card never leaves its owner's wallet: the program freezes it with Core's FreezeDelegate and moves it with TransferDelegate, so it stays battle-eligible until it sells. Offers and trade SOL are escrowed in program accounts; the fee (2.5%) goes to a treasury. See [`contracts/README.md`](contracts/README.md).
 
-The Go API indexes it read-only when `MARKET_PROGRAM_ID` is set (`services/api/internal/market`): `GET /api/market` (snapshot of cards, listings, offers, trades, sales), `POST /api/market/refresh`, `GET /api/market/sol-price`. It holds no keys; users sign every transaction. History is kept in `MARKET_STORE_PATH` (default `data/market.json`).
+The Go API indexes it read-only when `MARKET_PROGRAM_ID` is set (`services/api/internal/market`): `GET /api/market` (snapshot of cards, listings, offers, trades, sales), `POST /api/market/refresh`, `GET /api/market/sol-price`. Users sign every marketplace transaction. Optional onboarding uses a separate server-only Devnet minter key. History is kept in `MARKET_STORE_PATH` (default `data/market.json`).
 
-The marketplace has no mock mode: without the API it shows an unavailable notice. Signing works with a Privy wallet or with "Continue with Phantom" (also offered in demo sign-in mode); demo email accounts can browse but not sign.
+The marketplace has no mock mode: without the API it shows an unavailable notice. Signing works with a Privy wallet or with "Continue with Phantom"; email sign-in uses Privy when configured.
+
+### Free NFT → list → buy → wallet transfer
+
+These are test collectibles, but minting, payment and ownership are real Solana transactions. Connect Phantom, click **Get a free card** on `/market` or `/collection`, and the API creates a Metaplex Core NFT owned by that wallet. In My Cards, get Devnet SOL for fees and list the card. Another wallet can buy it: the contract atomically pays the seller, pays the marketplace fee and transfers the NFT to the buyer. The index then removes it from the seller's collection and adds it to the buyer's collection and battle loadout.
+
+Configure a deployed market program and a collection owned by your minter (from `contracts/`):
+
+```sh
+node scripts/setup-market.mjs --rpc https://api.devnet.solana.com --admin /private/path/minter.json --create-collection "Poke.fun Devnet Cards"
+```
+
+Export these in the Go API terminal before running `go run ./cmd/server`:
+
+```sh
+export MARKET_PROGRAM_ID=<deployed-market-program>
+export MARKET_RPC_URL=https://api.devnet.solana.com
+export MARKET_MINTER_KEYPAIR=/private/path/minter.json
+export MARKET_MINT_COLLECTION=<collection-printed-by-setup>
+export MARKET_FAUCET_SOL=0.25
+```
+
+Set `NEXT_PUBLIC_MARKET_PROGRAM_ID` and `NEXT_PUBLIC_SOLANA_RPC_URL` to the same program/network in `apps/web/.env.local`. Fund the minter with Devnet SOL for mint rent, fees and grants. It must control the collection's update authority; the setup script approves that collection in the market. The API rejects mainnet onboarding. Never expose the minter key through a `NEXT_PUBLIC_` variable.
+
+Minting is limited to three cards per wallet daily, twelve per connecting IP and four hundred globally. SOL grants are limited to one per wallet, four per IP and sixty globally per twelve hours; wallets already at the grant threshold receive nothing. Limits persist in `MARKET_STORE_PATH`; the faucet keeps a reserve. The API uses the direct connection IP, so a reverse proxy shares an IP quota. Buyers and sellers always sign their own trades; the minter cannot authorize a sale for them.
+
+Run the integration suite with `cd contracts && ./tests/run-market.sh` (Go, Node, Solana tools and built program artifacts required). It uses an isolated local validator with real Core and marketplace programs, runs the 39 contract checks, then starts the Go API and verifies minting, faucet limits, listing, purchase, on-chain ownership, wallet collections and sale history. Override `MARKET_TEST_PORT`, `MARKET_TEST_API_PORT` or `GO_BIN` if needed.
 
 ### Card catalog and summon gallery
 
 - `apps/web/lib/cards/catalog.generated.json` is the versioned card → creature catalog (Base Set, Jungle, Fossil, 151, Crown Zenith Galarian Gallery). Each entry has its species, level, power tier and the `artWindow` the summon lifts out of the card. Regenerate it with `npm run catalog` (from cached API responses in `scripts/.cache/`, or `-- --refresh` to download again), and check every species against PokéAPI with `npm run catalog:check`.
-- `/dev/summons` (dev builds only, or set `NEXT_PUBLIC_DEV_TOOLS=1`) lists every catalog card and plays its full or mini summon. It can also switch the mock collection (default, one card, all ineligible, empty, large).
+- `/dev/summons` (dev builds only, or set `NEXT_PUBLIC_DEV_TOOLS=1`) lists every catalog card and plays its full or mini summon. Owned inventory comes from the wallet index.
 - QA findings and their status are in `docs/qa-report.md`.
 
 ### Pokémon data

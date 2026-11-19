@@ -11,11 +11,11 @@ export interface AuthUser {
 }
 
 /**
- * Sign-in provider seam. `PrivyBridge` implements it with Privy; `MockBridge` keeps the
+ * Sign-in provider seam. `PrivyBridge` implements it with Privy; `PhantomBridge` keeps the
  * app runnable without a Privy app id. Swap providers here without touching the UI.
  */
 export interface AuthBackend {
-  kind: "privy" | "mock";
+  kind: "privy" | "phantom";
   ready: boolean;
   user: AuthUser | null;
   sendCode(email: string): Promise<void>;
@@ -23,7 +23,7 @@ export interface AuthBackend {
   loginWithPhantom?(): Promise<void>;
   linkPhantom(): Promise<void>;
   signOut(): Promise<void>;
-  /** Signs a serialized Solana transaction for the signed-in address. Absent when the account can't sign (demo addresses). */
+  /** Signs a serialized Solana transaction for the signed-in address. Absent until a wallet can sign. */
   signTransaction?(transaction: Uint8Array): Promise<Uint8Array>;
 }
 

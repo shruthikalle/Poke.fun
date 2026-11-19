@@ -18,7 +18,7 @@ Events (`Listed`, `Sale`, `OfferMade`, `TradeClosed`, …) feed the Go index in 
 ```sh
 anchor build -p pokefun_market        # with Anchor 0.31.1
 npm install && npm run fetch:core     # dumps the Core program for the local validator
-./tests/run-market.sh                 # local validator + real Core program, 39 checks
+./tests/run-market.sh                 # isolated validator + 39 contract checks + Go mint/buy integration
 node scripts/setup-market.mjs --rpc <RPC> --collection <CORE_COLLECTION>   # initialize + approve a collection
 ```
 

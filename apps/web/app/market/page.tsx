@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { CardTile } from "../../components/market/CardTile";
 import { MarketShell } from "../../components/market/MarketShell";
 import { useMarketModals } from "../../components/market/useMarketModals";
+import { FreeCardButton } from "../../components/market/FreeCardButton";
 import styles from "../../components/market/market.module.css";
 import { useCurrency } from "../../lib/market/currency";
 import { useMarketplace } from "../../lib/market/useMarketplace";
@@ -61,6 +62,7 @@ export default function MarketplacePage() {
           <h1>Find your next champion</h1>
           <p>Devnet test cards traded on-chain. Pay with devnet SOL; the card lands in your wallet and can battle right away.</p>
         </div>
+        <div className={styles.heroActions}><FreeCardButton market={market} /></div>
       </div>
       {market.state.warning && <p className={styles.notice} data-tone="bad" role="status" style={{ gridColumn: "1 / -1" }}>{market.state.ready ? `Some marketplace data may be out of date: ${market.state.warning}` : "Can't reach the marketplace right now. Make sure the Poke.fun API is running with MARKET_PROGRAM_ID set."}</p>}
       <aside className={`pf-panel ${styles.filters}`} aria-label="Filters">
