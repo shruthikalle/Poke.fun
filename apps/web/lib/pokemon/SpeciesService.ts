@@ -1,6 +1,7 @@
 import { apiRequest } from "../battle/battleApi";
 import type { CreatureSprites, ElementType, Move } from "../battle/types";
 import { cached } from "./cache";
+import { cryUrl } from "../audio/AudioEngine";
 
 export interface BaseStats { hp: number; atk: number; def: number; spa: number; spd: number; spe: number }
 
@@ -73,9 +74,9 @@ async function withPresentation(data: SpeciesData): Promise<SpeciesData> {
         backStatic: back,
       },
       artwork: pokemon.sprites.other?.["official-artwork"]?.front_default ?? data.artwork,
-      cry: pokemon.cries?.latest ?? pokemon.cries?.legacy ?? data.cry,
+      cry: pokemon.cries?.latest ?? pokemon.cries?.legacy ?? data.cry ?? cryUrl(data.dex),
     };
-  } catch { return data; }
+  } catch { return { ...data, cry: data.cry ?? cryUrl(data.dex) }; }
 }
 
 /** Uses exactly the versioned definitions with which the server builds teams. */

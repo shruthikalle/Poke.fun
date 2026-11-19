@@ -3,6 +3,7 @@ import data from "./offlineDex.generated.json";
 import { createCreature, createStruggleMove } from "../battle/roster";
 import type { Creature, ElementType, Move } from "../battle/types";
 import type { SpeciesData } from "./SpeciesService";
+import { cryUrl } from "../audio/AudioEngine";
 
 interface Definition {
   key: string; species: string; name: string; dex: number; types: string[]; tier: number;
@@ -39,7 +40,7 @@ export function getEmbeddedSpecies(key: string): SpeciesData {
   if (!s) throw new Error(`Unknown embedded Pokémon: ${key}`);
   const back = s.sprite.replace("/pokemon/", "/pokemon/back/");
   return { key: s.key, dex: s.dex, name: s.name, types: [...s.types] as ElementType[], base: { ...s.base }, moves: embeddedMoves(s),
-    sprites: { front: s.sprite, back, frontStatic: s.sprite, backStatic: back }, artwork: null, cry: null };
+    sprites: { front: s.sprite, back, frontStatic: s.sprite, backStatic: back }, artwork: null, cry: cryUrl(s.dex) };
 }
 
 export function canonicalOfflineTeam(team: Creature[], side: string): Creature[] {

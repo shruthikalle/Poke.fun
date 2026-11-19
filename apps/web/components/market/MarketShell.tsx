@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { useBattleAudio } from "../../lib/audio/useBattleAudio";
+import { useMusic } from "../../lib/audio/AudioProvider";
+import { SoundControl } from "../sound/SoundControl";
 import { useCurrency } from "../../lib/market/currency";
 import type { Marketplace } from "../../lib/market/useMarketplace";
 import { useWallet } from "../../lib/wallet/WalletProvider";
@@ -23,7 +24,7 @@ export const useShell = () => useContext(ShellContext);
 export function MarketShell({ section, market, children }: { section: Section; market: Marketplace; children: ReactNode }) {
   const { playerName, connected, signIn } = useWallet();
   const { format } = useCurrency();
-  const audio = useBattleAudio();
+  useMusic("menu");
   const [toast, setToast] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
   const seen = useRef<Map<string, string> | null>(null);
@@ -88,9 +89,7 @@ export function MarketShell({ section, market, children }: { section: Section; m
             ) : (
               <button className="pf-btn" data-size="sm" data-variant="primary" onClick={() => signIn()}>Sign in</button>
             )}
-            <button className={styles.iconBtn} onClick={audio.toggleMute} aria-label={audio.muted ? "Unmute" : "Mute"} aria-pressed={audio.muted}>
-              <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 6h3l4-3v10L5 10H2z" fill="currentColor" />{audio.muted ? <path d="M11 5l4 6M15 5l-4 6" stroke="currentColor" strokeWidth="1.6" /> : <path d="M11 5.5a3.5 3.5 0 010 5M12.5 3.5a6 6 0 010 9" stroke="currentColor" strokeWidth="1.4" fill="none" />}</svg>
-            </button>
+            <SoundControl />
           </div>
         </header>
         <div className={styles.body}>{children}</div>

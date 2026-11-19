@@ -1,0 +1,10 @@
+.hint {
+  position: fixed; left: 50%; bottom: var(--space-5); z-index: 60; transform: translateX(-50%);
+  display: inline-flex; align-items: center; gap: var(--space-2); padding: 8px 14px;
+  color: var(--accent-ink); background: var(--accent); border: 0; clip-path: var(--notch-shape);
+  font-family: var(--font-label); font-size: 11px; letter-spacing: .18em; text-transform: uppercase;
+  box-shadow: var(--shadow-drop); animation: hintIn var(--dur-med) var(--ease-out);
+}
+.hint:hover { background: var(--accent-hi); }
+@keyframes hintIn { from { opacity: 0; transform: translate(-50%, 8px); } }
+@media (prefers-reduced-motion: reduce) { .hint { animation: none; } }

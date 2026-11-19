@@ -10,6 +10,8 @@ import { Sidebar } from "../../components/battle/Sidebar";
 import { TopBar, type TabId } from "../../components/battle/TopBar";
 import { Viewport, ViewportFrame } from "../../components/battle/Viewport";
 import { cueForEvent, useBattleAudio } from "../../lib/audio/useBattleAudio";
+import { useAudio, useMusic } from "../../lib/audio/AudioProvider";
+import { cryFromSprite } from "../../lib/audio/AudioEngine";
 import { useBattleStream } from "../../lib/battle/BattleEngine";
 import { ApiError, apiRequest } from "../../lib/battle/battleApi";
 import { ServerBattleStream } from "../../lib/battle/ServerBattleStream";
@@ -138,6 +140,8 @@ export default function BattlePage() {
   const { state } = battle;
   const odds = useOdds(state);
   const audio = useBattleAudio();
+  const { playCry } = useAudio();
+  useMusic(state && state.phase !== "ended" ? "battle" : null);
   const lobby = useLobby();
   const motion = useMotionPreference();
 
@@ -175,6 +179,11 @@ export default function BattlePage() {
   useEffect(() => battle.subscribe((event, s) => {
     const cue = cueForEvent(event, s);
     if (cue) play(cue);
+    if (event.type === "switch") playCry(cryFromSprite(s?.sides[event.side]?.team[event.teamIndex]?.sprites.frontStatic), { delay: 0.25 });
+    if (event.type === "faint") {
+      const side = s?.sides[event.side];
+      playCry(cryFromSprite(side?.team[side.activeIndex]?.sprites.frontStatic), { rate: 0.8, volume: 0.7 });
+    }
     if (!ticket) return;
     if (event.type === "init") {
       setResult(null);
@@ -193,7 +202,23 @@ export default function BattlePage() {
         .then((rank) => setResult({ outcome, ...rank }))
         .catch((error: unknown) => setConnectNote(error instanceof Error ? error.message : "Could not load the battle result. Your server result is saved."));
     }
-  }), [battle.subscribe, play, ticket, playerName]);
+  }), [battle.subscribe, play, playCry, ticket, playerName]);
+
+  // The server only sends the turn clock when it resets, so tick the last 10 seconds locally.
+  const mustChoose = !!state && !state.pendingChoice && (state.phase === "choosing" || state.phase === "switching");
+  const secondsLeft = mustChoose && state.timer.enabled ? state.timer.secondsLeft : null;
+  useEffect(() => {
+    if (secondsLeft === null) return;
+    const end = Date.now() + secondsLeft * 1000;
+    let last = -1;
+    const tick = () => {
+      const left = Math.ceil((end - Date.now()) / 1000);
+      if (left !== last && left > 0 && left <= 10) play("countdown");
+      last = left;
+    };
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [secondsLeft, state?.turn, play]);
 
   const openRoom = useCallback((room: ChatRoom) => {
     setRooms((rs) => (rs.some((r) => r.id === room.id) ? rs : [...rs, room]));

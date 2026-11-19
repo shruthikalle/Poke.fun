@@ -10,7 +10,8 @@
     "catalog": "node scripts/build-card-catalog.mjs",
     "catalog:check": "node scripts/check-species.mjs",
     "offline-dex": "node scripts/build-offline-dex.mjs",
-    "offline-dex:check": "node scripts/build-offline-dex.mjs --check"
+    "offline-dex:check": "node scripts/build-offline-dex.mjs --check",
+    "audio": "node scripts/build-audio.mjs"
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",

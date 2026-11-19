@@ -9,6 +9,7 @@ import type { ChatRoom } from "../../lib/lobby/useLobby";
 import styles from "./battle.module.css";
 import { PixelIcon } from "../PixelIcon";
 import { CurrencyToggle } from "../market/CurrencyToggle";
+import { SoundControl } from "../sound/SoundControl";
 
 export type TabId = "battle" | string;
 
@@ -75,9 +76,7 @@ export function TopBar({ title, subtitle, rooms, activeTab, onSelect, onCloseRoo
         ) : (
           <button className={styles.button} onClick={onSignIn}>Sign in</button>
         )}
-        <button className={styles.iconButton} onClick={onToggleMute} aria-label={muted ? "Unmute" : "Mute"} aria-pressed={muted} title={muted ? "Sound off" : "Sound on"}>
-          <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 6h3l4-3v10L5 10H2z" fill="currentColor" />{muted ? <path d="M11 5l4 6M15 5l-4 6" stroke="currentColor" strokeWidth="1.6" /> : <path d="M11 5.5a3.5 3.5 0 010 5M12.5 3.5a6 6 0 010 9" stroke="currentColor" strokeWidth="1.4" fill="none" />}</svg>
-        </button>
+        <SoundControl />
         <div ref={ref} style={{ position: "relative" }}>
           <button className={styles.iconButton} onClick={() => setSettings((s) => !s)} aria-label="Settings" aria-expanded={settings}>
             <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M7 1h2l.4 2 1.4.6 1.7-1.2 1.4 1.4-1.2 1.7.6 1.4 2 .4v2l-2 .4-.6 1.4 1.2 1.7-1.4 1.4-1.7-1.2-1.4.6L9 15H7l-.4-2-1.4-.6-1.7 1.2-1.4-1.4 1.2-1.7L2.7 9 1 9V7l2-.4.6-1.4-1.2-1.7 1.4-1.4 1.7 1.2L7 3zM8 5.5A2.5 2.5 0 108 10.5 2.5 2.5 0 008 5.5z" /></svg>

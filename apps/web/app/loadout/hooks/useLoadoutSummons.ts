@@ -5,6 +5,7 @@ import { apiRequest } from "../../../lib/battle/battleApi";
 import type { CardPick } from "../../../lib/cards/mapping";
 import type { SpeciesData } from "../../../lib/pokemon/SpeciesService";
 import { errorMessage } from "./useLoadoutResource";
+import { cryUrl } from "../../../lib/audio/AudioEngine";
 
 /** Summons use the same embedded species data as authoritative server teams. */
 export function useLoadoutSummons(team: CardPick[]) {
@@ -27,7 +28,7 @@ export function useLoadoutSummons(team: CardPick[]) {
       const next = new Map<string, SpeciesData>();
       const failures = new Map<string, string>();
       results.forEach((result, index) => {
-        if (result.status === "fulfilled") next.set(keys[index], result.value);
+        if (result.status === "fulfilled") next.set(keys[index], { ...result.value, cry: result.value.cry ?? cryUrl(result.value.dex) });
         else failures.set(keys[index], errorMessage(result.reason));
       });
       setData(next);

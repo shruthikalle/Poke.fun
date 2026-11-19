@@ -7,6 +7,8 @@ import { AccountChip } from "../../components/AccountChip";
 import { Emblem } from "../../components/Emblem";
 import { CardSummon } from "../../components/summon/CardSummon";
 import { useBattleAudio } from "../../lib/audio/useBattleAudio";
+import { useMusic } from "../../lib/audio/AudioProvider";
+import { SoundControl } from "../../components/sound/SoundControl";
 import { type CardPick, type MatchFormat, type PowerTier } from "../../lib/cards/mapping";
 import speciesIndex from "../../lib/cards/species.generated.json";
 import { useMotionPreference } from "../../lib/motion";
@@ -44,6 +46,10 @@ export default function LoadoutPage() {
   const [summon, setSummon] = useState<{ key: string; sequence: number } | null>(null);
   const motion = useMotionPreference();
   const audio = useBattleAudio();
+  useMusic("menu");
+  const found = matchmaking.queue.status === "found" || paid.queue.status === "found";
+  const { play: playCue } = audio;
+  useEffect(() => { if (found) playCue("match-found"); }, [found, playCue]);
 
   useEffect(() => {
     if (ready && !playerName) signIn({ onCancel: () => router.push("/") });
@@ -116,6 +122,7 @@ export default function LoadoutPage() {
           <Link href="/loadout" aria-current="page">Battle</Link>
         </nav>
         <div className={styles.account}>
+          <SoundControl />
           {playerName && <AccountChip classes={{
             chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem,
           }} />}

@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { preload } from "react-dom";
 import { AccountChip } from "../components/AccountChip";
+import { SoundControl } from "../components/sound/SoundControl";
+import { useMusic } from "../lib/audio/AudioProvider";
 import { Emblem } from "../components/Emblem";
 import { PixelAvatar } from "../components/PixelAvatar";
 import { useLobby } from "../lib/lobby/useLobby";
@@ -156,6 +158,7 @@ export default function Landing() {
   const router = useRouter();
   const { playerName, signIn } = useWallet();
   const lobby = useLobby();
+  useMusic("menu");
   const [leaderboard, setLeaderboard] = useState<Leaderboard | null>(null);
   const [leaderboardError, setLeaderboardError] = useState(false);
   useEffect(() => {
@@ -197,6 +200,7 @@ export default function Landing() {
             <Link href="/collection">My Cards</Link>
             <Link href="/history">History</Link>
             <Link href="/loadout">Play</Link>
+            <SoundControl />
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
                 extra={<Link className={styles.menuItem} href="/loadout">Play a match</Link>} />
