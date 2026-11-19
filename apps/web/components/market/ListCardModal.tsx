@@ -49,7 +49,7 @@ export function ListCardModal({ mint, market, onClose }: { mint: string; market:
                 <tr><td>Marketplace fee (2.5%)</td><td>−{format(sol * FEE)}</td></tr>
                 <tr><th>You receive</th><th>{format(sol * (1 - FEE))}</th></tr>
               </tbody></table>
-              <p className={styles.mutedNote}>The card stays in the vault until it sells. You can remove the listing anytime.</p>
+              <p className={styles.mutedNote}>The card stays in your wallet, frozen until it sells. You can remove the listing anytime.</p>
               {error && <p className={styles.notice} data-tone="bad" role="alert">{error}</p>}
               <div className={styles.actionsRow}>
                 <button className="pf-btn" data-variant="primary" disabled={busy} onClick={confirm}>{busy ? "Saving…" : existing ? "Save new price" : "Confirm listing"}</button>
@@ -61,8 +61,8 @@ export function ListCardModal({ mint, market, onClose }: { mint: string; market:
               <label className={styles.fieldLabel}>Price ({currency})
                 <input className="pf-input" type="number" min="0" step={currency === "SOL" ? "0.01" : "1"} value={price} autoFocus onChange={(e) => setPrice(e.target.value)} />
               </label>
-              <p className={styles.mutedNote}>{existing ? <>Listed now at {format(existing.priceSol)}. </> : null}Similar cards sell for about {format(estimate)}.</p>
-              {sol > 0 && sol < estimate * 0.5 && <p className={styles.notice} data-tone="bad" role="alert">That&apos;s less than half what similar cards sell for. Double-check the price.</p>}
+              <p className={styles.mutedNote}>{existing ? <>Listed now at {format(existing.priceSol)}. </> : null}{estimate > 0 ? <>Last sold for {format(estimate)}.</> : "No sales yet, so set your own price."}</p>
+              {sol > 0 && sol < estimate * 0.5 && <p className={styles.notice} data-tone="bad" role="alert">That&apos;s less than half its last sale price. Double-check the price.</p>}
               {error && <p className={styles.notice} data-tone="bad" role="alert">{error}</p>}
               <div className={styles.actionsRow}>
                 <button className="pf-btn" data-variant="primary" disabled={!(amount > 0)} onClick={() => setStep("confirm")}>{existing ? "Review new price" : "Review listing"}</button>

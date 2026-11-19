@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 
 const RPC_URL = process.env.NEXT_PUBLIC_SOLANA_RPC_URL ?? "https://api.devnet.solana.com";
+/** Dispatch on `window` after a transaction or airdrop to re-read the balance now. */
+export const BALANCE_EVENT = "pf:wallet-balance";
 
-/** The wallet's actual Devnet SOL, separate from marketplace demo credit. */
+/** The wallet's actual Devnet SOL. */
 export function useWalletSolBalance(address: string | null): number | null {
   const [balance, setBalance] = useState<{ address: string; sol: number } | null>(null);
 
@@ -28,7 +30,9 @@ export function useWalletSolBalance(address: string | null): number | null {
     };
     void load();
     const timer = setInterval(() => void load(), 30_000);
-    return () => { active = false; clearInterval(timer); };
+    const bump = () => void load();
+    window.addEventListener(BALANCE_EVENT, bump);
+    return () => { active = false; clearInterval(timer); window.removeEventListener(BALANCE_EVENT, bump); };
   }, [address]);
 
   return address && balance?.address === address ? balance.sol : null;

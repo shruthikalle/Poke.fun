@@ -12,6 +12,7 @@ import (
 
 	"github.com/shruthikalle/Poke.fun/services/api/internal/collectibles"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/gamestore"
+	"github.com/shruthikalle/Poke.fun/services/api/internal/market"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/playerstore"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/resultstore"
 	"github.com/shruthikalle/Poke.fun/services/api/internal/server"
@@ -47,14 +48,29 @@ func main() {
 		cfg.Collectibles = collectibles.NewReader(env("DEVNET_RPC_URL", "https://api.devnet.solana.com"), collection)
 		log.Printf("Metaplex Core NFT reader enabled for collection %s", collection)
 	}
+	stop, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	// The marketplace index is read-only: it never holds keys or signs.
+	if programID := os.Getenv("MARKET_PROGRAM_ID"); programID != "" {
+		svc, err := market.New(market.Options{
+			RPCURL:    env("MARKET_RPC_URL", env("DEVNET_RPC_URL", "https://api.devnet.solana.com")),
+			ProgramID: programID,
+			StorePath: env("MARKET_STORE_PATH", "data/market.json"),
+			PriceURL:  env("SOL_PRICE_URL", "https://api.coingecko.com/api/v3/simple/price?ids=solana&vs_currencies=usd&include_24hr_change=true"),
+		})
+		if err != nil {
+			log.Fatalf("open market index: %v", err)
+		}
+		go svc.Run(stop)
+		cfg.Market = svc.Handler()
+		log.Printf("Marketplace index enabled for program %s", programID)
+	}
 	handler, err := server.NewWithConfig(cfg)
 	if err != nil {
 		log.Fatalf("restore games: %v", err)
 	}
 
 	httpServer := &http.Server{Addr: addr, Handler: handler}
-	stop, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
 	go func() {
 		log.Printf("API listening on %s", addr)
 		if err := httpServer.ListenAndServe(); !errors.Is(err, http.ErrServerClosed) {

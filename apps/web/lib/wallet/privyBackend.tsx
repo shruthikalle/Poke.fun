@@ -1,10 +1,11 @@
 "use client";
 
 import { PrivyProvider, useLinkAccount, useLoginWithEmail, useLogout, usePrivy, type User } from "@privy-io/react-auth";
-import { toSolanaWalletConnectors } from "@privy-io/react-auth/solana";
+import { toSolanaWalletConnectors, useSignTransaction, useWallets as useSolanaWallets } from "@privy-io/react-auth/solana";
 import { createSolanaRpc, createSolanaRpcSubscriptions } from "@solana/kit";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { connectPhantom, getPhantomProvider } from "./phantom";
+import { signWithStandardWallet } from "./standardWallet";
 import { session } from "../storage";
 import type { AuthBackend, AuthUser } from "./types";
 
@@ -44,6 +45,11 @@ function usePrivyBackend(): AuthBackend {
   const [walletSession, setWalletSession] = useState<SignedWalletSession | null>(null);
   const [walletReady, setWalletReady] = useState(false);
   const linkWaiter = useRef<{ resolve: () => void; reject: (e: unknown) => void } | null>(null);
+  const { wallets: solanaWallets } = useSolanaWallets();
+  const { signTransaction: privySign } = useSignTransaction();
+  const currentUser = walletSession
+    ? { id: `wallet-${walletSession.address}`, email: null, address: walletSession.address, linkedAddress: walletSession.address, walletAuthToken: walletSession.token }
+    : authenticated ? toAuthUser(user) : null;
 
   useEffect(() => {
     const raw = session.get(WALLET_SESSION_KEY);
@@ -68,9 +74,7 @@ function usePrivyBackend(): AuthBackend {
   return {
     kind: "privy",
     ready: walletReady && ready,
-    user: walletSession
-      ? { id: `wallet-${walletSession.address}`, email: null, address: walletSession.address, linkedAddress: walletSession.address, walletAuthToken: walletSession.token }
-      : authenticated ? toAuthUser(user) : null,
+    user: currentUser,
     sendCode: (email) => sendCode({ email }),
     verifyCode: (code) => loginWithCode({ code }),
     loginWithPhantom: () => {
@@ -88,6 +92,15 @@ function usePrivyBackend(): AuthBackend {
       })();
     },
     linkPhantom: walletSession ? async () => {} : linkPhantom,
+    signTransaction: async (transaction) => {
+      const owner = currentUser?.address;
+      if (!owner) throw new Error("Sign in first.");
+      if (walletSession) return signWithStandardWallet(owner, transaction);
+      const wallet = solanaWallets.find((w) => w.address === owner);
+      if (!wallet) throw new Error("Your wallet is still loading. Try again in a moment.");
+      const { signedTransaction } = await privySign({ transaction, wallet, chain: "solana:devnet" });
+      return signedTransaction;
+    },
     signOut: async () => {
       if (walletSession) {
         await authRequest("DELETE", "", undefined, walletSession.token).catch(() => {});

@@ -6,6 +6,18 @@ import type { PricePoint } from "../../lib/market/types";
 import styles from "./market.module.css";
 
 export function PriceChart({ points }: { points: PricePoint[] }) {
+  if (points.length < 2) {
+    return (
+      <div className={styles.chart}>
+        <div className={styles.chartHead}><span>Price history · 90 days</span></div>
+        <p className={styles.mutedNote}>{points.length ? "One sale so far. The chart fills in as this card trades." : "No sales yet."}</p>
+      </div>
+    );
+  }
+  return <Chart points={points} />;
+}
+
+function Chart({ points }: { points: PricePoint[] }) {
   const { format } = useCurrency();
   const W = 360, H = 110, P = 6;
   const { path, area, min, max, change } = useMemo(() => {

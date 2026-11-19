@@ -17,7 +17,6 @@ export interface DasAsset {
   ownership: { owner: string; frozen: boolean };
 }
 
-import { marketplaceService } from "../market/mockMarketplace";
 import { CARD_CATALOG, type CatalogEntry } from "./mapping";
 
 export interface CollectionService {
@@ -98,21 +97,7 @@ export const opponentAssets = (owner: string, count = 8) => {
   return pool.map((e, i) => fromCatalog(owner, e, i));
 };
 
-/** Cards the person owns in the marketplace demo (bought, traded or imported), as DAS assets. */
-function marketCollection(owner: string): DasAsset[] {
-  marketplaceService.restore();
-  marketplaceService.ensureAccount(owner, "You");
-  const { cards, owners } = marketplaceService.snapshot();
-  return Object.values(cards).filter((c) => owners[c.mint] === owner).map((c) => {
-    const [company, grade] = c.grade.split(" ");
-    const a = asset(owner, { id: c.mint, name: c.name, set: c.set, number: c.number, image: c.imageUri, grade });
-    a.content.metadata.name = `${c.name} – ${c.set} ${c.grade}`;
-    a.content.metadata.attributes = a.content.metadata.attributes.map((x) => (x.trait_type === "Grading Company" ? { ...x, value: company } : x));
-    return a;
-  });
-}
-
-/** Reads our test collection from Solana DAS. Marketplace demo cards stay separate. */
+/** Reads our test collection from Solana DAS. Marketplace purchases are real assets, so they show up here too. */
 async function devnetCollection(owner: string): Promise<DasAsset[]> {
   const response = await fetch(DEVNET_RPC, {
     method: "POST",
@@ -135,9 +120,7 @@ export class MockCollectionService implements CollectionService {
   async getOwnedCollectibles(owner: string): Promise<DasAsset[]> {
     const which = scenario();
     if (which !== "default") return mockCollection(owner, which);
-    const [onChain, demo] = await Promise.all([devnetCollection(owner), Promise.resolve(marketCollection(owner))]);
-    const onChainIds = new Set(onChain.map((a) => a.id));
-    return [...onChain, ...demo.filter((a) => !onChainIds.has(a.id))];
+    return devnetCollection(owner);
   }
 }
 

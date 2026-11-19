@@ -25,6 +25,8 @@ type Config struct {
 	Players      *playerstore.Store
 	Games        GameStore
 	Results      *resultstore.Store
+	// Market serves /api/market (read-only marketplace index); nil disables it.
+	Market http.Handler
 }
 
 // Handler owns the server lifecycle. Close quiesces HTTP mutations and flushes
@@ -43,7 +45,7 @@ func NewWithConfig(cfg Config) (*Handler, error) {
 		queue: map[string]*queueEntry{}, arenas: map[string]*arena.Game{},
 		peers: map[string]map[*arenaPeer]struct{}{}, arenaQueue: map[string]*arenaQueueEntry{}, terms: map[string]matchTerms{},
 		origin: cfg.Origin, collectibles: cfg.Collectibles, players: cfg.Players,
-		games: cfg.Games, results: cfg.Results, community: newCommunity()}
+		games: cfg.Games, results: cfg.Results, community: newCommunity(), market: cfg.Market}
 	if cfg.Games != nil {
 		data, err := cfg.Games.Load()
 		if err != nil {

@@ -23,6 +23,8 @@ export interface AuthBackend {
   loginWithPhantom?(): Promise<void>;
   linkPhantom(): Promise<void>;
   signOut(): Promise<void>;
+  /** Signs a serialized Solana transaction for the signed-in address. Absent when the account can't sign (demo addresses). */
+  signTransaction?(transaction: Uint8Array): Promise<Uint8Array>;
 }
 
 /** Kept for the Go API login seam (PRD W-01). TODO(api): exchange the provider access token for a game session. */

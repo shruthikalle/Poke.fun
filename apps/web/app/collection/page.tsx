@@ -11,7 +11,6 @@ import { MARKET_FEE, type Offer, type Trade } from "../../lib/market/types";
 import { useMarketplace, type Marketplace } from "../../lib/market/useMarketplace";
 import { useWallet } from "../../lib/wallet/WalletProvider";
 
-const SOURCE_NAME = { "collectors-crypt": "Collector's Crypt", phantom: "Phantom" } as const;
 
 function useNow(ms = 30_000) {
   const [now, setNow] = useState(0);
@@ -46,7 +45,7 @@ function SignedOut({ onCreate, onSignIn }: { onCreate: () => void; onSignIn: () 
       <div className={`pf-panel ${styles.empty}`} style={{ gridColumn: "1 / -1" }}>
         <div className={styles.emptyArt} aria-hidden="true"><i style={{ ["--r" as string]: "-8deg" }} /><i /><i style={{ ["--r" as string]: "8deg" }} /></div>
         <b>Start your binder</b>
-        <p>Create a free account to buy, sell and trade real graded cards. It takes about a minute.</p>
+        <p>Sign in with Phantom to buy, sell and trade devnet test cards. It takes about a minute.</p>
         <div className={styles.emptyActions}>
           <button className="pf-btn" data-variant="primary" onClick={onCreate}>Create account</button>
           <button className="pf-btn" onClick={onSignIn}>Sign in</button>
@@ -62,10 +61,11 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
   const now = useNow();
   const worth = market.myCards.reduce((s, c) => s + market.valueOf(c.mint), 0);
   const earned = market.sales.reduce((s, l) => s + (l.soldPriceSol ?? l.priceSol) * (1 - MARKET_FEE), 0);
-  const imported = market.myCards.filter((c) => market.importOf(c.mint)).length;
   const inbox = [
     ...market.incomingOffers.filter((o) => o.status === "pending" || o.status === "countered").map((o) => ({ at: o.createdAt, node: <OfferRow key={o.id} offer={o} market={market} now={now} /> })),
     ...market.incomingTrades.filter((t) => t.status === "pending").map((t) => ({ at: t.createdAt, node: <TradeRow key={t.id} trade={t} market={market} now={now} /> })),
+    ...market.myOffers.filter((o) => o.status === "pending" || o.status === "countered").map((o) => ({ at: o.createdAt, node: <MyOfferRow key={o.id} offer={o} market={market} now={now} /> })),
+    ...market.myTrades.filter((t) => t.status === "pending" && t.from === market.me).map((t) => ({ at: t.createdAt, node: <MyTradeRow key={t.id} trade={t} market={market} now={now} /> })),
   ].sort((a, b) => b.at - a.at);
 
   const remove = async (listingId: string) => {
@@ -79,7 +79,7 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
         <div>
           <span className="pf-eyebrow">My Cards</span>
           <h1>Your collection</h1>
-          <p>Every card here is graded and secured to physical storage. Battle with them, list them for sale or trade with other collectors.</p>
+          <p>The cards in your devnet wallet. Listing keeps a card in your wallet, frozen until it sells, so it can still battle.</p>
         </div>
         <div className={styles.heroActions}>
           <button className="pf-btn" data-variant="primary" onClick={shell.openImport}>Add your cards</button>
@@ -88,10 +88,10 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
       </div>
 
       <div className={styles.stats}>
-        <div className={`pf-panel ${styles.stat}`}><span>Cards</span><strong>{market.myCards.length}</strong><small>{imported ? `${imported} imported` : "Bought or traded"}</small></div>
+        <div className={`pf-panel ${styles.stat}`}><span>Cards</span><strong>{market.myCards.length}</strong><small>In your wallet</small></div>
         <div className={`pf-panel ${styles.stat}`} data-tone="gold"><span>Collection value</span><strong>{format(worth, { compact: true })}</strong><small>Based on recent sales</small></div>
         <div className={`pf-panel ${styles.stat}`}><span>For sale</span><strong>{market.myListings.length}</strong><small>{market.sales.length ? `${market.sales.length} sold · ${format(earned, { compact: true })} earned` : "Nothing sold yet"}</small></div>
-        <div className={`pf-panel ${styles.stat}`}><span>Wallet SOL · Devnet</span><strong>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</strong><small>Marketplace demo credit: {market.balanceSol} SOL</small></div>
+        <div className={`pf-panel ${styles.stat}`}><span>Wallet SOL · Devnet</span><strong>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</strong><small><button className={styles.linkButton} onClick={async () => { const r = await market.addFunds(1); shell.toast(r.ok ? "Added devnet SOL to your wallet." : r.error); }}>Get devnet SOL</button></small></div>
       </div>
 
       <aside className={`pf-panel ${styles.filters}`} aria-label="Activity">
@@ -116,13 +116,15 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
           <div className={styles.grid}>
             {market.myCards.map((c) => {
               const listing = market.listingFor(c.mint);
-              const imp = market.importOf(c.mint);
+              const inTrade = market.myTrades.some((t) => t.status === "pending" && t.from === market.me && t.give.includes(c.mint));
               const badges: TileBadge[] = [];
               if (listing) badges.push({ text: "For sale", tone: "good" });
-              if (imp) badges.push({ text: "Imported", tone: "violet" });
+              if (inTrade) badges.push({ text: "In a trade", tone: "violet" });
               return (
-                <CardTile key={c.mint} card={c} priceSol={listing?.priceSol ?? null} note={`Worth ~${format(market.valueOf(c.mint))}`} badges={badges} listed={!!listing} onOpen={() => modals.detail(c.mint)}>
-                  {listing ? (
+                <CardTile key={c.mint} card={c} priceSol={listing?.priceSol ?? null} note={market.valueOf(c.mint) > 0 ? `Worth ~${format(market.valueOf(c.mint))}` : "No sales yet"} badges={badges} listed={!!listing} onOpen={() => modals.detail(c.mint)}>
+                  {inTrade ? (
+                    <span className={styles.mutedNote}>Offered in a trade</span>
+                  ) : listing ? (
                     <>
                       <button className="pf-btn" data-size="sm" data-variant="primary" onClick={() => modals.list(c.mint)}>Edit price</button>
                       <button className="pf-btn" data-size="sm" onClick={() => void remove(listing.id)}>Remove</button>
@@ -141,7 +143,7 @@ function Collection({ market, modals }: { market: Marketplace; modals: ReturnTyp
           <div className={`pf-panel ${styles.empty}`}>
             <div className={styles.emptyArt} aria-hidden="true"><i style={{ ["--r" as string]: "-8deg" }} /><i /><i style={{ ["--r" as string]: "8deg" }} /></div>
             <b>Your binder is empty</b>
-            <p>Pick up your first card in the Marketplace, or add graded cards you already own on Collector&apos;s Crypt or in Phantom.</p>
+            <p>Pick up your first card in the Marketplace. Cards in approved collections that your wallet already holds appear here on their own.</p>
             <div className={styles.emptyActions}>
               <Link href="/market" className="pf-btn" data-variant="primary">Browse the marketplace</Link>
               <button className="pf-btn" onClick={shell.openImport}>Add your cards</button>
@@ -171,7 +173,7 @@ function OfferRow({ offer, market, now }: { offer: Offer; market: Marketplace; n
   const mid = listing ? (offer.priceSol + listing.priceSol) / 2 : offer.priceSol;
   const [counter, setCounter] = useState(() => (currency === "SOL" ? fromSol(mid).toFixed(2) : String(Math.round(fromSol(mid)))));
   const [busy, setBusy] = useState<string | null>(null);
-  if (!listing) return null;
+  if (!listing || listing.status !== "active") return null;
 
   const respond = async (kind: "accept" | "decline" | "counter") => {
     setBusy(kind);
@@ -231,7 +233,7 @@ function TradeRow({ trade, market, now }: { trade: Trade; market: Marketplace; n
       <Thumbs mints={[...trade.give, ...trade.want]} market={market} />
       <div className={styles.inboxText}>
         <span>{who} offers {trade.give.map(name).join(" + ")}{trade.addSol > 0 && <> + <b>{format(trade.addSol)}</b></>} for your {trade.want.map(name).join(" + ")}</span>
-        <small>Their side {format(theirs)} · your side {format(yours)} · {ago(trade.createdAt, now)}</small>
+        <small>{theirs > 0 && yours > 0 ? <>Their side {format(theirs)} · your side {format(yours)}</> : "No recent sales to compare"} · {ago(trade.createdAt, now)}</small>
       </div>
       <div className={styles.inboxActions}>
         <button className="pf-btn" data-size="sm" data-variant="primary" disabled={!!busy} onClick={() => void respond(true)}>{busy === "accept" ? "Trading…" : "Accept"}</button>
@@ -241,9 +243,59 @@ function TradeRow({ trade, market, now }: { trade: Trade; market: Marketplace; n
   );
 }
 
+/** Offers you made: withdraw while pending, or answer the seller's counter. */
+function MyOfferRow({ offer, market, now }: { offer: Offer; market: Marketplace; now: number }) {
+  const { format } = useCurrency();
+  const shell = useShell();
+  const [busy, setBusy] = useState<"accept" | "withdraw" | null>(null);
+  const listing = market.listingById(offer.listingId);
+  const open = listing?.status === "active";
+  const name = listing?.card.name ?? "a card";
+  const act = async (kind: "accept" | "withdraw") => {
+    setBusy(kind);
+    const r = kind === "accept" ? await market.acceptCounter(offer.id) : await market.cancelOffer(offer.id);
+    setBusy(null);
+    shell.toast(!r.ok ? r.error : kind === "accept" ? `It's yours! ${name} is in your collection.` : "Offer withdrawn. Your SOL is back in your wallet.");
+  };
+  return (
+    <div className={`pf-panel ${styles.inboxItem}`} data-pending={offer.status === "countered" || undefined}>
+      {listing && <Thumbs mints={[listing.card.mint]} market={market} />}
+      <div className={styles.inboxText}>
+        <span>{offer.status === "countered" && open
+          ? <>{listing?.seller.name} countered your {format(offer.priceSol)} offer on {name} at <b>{format(offer.counterSol ?? 0)}</b></>
+          : <>Your offer of <b>{format(offer.priceSol)}</b> on {name}</>}</span>
+        <small>{open ? "Your SOL is held in escrow until this is answered" : "This card is no longer for sale. Withdraw to get your SOL back"} · {ago(offer.createdAt, now)}</small>
+      </div>
+      <div className={styles.inboxActions}>
+        {offer.status === "countered" && open && <button className="pf-btn" data-size="sm" data-variant="primary" disabled={!!busy} onClick={() => void act("accept")}>{busy === "accept" ? "Buying…" : `Accept ${format(offer.counterSol ?? 0)}`}</button>}
+        <button className="pf-btn" data-size="sm" disabled={!!busy} onClick={() => void act("withdraw")}>{busy === "withdraw" ? "…" : "Withdraw"}</button>
+      </div>
+    </div>
+  );
+}
+
+function MyTradeRow({ trade, market, now }: { trade: Trade; market: Marketplace; now: number }) {
+  const { format } = useCurrency();
+  const shell = useShell();
+  const [busy, setBusy] = useState(false);
+  const name = (m: string) => market.state.cards[m]?.name ?? "a card";
+  const who = market.state.sellers[trade.to]?.name ?? "a collector";
+  return (
+    <div className={`pf-panel ${styles.inboxItem}`}>
+      <Thumbs mints={[...trade.give, ...trade.want]} market={market} />
+      <div className={styles.inboxText}>
+        <span>You offered {who} {trade.give.map(name).join(" + ") || "SOL"}{trade.addSol > 0 && <> + <b>{format(trade.addSol)}</b></>} for {trade.want.map(name).join(" + ")}</span>
+        <small>Your cards are frozen in your wallet until they answer · {ago(trade.createdAt, now)}</small>
+      </div>
+      <div className={styles.inboxActions}>
+        <button className="pf-btn" data-size="sm" disabled={busy} onClick={async () => { setBusy(true); const r = await market.cancelTrade(trade.id); setBusy(false); shell.toast(r.ok ? "Trade withdrawn. Your cards are free again." : r.error); }}>{busy ? "…" : "Withdraw"}</button>
+      </div>
+    </div>
+  );
+}
+
 function ActivityFeed({ market, now }: { market: Marketplace; now: number }) {
   const { format } = useCurrency();
-  const me = market.me;
   const nameOf = (mint: string) => market.state.cards[mint]?.name ?? "a card";
   const person = (a: string) => market.state.sellers[a]?.name ?? "a collector";
   const items: { id: string; at: number; status: string; text: ReactNode }[] = [];
@@ -254,14 +306,6 @@ function ActivityFeed({ market, now }: { market: Marketplace; now: number }) {
   });
   market.purchases.forEach((l) => items.push({ id: `buy-${l.id}`, at: l.soldAt ?? l.listedAt, status: "bought", text: <>Bought {l.card.name} from {l.seller.name} for <b>{format(l.soldPriceSol ?? l.priceSol)}</b></> }));
   market.myListings.forEach((l) => items.push({ id: `list-${l.id}`, at: l.listedAt, status: "listed", text: <>Listed {l.card.name} for <b>{format(l.priceSol)}</b></> }));
-  const batches = new Map<string, { at: number; source: keyof typeof SOURCE_NAME; n: number }>();
-  Object.entries(market.state.imports).forEach(([mint, rec]) => {
-    const mine = rec.by ? rec.by === me : market.state.owners[mint] === me || market.sales.some((l) => l.card.mint === mint);
-    if (!mine) return;
-    const key = `${rec.source}-${rec.at}`;
-    batches.set(key, { at: rec.at, source: rec.source, n: (batches.get(key)?.n ?? 0) + 1 });
-  });
-  batches.forEach((b, key) => items.push({ id: `imp-${key}`, at: b.at, status: "imported", text: <>Added {b.n} {b.n === 1 ? "card" : "cards"} from {SOURCE_NAME[b.source]}</> }));
   market.myOffers.forEach((o) => {
     const l = market.listingById(o.listingId);
     items.push({ id: o.id, at: o.createdAt, status: o.status, text: <>Offered <b>{format(o.priceSol)}</b> on {l?.card.name ?? "a card"}</> });

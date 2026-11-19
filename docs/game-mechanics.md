@@ -498,10 +498,10 @@ single-process store; it must not be shared by several API instances.
 
 ## Deferred integrations preserved
 
-Wager deployment and Collector Crypt integration are intentionally skipped until
-their configuration is available. Existing marketplace, price, stake, auth
-fallback and offline demo features remain in the project. Their presence is not
-evidence of real transfers, verified vault custody or external market prices.
+Collector Crypt integration is intentionally skipped until its configuration is
+available. Stake, auth fallback and offline demo features remain in the project;
+their presence is not evidence of real transfers or verified vault custody. The
+marketplace is on-chain (devnet `pokefun_market`) and has no demo data.
 Optional DAS collection discovery is available when configured; the previous
 two-Core-asset reader remains the fallback without that configuration.
 

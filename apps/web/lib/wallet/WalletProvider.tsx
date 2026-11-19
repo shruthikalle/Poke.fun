@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { SignInDialog } from "../../components/SignInDialog";
 import { local } from "../storage";
+import { submitSigned, type TransactionSender } from "../market/program";
 import { useMockBackend } from "./mockBackend";
 import { truncateAddress } from "./phantom";
 import { PrivyBridge } from "./privyBackend";
@@ -30,6 +31,8 @@ export interface WalletContextValue {
   linkPhantom(): Promise<void>;
   playAsGuest(): void;
   signOut(): Promise<void>;
+  /** Signs with the signed-in wallet and submits to devnet; null when the account can't sign. */
+  sendTransaction: TransactionSender | null;
   /** Lower-level steps used by the dialog. */
   auth: Pick<AuthBackend, "sendCode" | "verifyCode" | "loginWithPhantom">;
 }
@@ -74,7 +77,13 @@ function WalletState({ backend, children }: { backend: AuthBackend; children: Re
     local.set(GUEST_KEY, name);
   }, []);
 
-  const { signOut: backendSignOut, linkPhantom, loginWithPhantom, sendCode, verifyCode } = backend;
+  const { signOut: backendSignOut, linkPhantom, loginWithPhantom, sendCode, verifyCode, signTransaction } = backend;
+  const signRef = useRef(signTransaction);
+  signRef.current = signTransaction;
+  const canSign = !!signTransaction;
+  const sendTransaction = useMemo<TransactionSender | null>(() => (canSign
+    ? async (wire) => { const sign = signRef.current; if (!sign) throw new Error("Sign in with a wallet to continue."); return submitSigned(await sign(wire)); }
+    : null), [canSign]);
   const signOut = useCallback(async () => {
     local.remove(GUEST_KEY);
     setGuestName(null);
@@ -99,9 +108,10 @@ function WalletState({ backend, children }: { backend: AuthBackend; children: Re
       linkPhantom,
       playAsGuest,
       signOut,
+      sendTransaction,
       auth: { sendCode, verifyCode, loginWithPhantom },
     };
-  }, [user, guestName, backend.ready, backend.kind, restored, signIn, linkPhantom, playAsGuest, signOut, sendCode, verifyCode, loginWithPhantom]);
+  }, [user, guestName, backend.ready, backend.kind, restored, signIn, linkPhantom, playAsGuest, signOut, sendCode, verifyCode, loginWithPhantom, sendTransaction]);
 
   return (
     <WalletContext.Provider value={value}>
