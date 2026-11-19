@@ -21,25 +21,32 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
   const listing = market.listingFor(mint);
   const owner = market.ownerOf(mint);
   const mine = !!market.me && owner?.address === market.me;
-  const imported = market.importOf(mint);
   const history = useMemo(() => market.priceHistory(mint), [market, mint]);
   const [pane, setPane] = useState<Pane>("idle");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const [offer, setOffer] = useState("");
-  const pendingOffer = listing && market.myOffers.find((o) => o.listingId === listing.id && o.status === "pending");
+  const myOffer = listing && market.myOffers.find((o) => o.listingId === listing.id && (o.status === "pending" || o.status === "countered"));
+  const pendingOffer = myOffer?.status === "pending" ? myOffer : undefined;
+  const counter = myOffer?.status === "countered" ? myOffer : undefined;
 
   if (!card) return null;
   const value = listing?.priceSol ?? market.valueOf(mint);
 
+  const act = async (run: () => Promise<{ ok: boolean; error?: string }>, success: string) => {
+    setBusy(true);
+    const r = await run();
+    setBusy(false);
+    setMessage(r.ok ? { tone: "good", text: success } : { tone: "bad", text: r.error ?? "Something went wrong." });
+  };
+
   const buy = async () => {
     if (!listing) return;
-    setBusy(true);
-    const short = listing.priceSol - market.balanceSol;
-    if (short > 0) {
-      const topUp = await market.addFunds(Math.ceil(short * 100) / 100);
-      if (!topUp.ok) { setBusy(false); setMessage({ tone: "bad", text: topUp.error }); return; }
+    if (listing.priceSol > market.balanceSol) {
+      setMessage({ tone: "bad", text: "Not enough devnet SOL in your wallet. Use “Get devnet SOL” and try again." });
+      return;
     }
+    setBusy(true);
     const r = await market.buy(listing.id);
     setBusy(false); setPane("idle");
     setMessage(r.ok ? { tone: "good", text: "It's yours! Find it in My Cards." } : { tone: "bad", text: r.error });
@@ -52,7 +59,7 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
     setBusy(true);
     const r = await market.makeOffer(listing.id, toSol(amount));
     setBusy(false);
-    if (r.ok) { setPane("idle"); setOffer(""); setMessage({ tone: "good", text: `Offer sent to ${listing.seller.name}. You'll hear back in a moment.` }); }
+    if (r.ok) { setPane("idle"); setOffer(""); setMessage({ tone: "good", text: `Offer sent to ${listing.seller.name}. Your SOL is in escrow until they answer.` }); }
     else setMessage({ tone: "bad", text: r.error });
   };
 
@@ -63,23 +70,34 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
           <CardArt card={card} size="lg" />
           <div className={styles.vaultNote}>
             <span className={styles.lock} aria-hidden="true" />
-            <div><b>Secured to physical storage</b><span>The graded card sits in an insured vault. Ownership moves to you the moment you buy; request the physical card anytime.</span></div>
+            <div><b>Devnet test card · stays in the owner&apos;s wallet</b><span>Listing freezes it in the seller&apos;s wallet. Buying moves the SOL and the card in one Solana transaction. No physical card.</span></div>
           </div>
+          <a className={styles.mutedNote} href={`https://explorer.solana.com/address/${card.mint}?cluster=devnet`} target="_blank" rel="noreferrer">View on Solana Explorer ↗</a>
         </div>
         <div className={styles.detailInfo}>
           <div className={styles.detailTitle}>
             <h2>{card.name}</h2>
             <span>{card.set} · #{card.number}</span>
           </div>
-          <div className={styles.tags}><span className={styles.gradeTag}>{card.grade}</span><span className={styles.rarityTag}>{card.rarity}</span>{imported && <span className={styles.badge} data-tone="violet">Imported</span>}</div>
+          <div className={styles.tags}><span className={styles.gradeTag}>{card.grade}</span><span className={styles.rarityTag}>{card.rarity}</span></div>
 
           <div className={`pf-frame ${styles.priceBox}`}>
-            <span>{listing ? "Price" : "Estimated value"}</span>
-            <strong>{format(value)}</strong>
+            <span>{listing ? "Price" : "Last sale"}</span>
+            <strong>{value > 0 ? format(value) : "—"}</strong>
             {!listing && <small>Not listed for sale right now</small>}
           </div>
 
           {message && <p className={styles.notice} data-tone={message.tone} role="status">{message.text}</p>}
+          {market.me && !market.canSign && <p className={styles.notice} data-tone="bad" role="status">This account can&apos;t sign devnet transactions. Sign out and continue with Phantom.</p>}
+          {counter && listing && (
+            <div className={styles.confirm}>
+              <p>{listing.seller.name} countered your {format(counter.priceSol)} offer at <b>{format(counter.counterSol ?? 0)}</b>.</p>
+              <div className={styles.actionsRow}>
+                <button className="pf-btn" data-variant="primary" disabled={busy} onClick={() => void act(() => market.acceptCounter(counter.id), "It's yours! Find it in My Cards.")}>{busy ? "Working…" : `Accept ${format(counter.counterSol ?? 0)}`}</button>
+                <button className="pf-btn" disabled={busy} onClick={() => void act(() => market.cancelOffer(counter.id), "Offer withdrawn. Your SOL is back in your wallet.")}>Withdraw offer</button>
+              </div>
+            </div>
+          )}
 
           {mine ? (
             <div className={styles.actionsRow}>
@@ -99,11 +117,12 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
           ) : pane === "confirm-buy" && listing ? (
             <div className={styles.confirm}>
               <p>Buy <b>{card.name}</b> ({card.grade}) from {listing.seller.name} for <b>{format(listing.priceSol)}</b>?</p>
-              {market.balanceSol >= listing.priceSol
-                ? <p className={styles.mutedNote}>Paid from your balance ({format(market.balanceSol)}). Balance after: {format(market.balanceSol - listing.priceSol)}</p>
-                : <p className={styles.mutedNote}>Your balance covers {format(market.balanceSol)}. The remaining <b>{format(listing.priceSol - market.balanceSol)}</b> goes on your card on file (demo).</p>}
+              <p className={styles.mutedNote}>Paid from your wallet ({format(market.balanceSol)} devnet SOL). The seller receives 97.5%; 2.5% goes to the marketplace. Your wallet will ask you to approve.</p>
+              {market.balanceSol < listing.priceSol && (
+                <button className="pf-btn" data-size="sm" disabled={busy} onClick={() => void act(() => market.addFunds(listing.priceSol - market.balanceSol), "Devnet SOL added to your wallet.")}>Get devnet SOL</button>
+              )}
               <div className={styles.actionsRow}>
-                <button className="pf-btn" data-variant="primary" disabled={busy} onClick={buy}>{busy ? "Buying…" : market.balanceSol >= listing.priceSol ? "Confirm purchase" : "Pay and buy"}</button>
+                <button className="pf-btn" data-variant="primary" disabled={busy} onClick={buy}>{busy ? "Buying…" : "Confirm purchase"}</button>
                 <button className="pf-btn" disabled={busy} onClick={() => setPane("idle")}>Back</button>
               </div>
             </div>
@@ -114,7 +133,7 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
                   placeholder={suggest(fromSol(listing.priceSol * 0.92), currency)}
                   onChange={(e) => setOffer(e.target.value)} />
               </label>
-              <p className={styles.mutedNote}>Asking {format(listing.priceSol)}. Sellers usually accept offers within 10%.</p>
+              <p className={styles.mutedNote}>Asking {format(listing.priceSol)}. Your SOL is held in escrow on-chain until the seller answers. Withdraw it anytime.</p>
               <div className={styles.actionsRow}>
                 <button className="pf-btn" data-variant="primary" disabled={busy} onClick={sendOffer}>{busy ? "Sending…" : "Send offer"}</button>
                 <button className="pf-btn" disabled={busy} onClick={() => setPane("idle")}>Back</button>
@@ -123,7 +142,9 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
           ) : (
             <div className={styles.actionsRow}>
               {listing && <button className="pf-btn" data-variant="primary" onClick={() => (market.me ? setPane("confirm-buy") : void market.buy(listing.id))}>Buy now</button>}
-              {listing && <button className="pf-btn" disabled={!!pendingOffer} onClick={() => (market.me ? setPane("offer") : void market.makeOffer(listing.id, 0))}>{pendingOffer ? "Offer pending…" : "Make offer"}</button>}
+              {listing && !counter && (pendingOffer
+                ? <button className="pf-btn" disabled={busy} onClick={() => void act(() => market.cancelOffer(pendingOffer.id), "Offer withdrawn. Your SOL is back in your wallet.")}>Withdraw offer</button>
+                : <button className="pf-btn" onClick={() => (market.me ? setPane("offer") : void market.makeOffer(listing.id, 0))}>Make offer</button>)}
               <button className="pf-btn" onClick={() => onTrade(mint)}>Propose trade</button>
             </div>
           )}
@@ -135,7 +156,7 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
               <PixelAvatar seed={owner.address} size={32} />
               <div>
                 <b>{mine ? "You" : owner.name}</b>
-                <span>★ {owner.rating.toFixed(1)} · {owner.sales} sales · member since {owner.memberSince}</span>
+                <span>{owner.sales} {owner.sales === 1 ? "sale" : "sales"} · active since {owner.memberSince}</span>
               </div>
             </div>
           )}
@@ -145,8 +166,7 @@ export function CardDetailModal({ mint, market, onClose, onTrade, onTradeAway, o
             <dt>Number</dt><dd>#{card.number}</dd>
             <dt>Rarity</dt><dd>{card.rarity}</dd>
             <dt>Grade</dt><dd>{card.grade}</dd>
-            <dt>Originally from</dt><dd>{card.origin} (verified)</dd>
-            {imported && <><dt>Added from</dt><dd>{imported.source === "phantom" ? "Phantom" : "Collector's Crypt"}, imported by you</dd></>}
+            <dt>Originally from</dt><dd>{card.origin}</dd>
           </dl>
         </div>
       </div>

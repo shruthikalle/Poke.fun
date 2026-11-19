@@ -31,8 +31,10 @@ export function MarketShell({ section, market, children }: { section: Section; m
 
   useEffect(() => {
     const items = [
-      ...market.myOffers.map((o) => ({ id: o.id, status: o.status, text: o.status === "accepted" ? `Offer accepted: ${market.listingById(o.listingId)?.card.name ?? "the card"} is yours.` : "Your offer was declined. Try a little closer to the asking price." })),
-      ...market.myTrades.map((t) => ({ id: t.id, status: t.status, text: t.status === "accepted" ? "Trade accepted. Your new card is in My Cards." : "Your trade was declined." })),
+      ...market.myOffers.map((o) => ({ id: o.id, status: o.status, text: o.status === "accepted" ? `Offer accepted: ${market.listingById(o.listingId)?.card.name ?? "the card"} is yours.`
+        : o.status === "countered" ? `The seller countered at ${format(o.counterSol ?? 0)}. Answer it in My Cards.`
+        : o.status === "declined" ? "Your offer was declined. Try a little closer to the asking price." : "" })),
+      ...market.myTrades.map((t) => ({ id: t.id, status: t.status, text: t.status === "accepted" ? "Trade accepted. Your new card is in My Cards." : t.status === "declined" ? "Your trade was declined." : "" })),
       ...market.incomingOffers.map((o) => {
         const l = market.listingById(o.listingId);
         const who = market.state.sellers[o.from]?.name ?? "A collector";
@@ -76,7 +78,7 @@ export function MarketShell({ section, market, children }: { section: Section; m
           </nav>
           <div className={styles.account}>
             <CurrencyToggle />
-            {connected && <span className={styles.balance} title={`Devnet wallet SOL. Marketplace demo credit: ${market.balanceSol} SOL`}><small>Wallet SOL</small><b>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</b></span>}
+            {connected && <span className={styles.balance} title="Devnet wallet SOL. Purchases and offers pay from here."><small>Wallet SOL</small><b>{market.walletBalanceSol === null ? "—" : `${market.walletBalanceSol.toLocaleString("en-US", { maximumFractionDigits: 5 })} SOL`}</b></span>}
             {playerName ? (
               <AccountChip classes={{ chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem }}
                 extra={<>
@@ -92,7 +94,7 @@ export function MarketShell({ section, market, children }: { section: Section; m
           </div>
         </header>
         <div className={styles.body}>{children}</div>
-        {importing && <ImportCardsModal market={market} onClose={() => setImporting(false)} onImported={(n) => setToast(`Added ${n} ${n === 1 ? "card" : "cards"} to My Cards.`)} />}
+        {importing && <ImportCardsModal market={market} onClose={() => setImporting(false)} />}
         {toast && <div className={styles.toast} role="status">{toast}<button onClick={() => setToast(null)} aria-label="Dismiss">×</button></div>}
       </div>
     </ShellContext.Provider>

@@ -111,7 +111,7 @@ export function TradeModal({ market, wantMint, giveMint, onClose }: { market: Ma
           <span className={styles.meter}><i style={{ width: `${Math.min(100, ratio * 100)}%` }} data-tone={ratio >= 0.95 ? "good" : ratio >= 0.8 ? "warn" : "bad"} /></span>
           <span>Their side <b>{format(asked)}</b></span>
         </div>
-        {want && <p className={styles.mutedNote}>{ratio >= 0.95 ? "Looks fair. Most traders would accept this." : "Your side is lower than theirs. Add a card or some money to improve your chances."}</p>}
+        {want && <p className={styles.mutedNote}>{!asked ? "Their card has no recent sales to compare against." : ratio >= 0.95 ? "Your side is worth at least as much as theirs, based on recent sales." : "Your side is worth less than theirs, based on recent sales. Adding a card or some SOL may help."}</p>}
         {result && <p className={styles.notice} data-tone={result.tone} role="status">{result.text}</p>}
         <div className={styles.actionsRow}>
           {sent ? <button className="pf-btn" data-variant="primary" onClick={onClose}>Done</button> : (

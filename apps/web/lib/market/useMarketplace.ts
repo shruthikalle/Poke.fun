@@ -2,31 +2,32 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWallet } from "../wallet/WalletProvider";
-import { marketplaceService } from "./mockMarketplace";
+import { chainMarketplaceService } from "./chainMarketplace";
 import { useWalletSolBalance } from "./useWalletSolBalance";
-import type { Card, ImportSource, Listing, MarketplaceService, MarketResult, OfferAnswer, Trade } from "./types";
+import type { Listing, MarketplaceService, MarketResult, OfferAnswer, Trade } from "./types";
 
 const SIGN_IN_FIRST = { ok: false as const, error: "Sign in to continue." };
 
-/** Marketplace state and actions for the signed-in person. Backed by `MarketplaceService` (mock today). */
-export function useMarketplace(service: MarketplaceService = marketplaceService) {
-  const { address, connected, playerName, signIn } = useWallet();
+/** Marketplace state and actions for the signed-in person: the devnet `pokefun_market` program via the Go index. */
+export function useMarketplace(service: MarketplaceService = chainMarketplaceService) {
+  const { address, connected, playerName, signIn, sendTransaction } = useWallet();
+  useEffect(() => { service.setSender(sendTransaction); }, [service, sendTransaction]);
   const [state, setState] = useState(() => service.snapshot());
 
   useEffect(() => {
     const off = service.subscribe(() => setState(service.snapshot()));
-    service.restore();
+    service.start();
     setState(service.snapshot());
     return off;
   }, [service]);
 
   const me = connected ? address : null;
   const walletBalanceSol = useWalletSolBalance(me);
-  useEffect(() => { if (me) service.ensureAccount(me, playerName ?? "You"); }, [service, me, playerName]);
+  useEffect(() => { if (me && playerName) service.setDisplayName(me, playerName); }, [service, me, playerName]);
 
   const derived = useMemo(() => {
     const active = state.listings.filter((l) => l.status === "active");
-    const myCards = me ? Object.values(state.cards).filter((c) => state.owners[c.mint] === me).sort((a, b) => (state.imports[b.mint]?.at ?? 0) - (state.imports[a.mint]?.at ?? 0)) : [];
+    const myCards = me ? Object.values(state.cards).filter((c) => state.owners[c.mint] === me).sort((a, b) => a.name.localeCompare(b.name)) : [];
     const myListingIds = new Set(me ? state.listings.filter((l) => l.seller.address === me).map((l) => l.id) : []);
     const incomingOffers = state.offers.filter((o) => myListingIds.has(o.listingId));
     const incomingTrades = me ? state.trades.filter((t) => t.to === me) : [];
@@ -37,17 +38,18 @@ export function useMarketplace(service: MarketplaceService = marketplaceService)
       myOffers: me ? state.offers.filter((o) => o.from === me) : [],
       incomingOffers,
       incomingTrades,
-      pendingCount: incomingOffers.filter((o) => o.status === "pending").length + incomingTrades.filter((t) => t.status === "pending").length,
+      pendingCount: incomingOffers.filter((o) => o.status === "pending" && state.listings.some((l) => l.id === o.listingId && l.status === "active")).length
+        + incomingTrades.filter((t) => t.status === "pending").length
+        + (me ? state.offers.filter((o) => o.from === me && o.status === "countered").length : 0),
       sales: me ? state.listings.filter((l) => l.status === "sold" && l.seller.address === me) : [],
       purchases: me ? state.listings.filter((l) => l.status === "sold" && l.buyer === me) : [],
-      importOf: (mint: string) => state.imports[mint] ?? null,
       listingById: (id: string) => state.listings.find((l) => l.id === id),
       myTrades: me ? state.trades.filter((t) => t.from === me || t.to === me) : [],
-      balanceSol: me ? state.balances[me] ?? 0 : 0,
+      balanceSol: me ? walletBalanceSol ?? 0 : 0,
       listingFor: (mint: string): Listing | undefined => active.find((l) => l.card.mint === mint),
       ownerOf: (mint: string) => state.sellers[state.owners[mint]] ?? null,
     };
-  }, [state, me]);
+  }, [state, me, walletBalanceSol]);
 
   const guard = useCallback(<T,>(run: (me: string) => Promise<MarketResult<T>>): Promise<MarketResult<T>> => {
     if (!me) { signIn(); return Promise.resolve(SIGN_IN_FIRST); }
@@ -57,6 +59,8 @@ export function useMarketplace(service: MarketplaceService = marketplaceService)
   return {
     state,
     me,
+    /** False when signed in with an address that can't sign transactions (demo email accounts). */
+    canSign: !!sendTransaction,
     walletBalanceSol,
     ...derived,
     priceHistory: service.priceHistory.bind(service),
@@ -67,9 +71,12 @@ export function useMarketplace(service: MarketplaceService = marketplaceService)
     updatePrice: (listingId: string, priceSol: number) => guard((m) => service.updatePrice(listingId, m, priceSol)),
     respondOffer: (offerId: string, answer: OfferAnswer) => guard((m) => service.respondOffer(offerId, m, answer)),
     respondTrade: (tradeId: string, accept: boolean) => guard((m) => service.respondTrade(tradeId, m, accept)),
-    importCards: (cards: Card[], source: ImportSource) => guard((m) => service.importCards(m, cards, source)),
+    refresh: () => service.refresh(),
     cancelListing: (listingId: string) => guard((m) => service.cancelListing(listingId, m)),
     makeOffer: (listingId: string, priceSol: number) => guard((m) => service.makeOffer(listingId, m, priceSol)),
+    acceptCounter: (offerId: string) => guard((m) => service.acceptCounter(offerId, m)),
+    cancelOffer: (offerId: string) => guard((m) => service.cancelOffer(offerId, m)),
+    cancelTrade: (tradeId: string) => guard((m) => service.cancelTrade(tradeId, m)),
     proposeTrade: (input: Omit<Trade, "id" | "status" | "createdAt" | "from">) => guard((m) => service.proposeTrade({ ...input, from: m })),
   };
 }
