@@ -1,8 +1,34 @@
-# Poke.fun Devnet wager escrow
+# Poke.fun Solana programs
+
+- `programs/pokefun_market`: card marketplace (below).
+- `programs/pokefun_wager`: Devnet wager escrow (further below).
+
+## Card marketplace (`pokefun_market`)
+
+Trades Metaplex Core cards from admin-approved collections for native SOL.
+
+- **Non-custodial listings.** `list` adds Core FreezeDelegate (frozen) and TransferDelegate plugins with the program's `authority` PDA as delegate. The card stays in the seller's wallet and stays battle-eligible, but cannot move until it sells, trades or is released. Cancelling thaws it and returns both plugin authorities to the owner.
+- **Buy** (`buy(expected_price)`): pays the seller the price minus the fee, pays the treasury the fee (`fee_bps`, default 250, capped at 1000) and transfers the card, all in one instruction. `expected_price` stops a seller from raising the price under a pending purchase.
+- **Offers** on listed cards escrow the buyer's lamports in an offer PDA. The seller can accept, decline or counter; the buyer can accept a counter (topping up the difference) or withdraw. Anyone can refund an expired offer, or one whose listing is gone.
+- **Trades**: up to 3 cards each way plus optional SOL from the proposer. The proposer's cards are frozen and delegated; the counterparty accepts by signing (atomic swap) or declines. The proposer can cancel, and anyone can expire a trade after 7 days. Clients delist listed cards in the same transaction.
+- **Admin** can only set the fee, treasury, pause flag and collection allowlist. Pause blocks new activity but never cancels, refunds or declines.
+
+Events (`Listed`, `Sale`, `OfferMade`, `TradeClosed`, …) feed the Go index in `services/api/internal/market`.
+
+```sh
+anchor build -p pokefun_market        # with Anchor 0.31.1
+npm install && npm run fetch:core     # dumps the Core program for the local validator
+./tests/run-market.sh                 # local validator + real Core program, 39 checks
+node scripts/setup-market.mjs --rpc <RPC> --collection <CORE_COLLECTION>   # initialize + approve a collection
+```
+
+The local program ID comes from `target/deploy/pokefun_market-keypair.json` (not committed). Before deploying, put the deployed address in `declare_id!`, `Anchor.toml`, `idl/pokefun_market.json` and `apps/web/lib/market/pokefun_market.idl.json` (or set `NEXT_PUBLIC_MARKET_PROGRAM_ID` / `MARKET_PROGRAM_ID`). Devnet only: no independent audit.
+
+## Devnet wager escrow (`pokefun_wager`)
 
 The Anchor program is deployed on **Solana Devnet** at [`FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J`](https://explorer.solana.com/address/FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J?cluster=devnet). It accepts native Devnet SOL wagers and, separately, its configured SPL demo token. Its immutable config account is [`8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S`](https://explorer.solana.com/address/8ReWdmFQhDwcexEs8ZoW1o5xRP95mq3DKBugrJynVx8S?cluster=devnet). The configured token mint is [`e8aEdsUNqX96cnptqfH1ddGdYvKspSEzLGHrpgH8Zhp`](https://explorer.solana.com/address/e8aEdsUNqX96cnptqfH1ddGdYvKspSEzLGHrpgH8Zhp?cluster=devnet), a **six-decimal demo token, not Circle USDC or a dollar claim**. The trusted referee address is `4JEbjdy2WGKASayP2LuiMvA8TVo1uQ9z7mjgZLxgbHvL`. The two test wallets `Dxx5…Q8p6z` and `7Aug…793k` each received ten demo tokens. The second wallet also received 0.03 Devnet SOL for transaction fees.
 
-## Match flow
+### Match flow
 
 1. For a native Devnet SOL wager, player A signs `open_sol_wager(nonce, stake)` and sends the chosen lamports into the program-owned wager account. For a token wager, A signs `open_wager(nonce, stake)` and deposits the configured mint into a token vault. In either case, the wager is `Waiting` for five minutes. One SOL is `1_000_000_000` lamports; one six-decimal demo token is `1_000_000` token units.
 2. An off-chain skill queue pairs A with B at the same stake. The configured referee signs `reserve_wager(B)`, restricting the wager to B's wallet for two minutes.
@@ -12,7 +38,7 @@ The Anchor program is deployed on **Solana Devnet** at [`FphH5qUaMxam8wvewVXNxaL
 
 The program enforces the mint, stake, reserved opponent, payout recipient, state transitions, and timeouts. **It trusts the referee to report the winner honestly.** A referee compromise or bad game result can misdirect the pot before the battle deadline. This is a Devnet prototype, not an audited real-funds contract.
 
-## Current app integration
+### Current app integration
 
 The web loadout offers free play and native **Devnet SOL** stakes from 0.001 to 1 SOL per player. Paid queue requests require a Phantom-signed Devnet session and an NFT that the Go API verifies on-chain as owned by that wallet and belonging to the configured test collection. The first player signs `open_sol_wager`, the server confirms the escrow account and referee-reserves the second wallet, and the second player signs `join_sol_wager`. The Go arena starts only after both deposits are confirmed. Its result triggers server-side referee settlement; the battle page links to the escrow and payout transactions. A player can cancel and recover a pre-match deposit or, after the 15-minute contract deadline, sign a timeout refund.
 
@@ -22,7 +48,7 @@ The paid queue and settlement worker currently live in the single Next.js server
 
 A two-player app-to-contract integration test matched equal stakes, reserved the opponent, verified both deposits, started the arena, and [settled a 0.002 Devnet SOL pot](https://explorer.solana.com/tx/2qeHvQKF2Nnzg6gNZNrr7itjaADMgFDG5beZK5t5ToM3bD54rmFtVkFzoSRWgpYTdnv54vPRmzwpS7nxGr4jaySV?cluster=devnet). That test used a stub NFT reader and a predetermined arena result; the separate Go NFT reader test verified ownership of the minted Pikachu on Devnet. Two interactive Phantom profiles have not yet been exercised against the new UI.
 
-## Build and verify
+### Build and verify
 
 From `contracts/`:
 

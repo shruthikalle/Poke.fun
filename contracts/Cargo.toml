@@ -1,5 +1,5 @@
 [workspace]
-members = ["programs/pokefun_wager"]
+members = ["programs/pokefun_wager", "programs/pokefun_market"]
 resolver = "2"
 
 [profile.release]
