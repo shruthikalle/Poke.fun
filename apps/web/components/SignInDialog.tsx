@@ -75,10 +75,10 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
         {step === "email" ? (
           <form className={styles.form} onSubmit={submitEmail} noValidate>
             <h2 id="signin-title" className={styles.title}>{creating ? "Create your account" : "Sign in to Poke.fun"}</h2>
-            <p className={styles.body}>{provider === "privy" ? "Connect your Solana wallet to play with your cards." : creating ? "Just your email. We'll send a code to confirm it's you." : "Your cards, your rank, your battles."}</p>
+            <p className={styles.body}>Connect your Solana wallet to play with your cards.</p>
             {auth.loginWithPhantom && <button type="button" className={`pf-btn ${styles.primary}`} data-variant="primary" onClick={() => void run(async () => { await auth.loginWithPhantom?.(); }, true)} disabled={busy}>{busy ? "Signing in…" : "Continue with Phantom"}</button>}
-            {provider === "privy" && <p className={styles.fine}>Phantom signs a Devnet login message. No transaction is sent.</p>}
-            {auth.loginWithPhantom && <p className={styles.or}>or use email</p>}
+            {auth.loginWithPhantom && <p className={styles.fine}>Phantom signs a Devnet login message. No transaction is sent.</p>}
+            {provider === "privy" && <><p className={styles.or}>or use email</p>
             <label className={styles.field}>
               <span>Email</span>
               <input className="pf-input" type="email" autoComplete="email" placeholder="you@example.com" value={email}
@@ -91,6 +91,8 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
             <button type="button" className={styles.link} onClick={() => { setMode(creating ? "sign-in" : "create"); setError(null); }} disabled={busy}>
               {creating ? "Already have an account? Sign in" : "New here? Create an account"}
             </button>
+            </>}
+            {provider === "phantom" && error && <p className={styles.error} role="alert">{error}</p>}
             <button type="button" className={styles.link} onClick={() => { playAsGuest(); onSignedIn(); }} disabled={busy}>
               Play as a guest instead
             </button>
@@ -111,7 +113,7 @@ export function SignInDialog({ open, initialMode, onClose, onSignedIn }: { open:
           </form>
         )}
 
-        <p className={styles.fine}>{provider === "mock" ? "Demo mode: any 6-digit code works." : "Phantom signs you in with your wallet. Email uses a one-time code."}</p>
+        <p className={styles.fine}>{provider === "phantom" ? "Connect Phantom to mint, buy and sell Devnet cards." : "Phantom signs you in with your wallet. Email uses a one-time code."}</p>
       </div>
     </div>
   );
