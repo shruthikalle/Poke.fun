@@ -22,7 +22,7 @@ use mpl_core::{
 };
 
 // Replace with the deployed program ID before deploying.
-declare_id!("8c3Ek3z5WeohkFCJbhbK5eKNSMVT6t76suk3M7DvhjXd");
+declare_id!("7856fZ5pQssepMDSCoSjCQzNuUCTRQLsJPESTz7wfwyz");
 
 pub const AUTHORITY_SEED: &[u8] = b"authority";
 pub const MAX_FEE_BPS: u16 = 1_000;

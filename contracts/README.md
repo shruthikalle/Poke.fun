@@ -8,7 +8,7 @@
 Trades Metaplex Core cards from admin-approved collections for native SOL.
 
 - **Non-custodial listings.** `list` adds Core FreezeDelegate (frozen) and TransferDelegate plugins with the program's `authority` PDA as delegate. The card stays in the seller's wallet and stays battle-eligible, but cannot move until it sells, trades or is released. Cancelling thaws it and returns both plugin authorities to the owner.
-- **Buy** (`buy(expected_price)`): pays the seller the price minus the fee, pays the treasury the fee (`fee_bps`, default 250, capped at 1000) and transfers the card, all in one instruction. `expected_price` stops a seller from raising the price under a pending purchase.
+- **Buy** (`buy(expected_price)`): pays the seller the price minus the fee, pays the treasury the fee (`fee_bps`, default 0, capped at 1000) and transfers the card, all in one instruction. `expected_price` stops a seller from raising the price under a pending purchase.
 - **Offers** on listed cards escrow the buyer's lamports in an offer PDA. The seller can accept, decline or counter; the buyer can accept a counter (topping up the difference) or withdraw. Anyone can refund an expired offer, or one whose listing is gone.
 - **Trades**: up to 3 cards each way plus optional SOL from the proposer. The proposer's cards are frozen and delegated; the counterparty accepts by signing (atomic swap) or declines. The proposer can cancel, and anyone can expire a trade after 7 days. Clients delist listed cards in the same transaction.
 - **Admin** can only set the fee, treasury, pause flag and collection allowlist. Pause blocks new activity but never cancels, refunds or declines.

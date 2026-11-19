@@ -7,3 +7,7 @@ overflow-checks = true
 opt-level = "z"
 lto = "fat"
 codegen-units = 1
+
+[patch.crates-io]
+# Stack-safe loop from https://github.com/metaplex-foundation/mpl-core/issues/299.
+mpl-core = { path = "vendor/mpl-core" }

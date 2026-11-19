@@ -4,7 +4,7 @@ skip-lint = false
 
 [programs.localnet]
 pokefun_wager = "FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J"
-pokefun_market = "8c3Ek3z5WeohkFCJbhbK5eKNSMVT6t76suk3M7DvhjXd"
+pokefun_market = "7856fZ5pQssepMDSCoSjCQzNuUCTRQLsJPESTz7wfwyz"
 
 [programs.devnet]
 pokefun_wager = "FphH5qUaMxam8wvewVXNxaLVGvY8UqDBHBRhwbxNYF1J"

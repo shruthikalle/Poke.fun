@@ -11,7 +11,7 @@
 //     MARKET_MINTER_KEYPAIR, which mints free cards into it) and approves it for trading.
 //
 // Options: --admin <keypair.json> (default ~/.config/solana/id.json, also the fee treasury unless --treasury),
-// --fee-bps 250. Safe to re-run: existing config and approvals are left alone.
+// --fee-bps 0. Safe to re-run: existing config and approvals are left alone.
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import anchor from "@coral-xyz/anchor";
@@ -35,8 +35,8 @@ const authority = pda(Buffer.from("authority"));
 console.log(`program ${program.programId.toBase58()} on ${rpc}; admin ${admin.publicKey.toBase58()}`);
 if (!(await connection.getAccountInfo(config))) {
   const treasury = new PublicKey(args.treasury ?? admin.publicKey);
-  await program.methods.initialize(Number(args["fee-bps"] ?? 250), treasury).accountsStrict({ admin: admin.publicKey, config, authority, systemProgram: SystemProgram.programId }).rpc();
-  console.log(`initialized: fee ${args["fee-bps"] ?? 250} bps, treasury ${treasury.toBase58()}`);
+  await program.methods.initialize(Number(args["fee-bps"] ?? 0), treasury).accountsStrict({ admin: admin.publicKey, config, authority, systemProgram: SystemProgram.programId }).rpc();
+  console.log(`initialized: fee ${args["fee-bps"] ?? 0} bps, treasury ${treasury.toBase58()}`);
 } else {
   console.log("already initialized");
 }

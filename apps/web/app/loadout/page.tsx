@@ -110,7 +110,11 @@ export default function LoadoutPage() {
       <div className={styles.backdrop} aria-hidden="true" />
       <header className={styles.top}>
         <Link href="/" className={styles.brand}><Emblem size={22} /><span>Poke.fun</span></Link>
-        <span className="pf-eyebrow">Loadout</span>
+        <nav className={styles.nav} aria-label="Sections">
+          <Link href="/market">Marketplace</Link>
+          <Link href="/collection">My Cards</Link>
+          <Link href="/loadout" aria-current="page">Battle</Link>
+        </nav>
         <div className={styles.account}>
           {playerName && <AccountChip classes={{
             chip: styles.chip, avatar: styles.chipAvatar, menu: styles.menu, menuItem: styles.menuItem,
