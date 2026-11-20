@@ -162,27 +162,77 @@ function song({ bpm, chords, lead, bassPattern, drums, harmonyFrom = 8, duty = 0
   return buf;
 }
 
+// Game Boy-style arrangement: two pulse channels, a 4-bit wave bass and a noise kit, on a 16th-note grid.
+Object.assign(CHORDS, { D: ["D", "F#", "A"], B: ["B", "D#", "F#"] });
+wave.gb = (p) => Math.round(wave.triangle(p) * 7) / 7;
+
+function gbSong({ bpm, chords, lead, bass, drums, arpDuty = 0.125, leadDuty = 0.25, echo = 3 }) {
+  const step = 60 / bpm / 4, bar = step * 16;
+  const buf = buffer(chords.length * bar + 0.01);
+  chords.forEach((chord, bi) => {
+    const t0 = bi * bar;
+    const steps = lead[bi].split(/\s+/);
+    for (let s = 0; s < 16; s++) {
+      if (steps[s] === "." || steps[s] === "-") continue;
+      let len = 1;
+      while (steps[s + len] === ".") len++;
+      const note = { dur: len * step * 0.9, freq: hz(steps[s]), release: 0.03, vibrato: len >= 4 ? 0.008 : 0 };
+      tone(buf, { ...note, at: t0 + s * step, duty: leadDuty, gain: 0.17 });
+      tone(buf, { ...note, at: t0 + (s + echo) * step, duty: arpDuty, gain: 0.045 });
+    }
+    const tones = chordNotes(chord, 4);
+    for (let s = 0; s < 16; s++) {
+      tone(buf, { at: t0 + s * step, dur: step * 0.7, freq: hz(tones[s % 3] + (s % 6 >= 3 ? 12 : 0)), duty: arpDuty, gain: 0.04, release: 0.015 });
+    }
+    const root = chordNotes(chord, 2)[0];
+    (bass[bi] ?? bass.default).split(" ").forEach((p, s) => {
+      if (p === "-") return;
+      const offset = p === "8" ? 12 : p === "5" ? 7 : p === "3" ? (CHORDS[chord][1] === CHORDS[chord][0] ? 4 : chordNotes(chord, 2)[1] - root) : Number(p) - 1;
+      tone(buf, { at: t0 + s * step * 2, dur: step * 1.7, freq: hz(root + offset), type: "gb", gain: 0.3, release: 0.02 });
+    });
+    drums.split("").forEach((d, s) => {
+      const at = t0 + s * step;
+      if (d === "k") hiss(buf, { at, dur: 0.09, gain: 0.32, color: 0.08, decay: 9 });
+      if (d === "s") hiss(buf, { at, dur: 0.12, gain: 0.2, color: 0.6, decay: 7 });
+      if (d === "h") hiss(buf, { at, dur: 0.03, gain: 0.06, color: 1, decay: 10 });
+    });
+  });
+  return buf;
+}
+
 const MUSIC = {
-  menu: () => song({
-    bpm: 112,
-    chords: ["C", "Am", "F", "G", "C", "Am", "Dm", "G", "C", "Am", "F", "G", "C", "Am", "Dm", "G"],
+  menu: () => gbSong({
+    bpm: 132,
+    chords: ["C", "C", "F", "G", "C", "Am", "F", "G", "F", "G", "Em", "Am", "F", "G", "C", "C"],
     lead: [
-      "E5 - G5 - C6 - B5 G5", "A5 . . G5 E5 - C5 -", "F5 - A5 - C6 . A5 F5", "G5 . . . D5 - G5 -",
-      "E5 G5 C6 . B5 . G5 -", "A5 . C6 . B5 A5 G5 E5", "F5 . E5 . D5 . F5 .", "G5 . . . - - - -",
+      "G4 . C5 . E5 . G5 . . . . . E5 . G5 .", "C6 . . . . . . . B5 . A5 . G5 . . .",
+      "A5 . . . F5 . . . C5 . F5 . A5 . . .", "G5 . . . . . . . D5 . . . - . . .",
+      "E5 . G5 . C6 . . . G5 . E5 . C5 . . .", "E5 . . . A5 . . . C6 . B5 . A5 . . .",
+      "F5 . A5 . C6 . A5 . F5 . . . D5 . E5 .", "D5 . . . . . . . - . . . G4 . . .",
+      "C6 . . . A5 . . . F5 . . . A5 . C6 .", "B5 . . . G5 . . . D5 . G5 . B5 . . .",
+      "B5 . . . G5 . . . E5 . G5 . B5 . . .", "C6 . . . A5 . . . E5 . . . A5 . . .",
+      "A5 . . . C6 . . . F6 . . . E6 . D6 .", "D6 . . . B5 . . . G5 . . . D6 . . .",
+      "C6 . . . . . . . . . . . . . . .", "- . . . G5 . E5 . C5 . E5 . G5 . . .",
     ],
-    bassPattern: "1 - 5 - 8 - 5 -",
-    drums: "k-h-s-h-k-hks-h-",
+    bass: { default: "1 - 5 - 8 - 5 -" },
+    drums: "k---h-s-k-k-h-s-",
   }),
-  battle: () => song({
-    bpm: 150,
-    chords: ["Am", "F", "G", "Em", "Am", "F", "G", "E", "Am", "F", "G", "Em", "Am", "F", "G", "E"],
+  battle: () => gbSong({
+    bpm: 168,
+    chords: ["Em", "Em", "C", "D", "Em", "Em", "C", "B", "Am", "Am", "Em", "Em", "C", "D", "B", "B"],
     lead: [
-      "A4 . C5 . E5 . A5 G5", "F5 . E5 . C5 . A4 .", "G4 . B4 . D5 . G5 F5", "E5 . . . B4 . E5 .",
-      "A5 . G5 A5 . E5 C5 E5", "F5 . A5 . C6 . A5 F5", "G5 . F5 . D5 . B4 D5", "E5 . G#5 . B5 . . .",
+      "E5 . . . B4 . . . E5 . F#5 . G5 . . .", "F#5 . E5 . D5 . E5 . . . . . B4 . . .",
+      "C5 . . . E5 . . . G5 . . . A5 . G5 .", "F#5 . . . D5 . . . A4 . . . D5 . F#5 .",
+      "G5 . . . F#5 . . . E5 . . . B5 . . .", "A5 . G5 . F#5 . G5 . E5 . . . - . . .",
+      "E5 . G5 . C6 . . . B5 . A5 . G5 . E5 .", "D#5 . . . F#5 . . . B5 . . . A5 G5 F#5 D#5",
+      "A5 . . . C6 . . . B5 . A5 . E5 . . .", "C5 . D5 . E5 . A5 . . . G5 . A5 . . .",
+      "B5 . . . G5 . . . E5 . . . G5 . B5 .", "E6 . . . D6 . . . B5 . . . G5 . . .",
+      "C6 . B5 . A5 . G5 . E5 . G5 . C6 . . .", "D6 . C6 . B5 . A5 . F#5 . A5 . D6 . . .",
+      "B5 A#5 B5 C6 B5 A#5 A5 G#5 G5 F#5 F5 E5 D#5 . . .", "B4 . . . D#5 . . . F#5 . . . B5 . . .",
     ],
-    bassPattern: "1 8 1 8 1 8 5 8",
-    drums: "khhhskhhkhkhskhs",
-    duty: 0.5,
+    bass: { default: "1 8 1 8 1 8 1 8", 7: "1 8 1 8 1 2 3 5", 15: "1 1 2 2 3 3 5 8" },
+    drums: "k-h-s-hhk-hks-hs",
+    leadDuty: 0.5,
   }),
 };
 
